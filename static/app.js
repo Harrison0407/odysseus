@@ -834,6 +834,144 @@ function initializeEventListeners() {
     });
   }
 
+  // ── Browser panel ──
+  (function initBrowserPanel() {
+    const DEFAULT_BROWSER_URL = 'https://notebooklm.google.com';
+    const STORAGE_KEY = 'odysseus-browser-url';
+    const modal = el('browser-modal');
+    const toolBtn = el('tool-browser-btn');
+    const closeBtn = el('close-browser-modal');
+    const input = el('browser-url-input');
+    const frame = el('browser-frame');
+    const fallback = el('browser-frame-fallback');
+    const openBtn = el('browser-open-btn');
+    const externalBtn = el('browser-open-external-btn');
+    const backBtn = el('browser-back-btn');
+    const forwardBtn = el('browser-forward-btn');
+    const refreshBtn = el('browser-refresh-btn');
+    if (!modal || !toolBtn || !input || !frame) return;
+
+    let history = [];
+    let historyIndex = -1;
+    let fallbackTimer = null;
+    let currentUrl = localStorage.getItem(STORAGE_KEY) || DEFAULT_BROWSER_URL;
+
+    function normalizeUrl(value) {
+      const trimmed = String(value || '').trim();
+      if (!trimmed) return DEFAULT_BROWSER_URL;
+      if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return trimmed;
+      return 'https://' + trimmed;
+    }
+
+    function updateNavButtons() {
+      if (backBtn) backBtn.disabled = historyIndex <= 0;
+      if (forwardBtn) forwardBtn.disabled = historyIndex >= history.length - 1;
+    }
+
+    function setFallbackVisible(visible) {
+      if (fallback) fallback.classList.toggle('hidden', !visible);
+    }
+
+    function shouldShowFallback(url) {
+      try {
+        const host = new URL(url).hostname.toLowerCase();
+        return host === 'notebooklm.google.com' || host === 'accounts.google.com';
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function scheduleFallback(url) {
+      clearTimeout(fallbackTimer);
+      if (shouldShowFallback(url)) {
+        setFallbackVisible(true);
+        return;
+      }
+      fallbackTimer = setTimeout(() => {
+        try {
+          const doc = frame.contentDocument;
+          if (doc && doc.body && doc.body.childElementCount > 0) return;
+        } catch (_) {
+          return;
+        }
+        setFallbackVisible(true);
+      }, 3500);
+    }
+
+    function navigate(url, pushHistory = true) {
+      currentUrl = normalizeUrl(url);
+      input.value = currentUrl;
+      localStorage.setItem(STORAGE_KEY, currentUrl);
+      setFallbackVisible(false);
+      frame.src = currentUrl;
+      scheduleFallback(currentUrl);
+      if (pushHistory) {
+        history = history.slice(0, historyIndex + 1);
+        history.push(currentUrl);
+        historyIndex = history.length - 1;
+      }
+      updateNavButtons();
+    }
+
+    function openBrowser() {
+      modal.classList.remove('hidden');
+      toolBtn.classList.add('active');
+      if (!frame.src) navigate(currentUrl);
+      else input.value = currentUrl;
+      setTimeout(() => input.focus(), 0);
+    }
+
+    function closeBrowser() {
+      modal.classList.add('hidden');
+      toolBtn.classList.remove('active');
+      clearTimeout(fallbackTimer);
+    }
+
+    toolBtn.addEventListener('click', () => {
+      if (modal.classList.contains('hidden')) openBrowser();
+      else closeBrowser();
+    });
+    if (closeBtn) closeBtn.addEventListener('click', closeBrowser);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeBrowser();
+    });
+    new MutationObserver(() => {
+      toolBtn.classList.toggle('active', !modal.classList.contains('hidden'));
+    }).observe(modal, { attributes: true, attributeFilter: ['class'] });
+    if (openBtn) openBtn.addEventListener('click', () => navigate(input.value));
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        navigate(input.value);
+      }
+    });
+    if (refreshBtn) refreshBtn.addEventListener('click', () => navigate(currentUrl, false));
+    if (backBtn) backBtn.addEventListener('click', () => {
+      if (historyIndex <= 0) return;
+      historyIndex -= 1;
+      navigate(history[historyIndex], false);
+    });
+    if (forwardBtn) forwardBtn.addEventListener('click', () => {
+      if (historyIndex >= history.length - 1) return;
+      historyIndex += 1;
+      navigate(history[historyIndex], false);
+    });
+    if (externalBtn) externalBtn.addEventListener('click', () => {
+      window.open(currentUrl, '_blank', 'noopener,noreferrer');
+    });
+    frame.addEventListener('load', () => {
+      clearTimeout(fallbackTimer);
+      setTimeout(() => {
+        try {
+          const doc = frame.contentDocument;
+          if (doc && doc.body && doc.body.childElementCount === 0) setFallbackVisible(true);
+        } catch (_) {}
+      }, 250);
+    });
+    updateNavButtons();
+    input.value = currentUrl;
+  })();
+
   // ── Cookbook modal toggle ──
   const toolCookbookBtn = el('tool-cookbook-btn');
   if (toolCookbookBtn) {
@@ -1042,6 +1180,7 @@ function initializeEventListeners() {
       setTimeout(_goFullscreen, 200);
     },
     '/memory':   () => document.getElementById('tool-memory-btn')?.click(),
+    '/browser':  () => document.getElementById('tool-browser-btn')?.click(),
     '/gallery':  () => document.getElementById('tool-gallery-btn')?.click(),
     '/tasks':    () => document.getElementById('tool-tasks-btn')?.click(),
     '/library':  () => sessionModule && sessionModule.openLibrary && sessionModule.openLibrary(),
@@ -2144,19 +2283,11 @@ function initializeEventListeners() {
   (function initTTSToggle() {
     const ttsBtn = document.getElementById('overflow-tts-btn');
     if (!ttsBtn) return;
-    try {
-      const st = loadToggleState();
-      if (st.ttsMode) {
-        ttsBtn.classList.add('active');
-        if (window.aiTTSManager) window.aiTTSManager.autoPlay = true;
-      }
-    } catch(e) {}
+    if (window.aiTTSManager) window.aiTTSManager.autoPlay = false;
 
     ttsBtn.addEventListener('click', () => {
-      const isActive = !ttsBtn.classList.contains('active');
-      ttsBtn.classList.toggle('active', isActive);
-      if (window.aiTTSManager) window.aiTTSManager.autoPlay = isActive;
-      const s = loadToggleState(); s.ttsMode = isActive; saveToggleState(s);
+      if (window.aiTTSManager) window.aiTTSManager.autoPlay = false;
+      const s = loadToggleState(); s.ttsMode = false; saveToggleState(s);
       updatePlusDot();
     });
   })();
@@ -3807,6 +3938,102 @@ function startOdysseusApp() {
       if (listening) stopListening();
       else startListening();
     });
+  })();
+
+  // ── Browser speech synthesis for assistant replies ──
+  (function initAssistantSpeech() {
+    const LANGUAGE_STORAGE_KEY = 'odysseus-voice-language';
+    let activeButton = null;
+
+    function looksSpanish(text) {
+      const value = String(text || '').toLowerCase();
+      if (/[¿¡áéíóúüñ]/i.test(value)) return true;
+      return /\b(el|la|los|las|un|una|unos|unas|de|del|que|con|para|por|como|pero|porque|este|esta|estos|estas|hola|gracias|usted|ustedes|es|son|está|están|tengo|tiene|puedo|puede|hacer|sobre)\b/i.test(value);
+    }
+
+    function selectedLanguage(text) {
+      const value = localStorage.getItem(LANGUAGE_STORAGE_KEY) || 'auto';
+      if (value === 'es-ES' || value === 'en-US') return value;
+      return looksSpanish(text) ? 'es-ES' : 'en-US';
+    }
+
+    function plainText(text) {
+      const temp = document.createElement('div');
+      temp.innerHTML = String(text || '').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
+      temp.querySelectorAll('pre, code, script, style').forEach(el => el.remove());
+      return (temp.textContent || '')
+        .replace(/```[\s\S]*?```/g, '')
+        .replace(/#{1,6}\s/g, '')
+        .replace(/\*\*(.+?)\*\*/g, '$1')
+        .replace(/\*(.+?)\*/g, '$1')
+        .replace(/\[(.+?)\]\(.+?\)/g, '$1')
+        .replace(/`(.+?)`/g, '$1')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+    }
+
+    function findVoice(lang) {
+      if (!('speechSynthesis' in window)) return null;
+      const voices = window.speechSynthesis.getVoices();
+      const lower = (lang || '').toLowerCase();
+      const prefix = lower.startsWith('es') ? 'es' : lower.startsWith('en') ? 'en' : lower.split('-')[0];
+      const preferredName = prefix === 'es' ? 'paulina' : prefix === 'en' ? 'samantha' : '';
+      return (preferredName ? voices.find(v =>
+          v.lang.toLowerCase().startsWith(prefix) &&
+          v.name.toLowerCase().includes(preferredName)
+        ) : null) ||
+        voices.find(v => v.lang.toLowerCase() === lower) ||
+        voices.find(v => v.lang.toLowerCase().startsWith(prefix)) ||
+        null;
+    }
+
+    function resetButton(btn) {
+      if (!btn) return;
+      btn.classList.remove('speaking');
+      btn.title = 'Read aloud';
+      btn.setAttribute('aria-label', 'Read aloud');
+    }
+
+    function stop() {
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      resetButton(activeButton);
+      activeButton = null;
+    }
+
+    function speak(text, btn) {
+      if (!('speechSynthesis' in window)) {
+        uiModule.showError('Text-to-speech is not supported in this browser.');
+        return;
+      }
+      if (btn && activeButton === btn && window.speechSynthesis.speaking) {
+        stop();
+        return;
+      }
+
+      stop();
+      const cleaned = plainText(text);
+      if (!cleaned) return;
+
+      const lang = selectedLanguage(cleaned);
+      const utterance = new SpeechSynthesisUtterance(cleaned);
+      utterance.lang = lang;
+      const voice = findVoice(lang);
+      if (voice) utterance.voice = voice;
+      utterance.rate = lang.toLowerCase().startsWith('es') ? 1.15 : 1.25;
+      utterance.pitch = 1.0;
+      utterance.onend = () => { resetButton(btn); if (activeButton === btn) activeButton = null; };
+      utterance.onerror = () => { resetButton(btn); if (activeButton === btn) activeButton = null; };
+
+      activeButton = btn || null;
+      if (btn) {
+        btn.classList.add('speaking');
+        btn.title = 'Stop reading';
+        btn.setAttribute('aria-label', 'Stop reading');
+      }
+      window.speechSynthesis.speak(utterance);
+    }
+
+    window.odysseusSpeech = { speak, stop };
   })();
 
   // Enter to send (shift+enter for newline), or new chat when empty

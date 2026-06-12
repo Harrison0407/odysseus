@@ -1044,9 +1044,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       let metrics = null;
       let isThinking = false;
       let thinkingStartTime = null;
-      // Streaming TTS: synthesize sentence-by-sentence during streaming
-      const streamingTTS = !!(window.aiTTSManager && window.aiTTSManager.autoPlay && window.aiTTSManager.available);
-      if (streamingTTS) window.aiTTSManager.streamingStart();
+      const streamingTTS = false;
       // Multi-bubble agent tracking
       let roundHolder = holder;       // Current AI text bubble (changes per round)
       let roundText = '';             // Text accumulated for current round
@@ -2753,35 +2751,6 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         if (footerTarget !== holder) footerTarget.dataset.raw = accumulated;
         if (addAITTSButton && accumulated && window.aiTTSManager?._provider !== 'disabled' && window.aiTTSManager?.available) {
           addAITTSButton(footerTarget, accumulated);
-        }
-        // TTS auto-play: streaming mode flushes remaining text, non-streaming enqueues full message
-        if (accumulated && window.aiTTSManager && window.aiTTSManager.autoPlay) {
-          const ttsBtn = holder.querySelector('.ai-tts-button');
-          if (ttsBtn) {
-            var ICON_PLAY_TTS = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6 3 20 12 6 21 6 3"/></svg>';
-            var ICON_STOP_TTS = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>';
-            const resetFn = () => {
-              ttsBtn.innerHTML = ICON_PLAY_TTS;
-              ttsBtn.classList.remove('playing', 'loading');
-              ttsBtn.style.color = '#6b7280';
-              ttsBtn.title = 'Read aloud';
-            };
-            if (streamingTTS) {
-              // Flush remaining partial sentence and attach the real button
-              window.aiTTSManager.streamingEnd(accumulated);
-              window.aiTTSManager.streamingAttachButton(ttsBtn, resetFn);
-              // If still playing sentences from the stream, show stop icon
-              if (window.aiTTSManager.isPlaying || window.aiTTSManager._processing) {
-                ttsBtn.innerHTML = ICON_STOP_TTS;
-                ttsBtn.classList.add('playing');
-                ttsBtn.style.color = '#ccc';
-                ttsBtn.title = 'Stop';
-              }
-            } else {
-              // Non-streaming fallback (autoPlay toggled mid-stream, etc.)
-              window.aiTTSManager.enqueue(accumulated, ttsBtn, resetFn);
-            }
-          }
         }
         if (metrics) {
           displayMetrics(footerTarget, metrics);

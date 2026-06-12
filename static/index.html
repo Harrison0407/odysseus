@@ -829,6 +829,17 @@
           </svg>
           <span class="grow">Brain</span>
         </div>
+        <div class="list-item" id="tool-browser-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+            style="flex-shrink:0;opacity:0.5;">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M2 12h20"/>
+            <path d="M12 2a15.3 15.3 0 0 1 0 20"/>
+            <path d="M12 2a15.3 15.3 0 0 0 0 20"/>
+          </svg>
+          <span class="grow">Browser</span>
+        </div>
         <div class="list-item" id="tool-calendar-btn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
@@ -1315,6 +1326,33 @@
     </div>
   </div>
 
+
+  <!-- Browser Panel -->
+  <div id="browser-modal" class="modal hidden">
+    <div class="modal-content browser-modal-content" role="dialog" aria-label="Browser">
+      <div class="modal-header">
+        <h4>Browser</h4>
+        <button class="close-btn" id="close-browser-modal" aria-label="Close browser">✖</button>
+      </div>
+      <div class="browser-toolbar">
+        <button type="button" class="browser-nav-btn" id="browser-back-btn" title="Back" aria-label="Back">‹</button>
+        <button type="button" class="browser-nav-btn" id="browser-forward-btn" title="Forward" aria-label="Forward">›</button>
+        <button type="button" class="browser-nav-btn" id="browser-refresh-btn" title="Refresh" aria-label="Refresh">↻</button>
+        <input type="url" id="browser-url-input" class="browser-url-input" aria-label="Browser URL" autocomplete="off" spellcheck="false">
+        <button type="button" class="browser-open-btn" id="browser-open-btn">Open</button>
+      </div>
+      <div class="browser-frame-wrap">
+        <iframe id="browser-frame" class="browser-frame" title="Browser view" sandbox="allow-forms allow-popups allow-scripts allow-same-origin"></iframe>
+        <div id="browser-frame-fallback" class="browser-frame-fallback hidden">
+          <div class="browser-fallback-box">
+            <h4>This site may block embedded browsing.</h4>
+            <p>Open it in a new browser tab, or try another URL here.</p>
+            <button type="button" id="browser-open-external-btn">Open externally</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Cookbook Modal -->
   <div id="cookbook-modal" class="modal hidden">

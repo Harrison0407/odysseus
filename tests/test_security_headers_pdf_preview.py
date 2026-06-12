@@ -24,7 +24,9 @@ def test_default_routes_remain_unframeable():
     response = _client().get("/plain")
 
     assert response.headers["X-Frame-Options"] == "DENY"
-    assert "frame-ancestors 'none'" in response.headers["Content-Security-Policy"]
+    csp = response.headers["Content-Security-Policy"]
+    assert "frame-src 'self' https:" in csp
+    assert "frame-ancestors 'none'" in csp
 
 
 def test_document_pdf_preview_can_be_framed_by_same_origin():

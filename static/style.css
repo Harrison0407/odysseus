@@ -2372,6 +2372,9 @@ body.bg-pattern-sparkles {
       padding: 0 6px;
       flex-shrink: 0;
     }
+    .msg-tts-btn.speaking {
+      color: var(--accent, var(--red)) !important;
+    }
     .input-icon-btn {
       background: none;
       border: none;
@@ -4964,6 +4967,7 @@ body.bg-pattern-sparkles {
       #compare-model-overlay,
       #research-overlay,
       #theme-modal,
+      #browser-modal,
       #settings-modal,
       #email-lib-modal {
         left: calc(var(--icon-rail-w, 48px) + var(--sidebar-w, 0px));
@@ -5161,6 +5165,109 @@ body.bg-pattern-sparkles {
     .modal-dock-close:hover { color:var(--red); opacity:1; }
     .modal-body { flex:1; overflow-y:auto; }
     .modal-body button { margin-top:6px; }
+    .browser-modal-content {
+      width: min(1120px, 96vw);
+      height: 92vh;
+      max-height: 92vh;
+      background: var(--bg);
+      overflow: hidden;
+      padding: 10px;
+      gap: 8px;
+    }
+    .browser-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .browser-nav-btn,
+    .browser-open-btn {
+      height: 30px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--fg);
+      border-radius: 6px;
+      cursor: pointer;
+      font: inherit;
+      flex-shrink: 0;
+    }
+    .browser-nav-btn {
+      width: 32px;
+      font-size: 18px;
+      line-height: 1;
+    }
+    .browser-open-btn {
+      padding: 0 12px;
+      font-size: 12px;
+    }
+    .browser-url-input {
+      height: 30px;
+      min-width: 0;
+      flex: 1;
+      border: 1px solid var(--border);
+      background: var(--input-bg, var(--panel));
+      color: var(--fg);
+      border-radius: 6px;
+      padding: 0 10px;
+      font: inherit;
+      font-size: 12px;
+    }
+    .browser-frame-wrap {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--panel);
+    }
+    .browser-frame {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: #fff;
+      display: block;
+    }
+    .browser-frame-fallback {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: var(--bg);
+      color: var(--fg);
+      text-align: center;
+    }
+    .browser-frame-fallback.hidden { display: none; }
+    .browser-fallback-box {
+      max-width: 380px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 18px;
+    }
+    .browser-fallback-box h4 {
+      margin: 0 0 8px;
+      color: var(--fg);
+      font-size: 15px;
+    }
+    .browser-fallback-box p {
+      margin: 0 0 12px;
+      color: color-mix(in srgb, var(--fg) 72%, transparent);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .browser-fallback-box button {
+      border: 1px solid var(--border);
+      background: var(--fg);
+      color: var(--bg);
+      border-radius: 6px;
+      padding: 7px 12px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 12px;
+    }
     /* Styled confirm dialog — keeps backdrop */
     #styled-confirm-overlay {
       background:rgba(0,0,0,0.5);

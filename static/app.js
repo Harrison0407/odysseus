@@ -3705,6 +3705,110 @@ function startOdysseusApp() {
     });
   }
 
+  // ── Push-to-talk voice input (browser Web Speech API) ──
+  (function initVoiceInputButton() {
+    const voiceBtn = document.getElementById('voice-input-btn');
+    const languageSelect = document.getElementById('voice-language-select');
+    const input = el('message');
+    if (!voiceBtn || !input) return;
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const LANGUAGE_STORAGE_KEY = 'odysseus-voice-language';
+    let recognition = null;
+    let listening = false;
+    let transcript = '';
+
+    if (languageSelect) {
+      const savedLanguage = localStorage.getItem(LANGUAGE_STORAGE_KEY) || 'auto';
+      languageSelect.value = ['auto', 'es-ES', 'en-US'].includes(savedLanguage) ? savedLanguage : 'auto';
+      languageSelect.addEventListener('change', () => {
+        localStorage.setItem(LANGUAGE_STORAGE_KEY, languageSelect.value || 'auto');
+      });
+    }
+
+    function selectedLanguage() {
+      const value = languageSelect ? languageSelect.value : 'auto';
+      return value === 'auto' ? (navigator.language || '') : value;
+    }
+
+    function setListening(active) {
+      listening = active;
+      voiceBtn.classList.toggle('listening', active);
+      voiceBtn.setAttribute('aria-pressed', active ? 'true' : 'false');
+      voiceBtn.title = active ? 'Stop voice input' : 'Voice input';
+      voiceBtn.setAttribute('aria-label', active ? 'Stop voice input' : 'Voice input');
+    }
+
+    function insertTranscript(text) {
+      text = (text || '').trim();
+      if (!text) return;
+      const start = input.selectionStart ?? input.value.length;
+      const end = input.selectionEnd ?? input.value.length;
+      const before = input.value.slice(0, start);
+      const after = input.value.slice(end);
+      const needsLeadingSpace = before && !/\s$/.test(before);
+      const needsTrailingSpace = after && !/^\s/.test(after);
+      const inserted = `${needsLeadingSpace ? ' ' : ''}${text}${needsTrailingSpace ? ' ' : ''}`;
+      input.value = before + inserted + after;
+      const caret = before.length + inserted.length;
+      input.setSelectionRange(caret, caret);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.focus();
+    }
+
+    function stopListening() {
+      if (!recognition) {
+        setListening(false);
+        return;
+      }
+      try { recognition.stop(); } catch {}
+    }
+
+    function startListening() {
+      if (!SpeechRecognition) {
+        uiModule.showError('Voice input is not supported in this browser.');
+        return;
+      }
+
+      transcript = '';
+      recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = selectedLanguage();
+
+      recognition.onresult = (event) => {
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            transcript += event.results[i][0].transcript + ' ';
+          }
+        }
+      };
+      recognition.onerror = () => {
+        setListening(false);
+      };
+      recognition.onend = () => {
+        const finalTranscript = transcript;
+        recognition = null;
+        setListening(false);
+        insertTranscript(finalTranscript);
+      };
+
+      try {
+        recognition.start();
+        setListening(true);
+      } catch {
+        setListening(false);
+      }
+    }
+
+    voiceBtn.addEventListener('pointerdown', (e) => e.preventDefault());
+    voiceBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (listening) stopListening();
+      else startListening();
+    });
+  })();
+
   // Enter to send (shift+enter for newline), or new chat when empty
   if (messageInput) {
     messageInput.addEventListener('keydown', (e) => {

@@ -31,6 +31,15 @@ let _saveTasks;
 
 // Storage keys
 const SERVE_STATE_KEY = 'cookbook-serve-state';
+const _modelDownloadInFlight = new Set();
+
+function _downloadLaunchKey(payload, fallbackHost = '') {
+  const host = String(payload?.remote_host || fallbackHost || 'local').trim() || 'local';
+  const repo = String(payload?.repo_id || payload?.repo || payload?.name || '').trim();
+  const include = String(payload?.include || '').trim();
+  const localDir = String(payload?.local_dir || '').replace(/\/+$/, '').trim();
+  return `${host}\n${repo}\n${include}\n${localDir}`;
+}
 
 // ── Panel field helpers ──
 
@@ -522,11 +531,10 @@ export async function _runModelDownload(panel, model, backend, hostOverride) {
   const targetHost = host || 'local';
 
   const tasks = _loadTasks();
+  const payloadKey = _downloadLaunchKey(payload, targetHost);
   const sameDownload = (t) => {
     if (!t || t.type !== 'download') return false;
-    const tRepo = t?.payload?.repo_id || t?.repo_id || t?.repo || t?.name || '';
-    const tHost = t?.remoteHost || t?.payload?.remote_host || 'local';
-    return String(tRepo) === String(payload.repo_id) && String(tHost || 'local') === String(targetHost);
+    return _downloadLaunchKey(t.payload || t, t.remoteHost || 'local') === payloadKey;
   };
   const duplicate = tasks.find(t => sameDownload(t) && (t.status === 'running' || t.status === 'queued'));
   if (duplicate) {
@@ -583,6 +591,13 @@ export async function _runModelDownload(panel, model, backend, hostOverride) {
     return;
   }
 
+  const launchKey = payloadKey;
+  if (_modelDownloadInFlight.has(launchKey)) {
+    uiModule.showToast(`${shortName} download is already being started`);
+    return;
+  }
+  _modelDownloadInFlight.add(launchKey);
+
   try {
     const res = await fetch('/api/model/download', {
       method: 'POST',
@@ -602,9 +617,11 @@ export async function _runModelDownload(panel, model, backend, hostOverride) {
       return;
     }
     _addTask(data.session_id, shortName, 'download', payload);
-    uiModule.showToast(`Downloading ${shortName}...`);
+    uiModule.showToast(data.existing ? `${shortName} is already downloading` : `Downloading ${shortName}...`);
   } catch (e) {
     uiModule.showToast('Download failed: ' + e.message, 9000);
+  } finally {
+    _modelDownloadInFlight.delete(launchKey);
   }
 }
 

@@ -56,6 +56,33 @@ _HF_TOKEN_STATUS_SNIPPET = (
 )
 
 _DOWNLOAD_PROGRESS_CACHE: dict[str, dict] = {}
+_ACTIVE_DOWNLOAD_SESSIONS: dict[str, dict] = {}
+
+
+def _download_key_from_values(
+    repo_id: str | None,
+    include: str | None = None,
+    host: str | None = None,
+    local_dir: str | None = None,
+) -> str:
+    """Stable key for one logical download target."""
+    return "\n".join(
+        [
+            (host or "local").strip() or "local",
+            (repo_id or "").strip(),
+            (include or "").strip(),
+            (local_dir or "").rstrip("/").strip(),
+        ]
+    )
+
+
+def _download_key_from_task(task: dict) -> str:
+    payload = task.get("payload") if isinstance(task.get("payload"), dict) else {}
+    repo_id = payload.get("repo_id") or task.get("repo_id") or task.get("repo") or task.get("name") or ""
+    host = task.get("remoteHost") or payload.get("remote_host") or "local"
+    include = payload.get("include") or ""
+    local_dir = payload.get("local_dir") or ""
+    return _download_key_from_values(repo_id, include, host, local_dir)
 
 
 def _hf_model_metadata(repo_id: str, hf_token: str | None = None) -> dict:
@@ -122,6 +149,7 @@ def _expected_download_info(repo_id: str, include: str | None = None, hf_token: 
 def setup_cookbook_routes() -> APIRouter:
     router = APIRouter(tags=["cookbook"])
     _cookbook_state_path = Path(COOKBOOK_STATE_FILE)
+    _download_launch_lock = asyncio.Lock()
 
     def _mask_secret(value: str) -> str:
         if not value:
@@ -308,6 +336,125 @@ def setup_cookbook_routes() -> APIRouter:
         except Exception:
             return ""
 
+    def _load_cookbook_tasks() -> list[dict]:
+        if not _cookbook_state_path.exists():
+            return []
+        try:
+            state = json.loads(_cookbook_state_path.read_text(encoding="utf-8"))
+            tasks = state.get("tasks") if isinstance(state, dict) else []
+            if isinstance(tasks, list):
+                return [t for t in tasks if isinstance(t, dict)]
+            if isinstance(tasks, dict):
+                return [t for t in tasks.values() if isinstance(t, dict)]
+        except Exception:
+            pass
+        return []
+
+    async def _download_session_alive(task: dict) -> bool:
+        session_id = str(task.get("sessionId") or "")
+        if not _SESSION_ID_RE.match(session_id):
+            return False
+        remote = task.get("remoteHost") or (task.get("payload") or {}).get("remote_host") or ""
+        platform = task.get("platform") or (task.get("payload") or {}).get("platform") or ""
+        ssh_port = str(task.get("sshPort") or (task.get("payload") or {}).get("ssh_port") or "")
+        try:
+            if remote:
+                remote = validate_remote_host(remote)
+                ssh_base = ["ssh", "-o", "ConnectTimeout=4", "-o", "StrictHostKeyChecking=no"]
+                if ssh_port:
+                    ssh_port = validate_ssh_port(ssh_port)
+                    if ssh_port != "22":
+                        ssh_base.extend(["-p", ssh_port])
+                if platform == "windows":
+                    sd = "$env:TEMP\\odysseus-sessions"
+                    cmd = (
+                        f"$pid = Get-Content \"{sd}\\{session_id}.pid\" -ErrorAction SilentlyContinue; "
+                        "if ($pid) { Get-Process -Id $pid -ErrorAction SilentlyContinue | Out-Null; "
+                        "if ($?) { exit 0 } else { exit 1 } } else { exit 1 }"
+                    )
+                    proc = await asyncio.create_subprocess_exec(
+                        *ssh_base, remote, "powershell", "-Command", cmd,
+                        stdout=asyncio.subprocess.DEVNULL,
+                        stderr=asyncio.subprocess.DEVNULL,
+                    )
+                else:
+                    proc = await asyncio.create_subprocess_exec(
+                        *ssh_base, remote, "tmux", "has-session", "-t", session_id,
+                        stdout=asyncio.subprocess.DEVNULL,
+                        stderr=asyncio.subprocess.DEVNULL,
+                    )
+            elif IS_WINDOWS:
+                pid_path = TMUX_LOG_DIR / f"{session_id}.pid"
+                try:
+                    return pid_alive(int(pid_path.read_text(encoding="utf-8").strip()))
+                except Exception:
+                    return False
+            else:
+                proc = await asyncio.create_subprocess_exec(
+                    "tmux", "has-session", "-t", session_id,
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=6)
+            except asyncio.TimeoutError:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                return False
+            if proc.returncode != 0:
+                return False
+            if platform == "windows":
+                return True
+            try:
+                if remote:
+                    cap = await asyncio.create_subprocess_exec(
+                        *ssh_base, remote, "tmux", "capture-pane", "-t", session_id, "-p", "-S", "-80",
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.DEVNULL,
+                    )
+                else:
+                    cap = await asyncio.create_subprocess_exec(
+                        "tmux", "capture-pane", "-t", session_id, "-p", "-S", "-80",
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.DEVNULL,
+                    )
+                stdout, _ = await asyncio.wait_for(cap.communicate(), timeout=4)
+                snapshot = stdout.decode("utf-8", errors="replace")
+                if "DOWNLOAD_OK" in snapshot or "DOWNLOAD_FAILED" in snapshot:
+                    return False
+            except Exception:
+                pass
+            return True
+        except Exception:
+            return False
+
+    async def _existing_download_for_key(download_key: str) -> dict | None:
+        remembered = _ACTIVE_DOWNLOAD_SESSIONS.get(download_key)
+        candidates: list[dict] = []
+        if isinstance(remembered, dict):
+            candidates.append(remembered)
+        candidates.extend(
+            task for task in _load_cookbook_tasks()
+            if task.get("type") == "download" and _download_key_from_task(task) == download_key
+        )
+        seen: set[str] = set()
+        for task in candidates:
+            sid = task.get("sessionId")
+            if not sid or sid in seen:
+                continue
+            seen.add(sid)
+            launching_until = float(task.get("_launching_until") or 0)
+            if launching_until and time.time() <= launching_until:
+                return task
+            alive = await _download_session_alive(task)
+            if alive:
+                _ACTIVE_DOWNLOAD_SESSIONS[download_key] = task
+                return task
+        _ACTIVE_DOWNLOAD_SESSIONS.pop(download_key, None)
+        return None
+
     def _cookbook_ssh_dir() -> Path:
         # The Docker image keeps cookbook keys under /app/.ssh; that path only
         # exists inside the container. On Windows (and any non-container host)
@@ -478,6 +625,50 @@ def setup_cookbook_routes() -> APIRouter:
         req.local_dir = _validate_local_dir(req.local_dir)
         req.hf_token = "" if is_ollama_download else (req.hf_token or _load_stored_hf_token())
         _validate_token(req.hf_token)
+        download_key = _download_key_from_values(
+            req.repo_id,
+            req.include,
+            req.remote_host or "local",
+            req.local_dir,
+        )
+        async with _download_launch_lock:
+            existing = await _existing_download_for_key(download_key)
+            if existing:
+                existing_sid = existing.get("sessionId")
+                logger.info(
+                    "Model download deduped: repo=%s include=%s host=%s local_dir=%s existing_session=%s",
+                    req.repo_id,
+                    req.include or "",
+                    req.remote_host or "local",
+                    req.local_dir or "",
+                    existing_sid,
+                )
+                return {
+                    "ok": True,
+                    "session_id": existing_sid,
+                    "remote": req.remote_host or "local",
+                    "existing": True,
+                    "download_info": (existing.get("payload") or {}).get("download_info") or {},
+                }
+            session_id = f"cookbook-{uuid.uuid4().hex[:8]}"
+            _ACTIVE_DOWNLOAD_SESSIONS[download_key] = {
+                "id": session_id,
+                "sessionId": session_id,
+                "type": "download",
+                "status": "running",
+                "payload": {
+                    "repo_id": req.repo_id,
+                    "include": req.include,
+                    "remote_host": req.remote_host or "",
+                    "local_dir": req.local_dir or "",
+                    "ssh_port": req.ssh_port or "",
+                    "platform": req.platform or "",
+                },
+                "remoteHost": req.remote_host or "",
+                "sshPort": req.ssh_port or "",
+                "platform": req.platform or "",
+                "_launching_until": time.time() + 60,
+            }
         download_info = {}
         if not is_ollama_download:
             download_info = _expected_download_info(req.repo_id, req.include, req.hf_token)
@@ -488,7 +679,8 @@ def setup_cookbook_routes() -> APIRouter:
                 f"{float(download_info['gguf_total_bytes']) / (1024 ** 3):.1f} GB"
             )
         TMUX_LOG_DIR.mkdir(parents=True, exist_ok=True)
-        session_id = f"cookbook-{uuid.uuid4().hex[:8]}"
+        if download_info:
+            _ACTIVE_DOWNLOAD_SESSIONS[download_key]["payload"]["download_info"] = download_info
         wrapper_script = TMUX_LOG_DIR / f"{session_id}.sh"
 
         # Custom download dir: point the HF cache at <dir>/hub via env vars
@@ -784,6 +976,7 @@ def setup_cookbook_routes() -> APIRouter:
                 _launch_local_detached(session_id, lines)
             except Exception as e:
                 logger.error(f"Local detached download launch failed: {e}")
+                _ACTIVE_DOWNLOAD_SESSIONS.pop(download_key, None)
                 return {"ok": False, "error": str(e), "session_id": session_id}
         else:
             proc = await asyncio.create_subprocess_shell(
@@ -796,7 +989,9 @@ def setup_cookbook_routes() -> APIRouter:
             if proc.returncode != 0:
                 stderr = (await proc.stderr.read()).decode(errors="replace")
                 logger.error(f"Download failed (rc={proc.returncode}): {stderr}")
+                _ACTIVE_DOWNLOAD_SESSIONS.pop(download_key, None)
                 return {"ok": False, "error": stderr, "session_id": session_id}
+        _ACTIVE_DOWNLOAD_SESSIONS.get(download_key, {}).pop("_launching_until", None)
 
         # Log to assistant
         try:

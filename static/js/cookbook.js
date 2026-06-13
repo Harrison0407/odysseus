@@ -1391,7 +1391,10 @@ function _wireTabEvents(body) {
     };
     dlBtn.addEventListener('click', triggerDownload);
     dlInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') triggerDownload();
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        triggerDownload();
+      }
     });
   }
 

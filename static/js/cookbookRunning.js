@@ -287,6 +287,7 @@ const TASK_POLL_INTERVAL_MS = 3000;       // delay between reconnect-loop iterat
 const BG_MONITOR_INTERVAL_MS = 5000;      // background task status poll
 const STALE_PROGRESS_MS = 5 * 60 * 1000;  // download with no progress this long = stale
 const STARTUP_STALE_PROGRESS_MS = 45 * 1000; // 0%-forever startup stall: retry much sooner
+const _downloadLaunchInFlight = new Set();
 
 function _fmtBytes(bytes, unit = 'GB') {
   const n = Number(bytes || 0);
@@ -668,7 +669,10 @@ function _downloadDedupeKey(task) {
   if (!task || task.type !== 'download') return '';
   const repo = _downloadRepoKey(task);
   if (!repo) return '';
-  return `${_downloadHostKey(task)}\n${repo}`;
+  const payload = task.payload || {};
+  const include = String(payload.include || task.include || '').trim();
+  const localDir = String(payload.local_dir || task.local_dir || '').replace(/\/+$/, '').trim();
+  return `${_downloadHostKey(task)}\n${repo}\n${include}\n${localDir}`;
 }
 
 function _pruneQueuedDownloadDuplicates(tasks) {
@@ -1185,33 +1189,28 @@ export async function _syncFromServer() {
 
 // ── Retry download ──
 
-// Bounded auto-retry counter for downloads, keyed by model — network blips on
-// big multi-file downloads are common and HF resumes from the .incomplete parts.
-const _dlRetryCount = new Map();
-const _DL_MAX_AUTO_RETRY = 2;
-
-// Kill + relaunch a task (download or serve). Shared by the ⋮ → Restart action
-// and the click-to-retry on a stalled download badge.
+// Restart a task. Serve retries kill first; download retries ask the backend to
+// reuse any active matching session before launching a replacement.
 async function _retryTask(el, task) {
   if (el && el._abort) el._abort.abort();
   const badge = el?.querySelector('.cookbook-task-status');
   if (badge) { badge.textContent = 'restarting...'; badge.className = 'cookbook-task-status'; }
-  try {
-    await fetch('/api/shell/exec', {
-      method: 'POST', credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ command: _tmuxGracefulKill(task) }),
-    });
-  } catch {}
   if (task.payload) {
     if (task.type === 'serve' && task.payload._cmd) {
+      try {
+        await fetch('/api/shell/exec', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: _tmuxGracefulKill(task) }),
+        });
+      } catch {}
       _removeTask(task.sessionId);
       _launchServeTask(task.name, task.payload.repo_id, task.payload._cmd, task.payload._fields, task.remoteHost || '');
     } else {
-      uiModule.showToast('Retrying download — progress may look reset while HuggingFace checks cached files, then it should resume.', 7000);
+      uiModule.showToast('Checking for an active matching download before retrying...', 7000);
       _updateTask(task.sessionId, {
         status: 'running',
-        output: `${task.output || ''}\n\n[odysseus] Retrying download. Progress may briefly look like a fresh download while HuggingFace checks cached/incomplete files; cached partial files will be reused when available.`.trim(),
+        output: `${task.output || ''}\n\n[odysseus] Manual retry requested. Checking for an active matching HuggingFace download before launching a replacement.`.trim(),
         _retrying: true,
       });
       _retryDownload(task.name, task.payload, task.sessionId);
@@ -1220,6 +1219,14 @@ async function _retryTask(el, task) {
 }
 
 async function _retryDownload(name, payload, replaceSessionId = '') {
+  const _payloadBase = payload || {};
+  const launchKey = _downloadDedupeKey({ type: 'download', payload: _payloadBase, remoteHost: _payloadBase.remote_host || '' })
+    || `${_payloadBase.remote_host || 'local'}\n${_payloadBase.repo_id || name}`;
+  if (_downloadLaunchInFlight.has(launchKey)) {
+    uiModule.showToast(`${name} download is already being started`);
+    return;
+  }
+  _downloadLaunchInFlight.add(launchKey);
   try {
     // A retry means the fast hf_transfer path already failed once — fall back to
     // the plain, reliable downloader for this and any further attempt (it resumes
@@ -1265,10 +1272,12 @@ async function _retryDownload(name, payload, replaceSessionId = '') {
       const launchPayload = data.download_info ? { ..._payload, download_info: data.download_info } : _payload;
       _addTask(data.session_id, name, 'download', launchPayload);
     }
-    uiModule.showToast(`Downloading ${name}...`);
+    uiModule.showToast(data.existing ? `${name} is already downloading` : `Downloading ${name}...`);
   } catch (e) {
     uiModule.showToast('Download failed: ' + e.message);
     if (replaceSessionId) _updateTask(replaceSessionId, { status: 'crashed', _retrying: false });
+  } finally {
+    _downloadLaunchInFlight.delete(launchKey);
   }
 }
 
@@ -2920,11 +2929,8 @@ async function _reconnectTask(el, task) {
             if (curProgress !== el._lastProgress) {
               el._lastProgress = curProgress;
               el._lastProgressTime = Date.now();
-            } else if (!isPipDep && Date.now() - (el._lastProgressTime || 0) > _STALE_TIMEOUT && task._autoRestarted) {
+            } else if (!isPipDep && Date.now() - (el._lastProgressTime || 0) > _STALE_TIMEOUT) {
               const mins = Math.floor((Date.now() - (el._lastProgressTime || 0)) / 60000);
-              // Already auto-restarted once and stalled again — make the badge a
-              // one-click retry (resumes from the cached partial files) so the
-              // user doesn't have to dig into the ⋮ menu.
               badge.textContent = `stalled ${mins}m ↻`;
               badge.className = 'cookbook-task-status cookbook-task-error';
               badge.title = 'Click to retry — resumes where it stopped';
@@ -2933,60 +2939,7 @@ async function _reconnectTask(el, task) {
                 badge._retryBound = true;
                 badge.addEventListener('click', (e) => { e.stopPropagation(); _retryTask(el, task); });
               }
-            } else if (!isPipDep && Date.now() - (el._lastProgressTime || 0) > _STALE_TIMEOUT && !task._autoRestarted) {
-              task._autoRestarted = true;
-              _updateTask(task.sessionId, { _autoRestarted: true });
-              badge.textContent = _startupStalled ? '0% stall — retrying' : 'stale — restarting';
-              badge.className = 'cookbook-task-status cookbook-task-error';
               _showCookbookNotif(true);
-              try {
-                await fetch('/api/shell/exec', {
-                  method: 'POST', credentials: 'same-origin',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ command: _tmuxCmd(task, `kill-session -t ${task.sessionId}`) }),
-                });
-              } catch {}
-              try {
-                // Reuse original payload so the full repo_id (e.g. "Qwen/Qwen3.5-...")
-                // is preserved — rebuilding from task.repo/task.name drops the org prefix.
-                const dlPayload = task.payload
-                  ? { ...task.payload }
-                  : { repo_id: task.repo || task.name, remote_host: task.remoteHost || '' };
-                if (_envState.hfToken) dlPayload.hf_token = _envState.hfToken;
-                // Stalled with hf_transfer — restart on the reliable downloader.
-                dlPayload.disable_hf_transfer = true;
-                // Don't overwrite env_prefix — task.payload already has the correct
-                // "source <path>" form. The bare envPath would miss the `source` and
-                // the venv never activates (so hf CLI falls off PATH).
-                const res = await fetch('/api/model/download', {
-                  method: 'POST', credentials: 'same-origin',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(dlPayload),
-                });
-                const data = await res.json();
-                if (data.ok && data.session_id) {
-                  const nextPayload = data.download_info ? { ...dlPayload, download_info: data.download_info } : dlPayload;
-                  _updateTask(task.sessionId, {
-                    sessionId: data.session_id,
-                    status: 'running',
-                    output: '',
-                    payload: nextPayload,
-                    downloadProgress: data.download_info || task.downloadProgress || null,
-                  });
-                  task.sessionId = data.session_id;
-                  task.payload = nextPayload;
-                  if (data.download_info) task.downloadProgress = data.download_info;
-                  el._lastProgress = null;
-                  el._lastProgressTime = Date.now();
-                  badge.textContent = 'restarted';
-                  badge.className = 'cookbook-task-status cookbook-task-running';
-                  continue;
-                }
-              } catch {}
-              badge.textContent = 'stale — restart failed';
-              badge.className = 'cookbook-task-status cookbook-task-error';
-              _showCookbookNotif(true);
-              break;
             }
 
             // When the snapshot includes a shard-of-N marker (e.g.
@@ -3049,33 +3002,9 @@ async function _reconnectTask(el, task) {
               // The wrapper prints DOWNLOAD_FAILED but exits 0, and per-file
               // "Download complete"/"100%" lines make it look successful — so
               // catch the explicit failure marker and handle it.
-              // A gated/auth failure can NEVER be fixed by retrying (the HF token
-              // is sent, but its account isn't approved for this repo) — skip the
-              // auto-retries and surface the gated diagnosis straight away.
               const _accessDenied = /Access to model.*is restricted|gated repo|GatedRepoError|401 Unauthorized|403 Forbidden|not in the authorized list|awaiting a review|must (?:be authenticated|have access)/i.test(snapshot);
-              const _dlKey = task.payload?.repo_id || task.name;
-              const _dlN = _dlRetryCount.get(_dlKey) || 0;
-              if (!controller.signal.aborted && !_accessDenied && task.type === 'download' && task.payload && _dlN < _DL_MAX_AUTO_RETRY) {
-                // Auto-retry: kill the dead session and re-launch (resumes from
-                // the cached .incomplete files) after a short delay.
-                _dlRetryCount.set(_dlKey, _dlN + 1);
-                badge.textContent = `retrying (${_dlN + 1}/${_DL_MAX_AUTO_RETRY})…`;
-                badge.className = 'cookbook-task-status cookbook-task-running';
-                uiModule.showToast(`Download interrupted — retrying (${_dlN + 1}/${_DL_MAX_AUTO_RETRY}), resumes where it stopped…`, 6000);
-                const _p = task.payload, _nm = task.name;
-                try {
-                  await fetch('/api/shell/exec', {
-                    method: 'POST', credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ command: _tmuxCmd(task, `kill-session -t ${task.sessionId}`) }),
-                  });
-                } catch {}
-                _removeTask(task.sessionId);
-                setTimeout(() => { _retryDownload(_nm, _p); }, 8000);
-                break;
-              }
-              // Out of auto-retries (or not a download) — surface the error; the
-              // card's Retry button stays available to resume manually.
+              // Surface the error; the card's Retry button stays available to
+              // resume manually. Do not auto-launch a replacement download.
               badge.textContent = _statusLabel('error', task.type);
               badge.className = 'cookbook-task-status cookbook-task-error';
               _updateTask(task.sessionId, { status: 'error' });
@@ -3095,7 +3024,6 @@ async function _reconnectTask(el, task) {
             }
             if (snapshot.includes('DOWNLOAD_OK') || (snapshot.includes('/snapshots/') && completed >= totalFiles && totalFiles > 0)) {
               _clearDiagnosis(el);
-              _dlRetryCount.delete(task.payload?.repo_id || task.name);
               badge.textContent = _statusLabel('done', task.type);
               badge.className = 'cookbook-task-status cookbook-task-done';
               // Flip the type chip from "download" to the green "finished"

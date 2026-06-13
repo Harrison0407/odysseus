@@ -9,7 +9,9 @@ import shlex
 import shutil
 import subprocess
 import sys
+import time
 import uuid
+import fnmatch
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request, Depends
@@ -52,6 +54,70 @@ _HF_TOKEN_STATUS_SNIPPET = (
     'Add one in Odysseus Settings -> Cookbook -> HuggingFace Token."; '
     'fi'
 )
+
+_DOWNLOAD_PROGRESS_CACHE: dict[str, dict] = {}
+
+
+def _hf_model_metadata(repo_id: str, hf_token: str | None = None) -> dict:
+    """Fetch HuggingFace model metadata using stdlib only.
+
+    Returns a compact shape so failures stay non-fatal for download launch.
+    """
+    import urllib.parse
+    import urllib.request
+
+    url = "https://huggingface.co/api/models/" + urllib.parse.quote(repo_id, safe="")
+    req = urllib.request.Request(url, headers={"User-Agent": "Odysseus/1.0"})
+    if hf_token:
+        req.add_header("Authorization", f"Bearer {hf_token}")
+    with urllib.request.urlopen(req, timeout=12) as resp:
+        data = json.loads(resp.read().decode("utf-8", errors="replace"))
+    siblings = data.get("siblings") or []
+    files = []
+    for item in siblings:
+        name = item.get("rfilename") or item.get("path") or item.get("name")
+        if not name:
+            continue
+        size = item.get("size")
+        if size is None and isinstance(item.get("lfs"), dict):
+            size = item["lfs"].get("size")
+        try:
+            size = int(size or 0)
+        except Exception:
+            size = 0
+        files.append({"name": name, "size": size})
+    return {"files": files}
+
+
+def _selected_hf_files(metadata: dict, include: str | None = None) -> list[dict]:
+    files = list((metadata or {}).get("files") or [])
+    pattern = (include or "").strip()
+    if pattern:
+        files = [f for f in files if fnmatch.fnmatch(f.get("name", ""), pattern)]
+    return files
+
+
+def _expected_download_info(repo_id: str, include: str | None = None, hf_token: str | None = None) -> dict:
+    try:
+        metadata = _hf_model_metadata(repo_id, hf_token)
+        selected = _selected_hf_files(metadata, include)
+        total = sum(int(f.get("size") or 0) for f in selected)
+        gguf_files = [f for f in selected if str(f.get("name") or "").lower().endswith(".gguf")]
+        gguf_total = sum(int(f.get("size") or 0) for f in gguf_files)
+        selected_is_gguf = bool(gguf_files) and (
+            (include or "").lower().endswith(".gguf")
+            or all(str(f.get("name") or "").lower().endswith(".gguf") for f in selected)
+        )
+        return {
+            "total_bytes": total,
+            "file_count": len(selected),
+            "gguf_total_bytes": gguf_total,
+            "gguf_file_count": len(gguf_files),
+            "is_gguf": selected_is_gguf,
+        }
+    except Exception as exc:
+        logger.debug("HF metadata lookup failed for %s: %s", repo_id, exc)
+        return {}
 
 def setup_cookbook_routes() -> APIRouter:
     router = APIRouter(tags=["cookbook"])
@@ -412,6 +478,15 @@ def setup_cookbook_routes() -> APIRouter:
         req.local_dir = _validate_local_dir(req.local_dir)
         req.hf_token = "" if is_ollama_download else (req.hf_token or _load_stored_hf_token())
         _validate_token(req.hf_token)
+        download_info = {}
+        if not is_ollama_download:
+            download_info = _expected_download_info(req.repo_id, req.include, req.hf_token)
+        expected_gguf_msg = ""
+        if download_info.get("gguf_total_bytes"):
+            expected_gguf_msg = (
+                f"[odysseus] Expected final GGUF size: "
+                f"{float(download_info['gguf_total_bytes']) / (1024 ** 3):.1f} GB"
+            )
         TMUX_LOG_DIR.mkdir(parents=True, exist_ok=True)
         session_id = f"cookbook-{uuid.uuid4().hex[:8]}"
         wrapper_script = TMUX_LOG_DIR / f"{session_id}.sh"
@@ -447,6 +522,8 @@ def setup_cookbook_routes() -> APIRouter:
             lines.append(f"export HF_HOME={_dl_hf_home_shell}")
             lines.append(f"export HUGGINGFACE_HUB_CACHE={_dl_hf_home_shell}/hub")
             lines.append(f"export HF_HUB_CACHE={_dl_hf_home_shell}/hub")
+        if expected_gguf_msg:
+            lines.append(f"echo {shlex.quote(expected_gguf_msg)}")
         # Ensure pip-user scripts (e.g. hf CLI installed via --user) are on PATH
         lines.append('export PATH="$HOME/.local/bin:$HOME/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"')
         # When Odysseus runs from a venv (e.g. native macOS install), put its bin
@@ -509,6 +586,8 @@ def setup_cookbook_routes() -> APIRouter:
                 ps_lines.append(f"$env:HF_HOME = '{_dl_ps}'")
                 ps_lines.append(f"$env:HUGGINGFACE_HUB_CACHE = '{_dl_ps}/hub'")
                 ps_lines.append(f"$env:HF_HUB_CACHE = '{_dl_ps}/hub'")
+            if expected_gguf_msg:
+                ps_lines.append(f"Write-Host '{_ps_squote(expected_gguf_msg)}'")
             if req.env_prefix:
                 ps_lines.append(_safe_env_prefix(req.env_prefix))
             if is_ollama_download:
@@ -575,6 +654,8 @@ def setup_cookbook_routes() -> APIRouter:
                 runner_lines.append(f"export HF_HOME={_dl_hf_home_shell}")
                 runner_lines.append(f"export HUGGINGFACE_HUB_CACHE={_dl_hf_home_shell}/hub")
                 runner_lines.append(f"export HF_HUB_CACHE={_dl_hf_home_shell}/hub")
+            if expected_gguf_msg:
+                runner_lines.append(f"echo {shlex.quote(expected_gguf_msg)}")
             if req.env_prefix:
                 runner_lines.append(_safe_env_prefix(req.env_prefix))
             else:
@@ -730,7 +811,7 @@ def setup_cookbook_routes() -> APIRouter:
         except Exception:
             pass
 
-        return {"ok": True, "session_id": session_id, "remote": remote or "local"}
+        return {"ok": True, "session_id": session_id, "remote": remote or "local", "download_info": download_info}
 
     @router.get("/api/model/cached")
     async def model_cached(request: Request, host: str | None = None, model_dir: str | None = None, ssh_port: str | None = None, platform: str | None = None):
@@ -2691,6 +2772,77 @@ def setup_cookbook_routes() -> APIRouter:
             except Exception:
                 return False
 
+        def _download_progress_info(task: dict, model: str, remote_host: str = "", ssh_port: str = "") -> dict:
+            """Return persisted HF byte progress for a download task."""
+            payload = task.get("payload") or {}
+            repo_id = payload.get("repo_id") or model
+            if not repo_id or "/" not in repo_id:
+                return {}
+            expected = payload.get("download_info") if isinstance(payload.get("download_info"), dict) else {}
+            if not expected.get("total_bytes"):
+                cache = _DOWNLOAD_PROGRESS_CACHE.setdefault(task.get("sessionId") or "", {})
+                expected = cache.get("expected") or _expected_download_info(repo_id, payload.get("include"))
+                cache["expected"] = expected
+
+            local_dir = (payload.get("local_dir") or "").strip()
+            py = (
+                "import os,sys,json;"
+                "repo=sys.argv[1]; local=sys.argv[2] if len(sys.argv)>2 else '';"
+                "base=os.path.join(local.rstrip('/'),'hub') if local else "
+                "(os.environ.get('HUGGINGFACE_HUB_CACHE') or os.path.join(os.environ.get('HF_HOME', os.path.expanduser('~/.cache/huggingface')), 'hub'));"
+                "d=os.path.join(base,'models--'+repo.replace('/','--'));"
+                "blobs=os.path.join(d,'blobs'); total=0; inc=False;"
+                "\nwalk=os.walk(blobs) if os.path.isdir(blobs) else []\n"
+                "for root,dirs,files in walk:\n"
+                "    for name in files:\n"
+                "        p=os.path.join(root,name)\n"
+                "        try: total += os.path.getsize(p)\n"
+                "        except OSError: pass\n"
+                "        inc = inc or name.endswith('.incomplete')\n"
+                "print(json.dumps({'downloaded_bytes': total, 'has_incomplete': inc, 'cache_path': d}))"
+            )
+            cmd = ["python3", "-c", py, repo_id, local_dir]
+            try:
+                if remote_host:
+                    ssh_base = ["ssh"]
+                    if ssh_port and ssh_port != "22":
+                        ssh_base.extend(["-p", str(ssh_port)])
+                    shell_cmd = " ".join(shlex.quote(x) for x in cmd)
+                    proc = subprocess.run(ssh_base + [remote_host, shell_cmd], timeout=12, capture_output=True, text=True)
+                else:
+                    proc = subprocess.run(cmd, timeout=12, capture_output=True, text=True)
+                current = json.loads((proc.stdout or "{}").strip() or "{}") if proc.returncode == 0 else {}
+            except Exception:
+                current = {}
+
+            downloaded = int(current.get("downloaded_bytes") or 0)
+            total = int(expected.get("total_bytes") or 0)
+            now = time.time()
+            sid = task.get("sessionId") or ""
+            state = _DOWNLOAD_PROGRESS_CACHE.setdefault(sid, {})
+            prev_bytes = int(state.get("bytes") or 0)
+            prev_time = float(state.get("time") or now)
+            delta_t = max(now - prev_time, 0.001)
+            speed_bps = max(0.0, (downloaded - prev_bytes) / delta_t) if downloaded >= prev_bytes else 0.0
+            if downloaded != prev_bytes:
+                state["last_change"] = now
+            last_change = float(state.get("last_change") or now)
+            state.update({"bytes": downloaded, "time": now})
+            pct = round((downloaded / total) * 100) if total > 0 else None
+            eta_seconds = int((total - downloaded) / speed_bps) if total > 0 and speed_bps > 1 else None
+            stalled = downloaded > 0 and speed_bps < 1024 and (now - last_change) >= 30
+            return {
+                **expected,
+                "downloaded_bytes": downloaded,
+                "percent": max(0, min(100, pct)) if pct is not None else None,
+                "speed_bps": speed_bps,
+                "eta_seconds": eta_seconds,
+                "stalled": stalled,
+                "stall_seconds": int(now - last_change) if stalled else 0,
+                "cache_path": current.get("cache_path") or "",
+                "has_incomplete": bool(current.get("has_incomplete")),
+            }
+
         # Load saved tasks from cookbook state
         tasks = []
         state = {}
@@ -2947,6 +3099,9 @@ def setup_cookbook_routes() -> APIRouter:
             if download_zero_files:
                 diagnosis = {"message": "No matching files were downloaded. The model repo or filename/quant pattern may be wrong (for example a ':Q4_K_M' tag that does not exist in the repo). Check the repo and the include/quant pattern."}
             output_tail = "\n".join(full_snapshot.splitlines()[-12:]) if full_snapshot else ""
+            download_progress = _download_progress_info(task, model, remote, str(_tport or "")) if task_type == "download" else {}
+            if task_type == "download" and status == "running" and download_progress.get("stalled"):
+                progress_text = f"stalled {int(download_progress.get('stall_seconds') or 0) // 60}m"
 
             results.append({
                 "session_id": session_id,
@@ -2962,6 +3117,7 @@ def setup_cookbook_routes() -> APIRouter:
                 "reqs": phase_info.get("reqs"),
                 "pct": phase_info.get("pct"),
                 "remote": remote or "local",
+                "download_progress": download_progress,
             })
 
         return {"tasks": results}

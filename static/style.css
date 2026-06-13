@@ -19961,6 +19961,54 @@ body.gallery-selecting .gallery-dl-btn,
   font-family: 'Fira Code', monospace;
   opacity: 0.4;
 }
+.cookbook-download-progress {
+  margin: 0 10px 6px;
+  padding: 7px 8px;
+  border: 1px solid color-mix(in srgb, var(--fg) 10%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--fg) 4%, transparent);
+  font-family: 'Fira Code', monospace;
+  font-size: 10px;
+}
+.cookbook-download-progress.is-stalled {
+  border-color: color-mix(in srgb, var(--color-error, var(--warn)) 35%, var(--border));
+  background: color-mix(in srgb, var(--color-error, var(--warn)) 8%, transparent);
+}
+.cookbook-download-progress-top,
+.cookbook-download-progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+.cookbook-download-progress-top {
+  color: var(--fg);
+  font-weight: 600;
+}
+.cookbook-download-progress-meta {
+  margin-top: 5px;
+  color: var(--fg-muted);
+  opacity: 0.75;
+  flex-wrap: wrap;
+}
+.cookbook-download-bar {
+  height: 5px;
+  margin-top: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+}
+.cookbook-download-bar span {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: inherit;
+  background: var(--green, #50fa7b);
+}
+.cookbook-download-progress.is-stalled .cookbook-download-bar span {
+  background: var(--color-error, var(--warn));
+}
 .cookbook-task-status {
   font-size: 9px;
   padding: 1px 6px;

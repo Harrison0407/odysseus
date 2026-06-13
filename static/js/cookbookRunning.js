@@ -32,6 +32,14 @@ function _taskBadge(task) {
     // read as a different status while the server is coming up.
     return { text: task.progress, cls: 'cookbook-task-running' };
   }
+  if (task.type === 'download' && task.status === 'running' && task.downloadProgress) {
+    const p = task.downloadProgress;
+    if (p.stalled) return { text: 'stalled', cls: 'cookbook-task-error' };
+    if (p.percent != null) {
+      const speed = p.speed_bps ? ` · ${_fmtBytes(p.speed_bps, 'MB')}/s` : '';
+      return { text: `${p.percent}%${speed}`, cls: 'cookbook-task-running' };
+    }
+  }
   return { text: _statusLabel(task.status, task.type), cls: 'cookbook-task-' + task.status };
 }
 
@@ -280,6 +288,70 @@ const BG_MONITOR_INTERVAL_MS = 5000;      // background task status poll
 const STALE_PROGRESS_MS = 5 * 60 * 1000;  // download with no progress this long = stale
 const STARTUP_STALE_PROGRESS_MS = 45 * 1000; // 0%-forever startup stall: retry much sooner
 
+function _fmtBytes(bytes, unit = 'GB') {
+  const n = Number(bytes || 0);
+  if (!Number.isFinite(n) || n <= 0) return unit === 'MB' ? '0 MB' : '0.0 GB';
+  if (unit === 'MB') return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(n / (1024 ** 3)).toFixed(1)} GB`;
+}
+
+function _fmtEta(seconds) {
+  const s = Number(seconds);
+  if (!Number.isFinite(s) || s < 0) return 'estimating';
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = Math.floor(s % 60);
+  if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m`;
+  if (m > 0) return `${m}m ${String(sec).padStart(2, '0')}s`;
+  return `${sec}s`;
+}
+
+function _downloadProgressHtml(task) {
+  if (!task || task.type !== 'download') return '';
+  const p = task.downloadProgress || task.download_progress || task.payload?.download_info || null;
+  if (!p) return '';
+  const total = Number(p.total_bytes || p.gguf_total_bytes || 0);
+  const downloaded = Number(p.downloaded_bytes || 0);
+  if (!total && !p.gguf_total_bytes) return '';
+  const pct = Number.isFinite(Number(p.percent)) ? Number(p.percent) : (total ? Math.round((downloaded / total) * 100) : 0);
+  const speed = Number(p.speed_bps || 0);
+  const status = p.stalled ? 'stalled' : (speed > 0 ? 'active' : 'waiting');
+  const eta = p.stalled ? 'stalled' : _fmtEta(p.eta_seconds);
+  const expected = p.gguf_total_bytes && !downloaded ? `Expected GGUF size ${_fmtBytes(p.gguf_total_bytes)}` : '';
+  return `
+    <div class="cookbook-download-progress ${p.stalled ? 'is-stalled' : ''}">
+      <div class="cookbook-download-progress-top">
+        <span>${esc(_fmtBytes(downloaded))} / ${esc(_fmtBytes(total || p.gguf_total_bytes))}</span>
+        <span>${esc(String(Math.max(0, Math.min(100, pct || 0))))}%</span>
+      </div>
+      <div class="cookbook-download-bar"><span style="width:${Math.max(0, Math.min(100, pct || 0))}%"></span></div>
+      <div class="cookbook-download-progress-meta">
+        <span>${esc(status)}</span>
+        <span>${esc(_fmtBytes(speed, 'MB'))}/s</span>
+        <span>ETA ${esc(eta)}</span>
+        ${expected ? `<span>${esc(expected)}</span>` : ''}
+      </div>
+    </div>`;
+}
+
+function _updateDownloadProgressPanel(el, task) {
+  if (!el || !task || task.type !== 'download') return;
+  const html = _downloadProgressHtml(task);
+  let panel = el.querySelector('.cookbook-download-progress');
+  if (!html) {
+    if (panel) panel.remove();
+    return;
+  }
+  if (panel) {
+    const wrap = document.createElement('div');
+    wrap.innerHTML = html.trim();
+    panel.replaceWith(wrap.firstElementChild);
+  } else {
+    const sub = el.querySelector('.cookbook-task-sub');
+    if (sub) sub.insertAdjacentHTML('afterend', html);
+  }
+}
+
 // ── Phase detection (mirrors Python _parse_serve_phase in cookbook_routes.py) ──
 // Single source of truth for serve task status. KEEP IN SYNC with the Python version.
 export function _parseServePhase(snapshot) {
@@ -510,8 +582,9 @@ async function _startQueuedDownload(task) {
       _renderRunningTab();
       return;
     }
+    const launchPayload = data.download_info ? { ...(task.payload || {}), download_info: data.download_info } : task.payload;
     const oldId = task.sessionId;
-    const launchedTask = { ...task, sessionId: data.session_id, id: data.session_id, status: 'running' };
+    const launchedTask = { ...task, sessionId: data.session_id, id: data.session_id, status: 'running', payload: launchPayload };
     const key = _downloadDedupeKey(launchedTask);
     let found = false;
     const tasks = _loadTasks().filter(t => {
@@ -520,13 +593,15 @@ async function _startQueuedDownload(task) {
         t.sessionId = data.session_id;
         t.id = data.session_id;
         t.status = 'running';
+        t.payload = launchPayload;
+        if (data.download_info) t.downloadProgress = data.download_info;
         t._startLaunched = true;
         return true;
       }
       if (t.sessionId === data.session_id) return false;
       return !(key && t.type === 'download' && t.status === 'queued' && _downloadDedupeKey(t) === key);
     });
-    if (!found) tasks.push(_stripTaskSecrets(launchedTask));
+    if (!found) tasks.push(_stripTaskSecrets(data.download_info ? { ...launchedTask, downloadProgress: data.download_info } : launchedTask));
     _saveTasks(tasks);
     _renderRunningTab();
     _startBackgroundMonitor();
@@ -1169,23 +1244,26 @@ async function _retryDownload(name, payload, replaceSessionId = '') {
     if (replaceSessionId) {
       const tasks = _loadTasks();
       const task = tasks.find(t => t.sessionId === replaceSessionId);
+      const launchPayload = data.download_info ? { ..._payload, download_info: data.download_info } : _payload;
       if (task) {
         task.id = data.session_id;
         task.sessionId = data.session_id;
         task.status = 'running';
         task.output = '';
         task.ts = Date.now();
-        task.payload = _payload;
+        task.payload = launchPayload;
+        if (data.download_info) task.downloadProgress = data.download_info;
         task._retrying = false;
         _saveTasks(tasks);
         _soloExpandTaskId = data.session_id;
         _renderRunningTab();
         _startBackgroundMonitor();
       } else {
-        _addTask(data.session_id, name, 'download', _payload);
+        _addTask(data.session_id, name, 'download', launchPayload);
       }
     } else {
-      _addTask(data.session_id, name, 'download', _payload);
+      const launchPayload = data.download_info ? { ..._payload, download_info: data.download_info } : _payload;
+      _addTask(data.session_id, name, 'download', launchPayload);
     }
     uiModule.showToast(`Downloading ${name}...`);
   } catch (e) {
@@ -1859,6 +1937,7 @@ export function _renderRunningTab() {
         badge.className = 'cookbook-task-status' + (_bdg.cls ? ' ' + _bdg.cls : '');
         badge.style.display = '';
       }
+      _updateDownloadProgressPanel(el, task);
       // Indicator: spinning wave while running, green check when finished.
       const wave = el.querySelector('.cookbook-task-wave');
       if (wave) wave.style.display = task.status === 'running' ? '' : 'none';
@@ -1911,6 +1990,7 @@ export function _renderRunningTab() {
         <button class="cookbook-task-menu-btn" title="Actions">&#8942;</button>
       </div>
       <div class="cookbook-task-sub"><span class="cookbook-task-session">${esc(task.sessionId)}</span><span class="cookbook-task-uptime" style="display:${((task.type === 'serve' || task.type === 'download') && task.status === 'running') ? '' : 'none'}"></span>${(task.type === 'download') ? `<span class="cookbook-task-dldir" title="Download destination" style="font-size:9px;color:var(--fg-muted);font-family:'Fira Code',monospace;opacity:0.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40ch;">Dir: ${esc(task.payload?.local_dir || '~/.cache/huggingface/hub')}</span>` : ''}</div>
+      ${_downloadProgressHtml(task)}
       <div class="cookbook-output-wrap cookbook-task-collapsible${_mobileCollapseDefault ? ' cookbook-task-collapsed' : ''}"><pre class="cookbook-output-pre">${esc(task.output || '')}</pre><button type="button" class="copy-code cookbook-output-copy"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div>
     `;
 
@@ -2885,8 +2965,17 @@ async function _reconnectTask(el, task) {
                 });
                 const data = await res.json();
                 if (data.ok && data.session_id) {
-                  _updateTask(task.sessionId, { sessionId: data.session_id, status: 'running', output: '' });
+                  const nextPayload = data.download_info ? { ...dlPayload, download_info: data.download_info } : dlPayload;
+                  _updateTask(task.sessionId, {
+                    sessionId: data.session_id,
+                    status: 'running',
+                    output: '',
+                    payload: nextPayload,
+                    downloadProgress: data.download_info || task.downloadProgress || null,
+                  });
                   task.sessionId = data.session_id;
+                  task.payload = nextPayload;
+                  if (data.download_info) task.downloadProgress = data.download_info;
                   el._lastProgress = null;
                   el._lastProgressTime = Date.now();
                   badge.textContent = 'restarted';
@@ -3547,6 +3636,7 @@ async function _pollBackgroundStatus() {
           updates.status = live.status === 'ready' ? 'ready' : 'running';
         }
         if (live.progress && live.progress !== task.progress) updates.progress = live.progress;
+        if (live.download_progress) updates.downloadProgress = live.download_progress;
         if (live.output_tail) {
           const previous = String(task.output || '');
           const tail = String(live.output_tail || '');

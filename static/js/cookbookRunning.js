@@ -14,7 +14,9 @@ import { computeProgressSignal } from './cookbookProgressSignal.js';
 // quit cleanly reads as "stopped", not "error".
 function _statusLabel(status, type) {
   if (status === 'running' && type === 'download') return 'downloading';
+  if (status === 'running' && type === 'transcription') return 'transcribing';
   if (status === 'done' && type === 'download') return 'finished';
+  if (status === 'done' && type === 'transcription') return 'finished';
   if (status === 'error') return 'stopped';
   return status || '';
 }
@@ -39,6 +41,9 @@ function _taskBadge(task) {
       const speed = p.speed_bps ? ` · ${_fmtBytes(p.speed_bps, 'MB')}/s` : '';
       return { text: `${p.percent}%${speed}`, cls: 'cookbook-task-running' };
     }
+  }
+  if (task.type === 'transcription' && task.status === 'running' && task.progress) {
+    return { text: task.progress, cls: 'cookbook-task-running' };
   }
   return { text: _statusLabel(task.status, task.type), cls: 'cookbook-task-' + task.status };
 }
@@ -1759,7 +1764,7 @@ export function _renderRunningTab() {
       '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px;">' +
       '<h2 style="margin:0;padding:0;line-height:1;">Running <span id="running-count" class="memory-count" style="font-size:0.6em;opacity:0.6;font-weight:normal">' + activeCount + '</span></h2>' +
       '</div>' +
-      '<p class="memory-desc doclib-desc" style="margin-top:6px;">Active downloads and serving processes.</p>' +
+      '<p class="memory-desc doclib-desc" style="margin-top:6px;">Active downloads, transcriptions, and serving processes.</p>' +
       '</div>';
     const firstGroup = body.querySelector('.cookbook-group');
     if (firstGroup) body.insertBefore(group, firstGroup);
@@ -1885,7 +1890,7 @@ export function _renderRunningTab() {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();  // don't toggle the section collapse
       const host = btn.dataset.stopServer;
-      const running = _loadTasks().filter(t => (t.remoteHost || '') === host && t.status === 'running');
+      const running = _loadTasks().filter(t => (t.remoteHost || '') === host && t.status === 'running' && t.type !== 'transcription');
       if (!running.length) { uiModule.showToast(`Nothing running on ${_serverName(host)}`); return; }
       if (!await window.styledConfirm(`Stop ${running.length} running task${running.length > 1 ? 's' : ''} on ${_serverName(host)}?`, { confirmText: 'Stop all' })) return;
       // Mark every task as user-stopped BEFORE firing the kills so that the
@@ -1998,7 +2003,7 @@ export function _renderRunningTab() {
         <span class="cookbook-task-status ${_bdg.cls}"${_bdgTitle}>${esc(_bdg.text)}</span>
         <button class="cookbook-task-menu-btn" title="Actions">&#8942;</button>
       </div>
-      <div class="cookbook-task-sub"><span class="cookbook-task-session">${esc(task.sessionId)}</span><span class="cookbook-task-uptime" style="display:${((task.type === 'serve' || task.type === 'download') && task.status === 'running') ? '' : 'none'}"></span>${(task.type === 'download') ? `<span class="cookbook-task-dldir" title="Download destination" style="font-size:9px;color:var(--fg-muted);font-family:'Fira Code',monospace;opacity:0.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40ch;">Dir: ${esc(task.payload?.local_dir || '~/.cache/huggingface/hub')}</span>` : ''}</div>
+      <div class="cookbook-task-sub"><span class="cookbook-task-session">${esc(task.sessionId)}</span><span class="cookbook-task-uptime" style="display:${((task.type === 'serve' || task.type === 'download' || task.type === 'transcription') && task.status === 'running') ? '' : 'none'}"></span>${(task.type === 'download') ? `<span class="cookbook-task-dldir" title="Download destination" style="font-size:9px;color:var(--fg-muted);font-family:'Fira Code',monospace;opacity:0.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40ch;">Dir: ${esc(task.payload?.local_dir || '~/.cache/huggingface/hub')}</span>` : ''}</div>
       ${_downloadProgressHtml(task)}
       <div class="cookbook-output-wrap cookbook-task-collapsible${_mobileCollapseDefault ? ' cookbook-task-collapsed' : ''}"><pre class="cookbook-output-pre">${esc(task.output || '')}</pre><button type="button" class="copy-code cookbook-output-copy"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div>
     `;
@@ -2013,9 +2018,9 @@ export function _renderRunningTab() {
     }
 
     const _uptimeEl = el.querySelector('.cookbook-task-uptime');
-    if (_uptimeEl && (task.type === 'serve' || task.type === 'download') && task.status === 'running') {
+    if (_uptimeEl && (task.type === 'serve' || task.type === 'download' || task.type === 'transcription') && task.status === 'running') {
       const _startedAt = task.ts || Date.now();
-      const _prefix = task.type === 'download' ? 'downloading' : 'uptime';
+      const _prefix = task.type === 'download' ? 'downloading' : (task.type === 'transcription' ? 'transcribing' : 'uptime');
       el._uptimeInterval = setInterval(() => {
         const secs = Math.floor((Date.now() - _startedAt) / 1000);
         const h = Math.floor(secs / 3600);
@@ -2199,10 +2204,10 @@ export function _renderRunningTab() {
         if (task.status !== 'running' && task.status !== 'queued') {
           items.push({ label: 'Reconnect', action: 'reconnect' });
         }
-        if (task.status === 'running') {
+        if (task.status === 'running' && task.type !== 'transcription') {
           items.push({ label: 'Stop', action: 'stop', danger: true });
         }
-        items.push({ label: 'Restart', action: 'retry' });
+        if (task.type !== 'transcription') items.push({ label: 'Restart', action: 'retry' });
         // Edit serve — open the full serve panel (same as the edit icon),
         // switching to this task's server first so the model is found.
         if (task.type === 'serve' && task.payload?.repo_id) {
@@ -2575,7 +2580,7 @@ export function _renderRunningTab() {
     // responds; without this, the user opens the Running tab and sees
     // only the placeholder ("Launched by scheduled task …") because
     // _reconnectTask never fires for status 'ready'/'loading'/'warming'.
-    if (['running', 'ready', 'loading', 'warming', 'starting'].includes(task.status)) {
+    if (task.type !== 'transcription' && ['running', 'ready', 'loading', 'warming', 'starting'].includes(task.status)) {
       _reconnectTask(el, task);
     }
   }

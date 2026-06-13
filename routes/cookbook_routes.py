@@ -14,14 +14,15 @@ import uuid
 import fnmatch
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Request, Depends
+from fastapi import APIRouter, HTTPException, Request, Depends, UploadFile, File, Form
 
-from src.auth_helpers import require_user
-from src.constants import COOKBOOK_STATE_FILE
+from src.auth_helpers import require_privilege, require_user
+from src.constants import COOKBOOK_STATE_FILE, PERSONAL_UPLOADS_DIR
 from pydantic import BaseModel
 
 from core.middleware import require_admin
 from routes._validators import validate_remote_host, validate_ssh_port
+from src.upload_handler import secure_filename
 from core.platform_compat import (
     IS_WINDOWS,
     detached_popen_kwargs,
@@ -57,6 +58,9 @@ _HF_TOKEN_STATUS_SNIPPET = (
 
 _DOWNLOAD_PROGRESS_CACHE: dict[str, dict] = {}
 _ACTIVE_DOWNLOAD_SESSIONS: dict[str, dict] = {}
+_TRANSCRIPTION_JOBS: dict[str, dict] = {}
+
+_TRANSCRIBE_EXTS = {".mp3", ".m4a", ".wav", ".mp4"}
 
 
 def _download_key_from_values(
@@ -145,6 +149,65 @@ def _expected_download_info(repo_id: str, include: str | None = None, hf_token: 
     except Exception as exc:
         logger.debug("HF metadata lookup failed for %s: %s", repo_id, exc)
         return {}
+
+
+def _transcript_timestamp(seconds: float | int | None, sep: str = ",") -> str:
+    total_ms = max(0, int(round(float(seconds or 0) * 1000)))
+    ms = total_ms % 1000
+    total_s = total_ms // 1000
+    s = total_s % 60
+    total_m = total_s // 60
+    m = total_m % 60
+    h = total_m // 60
+    return f"{h:02d}:{m:02d}:{s:02d}{sep}{ms:03d}"
+
+
+def _transcript_segments(data: dict) -> list[dict]:
+    segments = data.get("segments") if isinstance(data, dict) else []
+    out = []
+    for idx, seg in enumerate(segments or []):
+        if not isinstance(seg, dict):
+            continue
+        text = str(seg.get("text") or "").strip()
+        if not text:
+            continue
+        speaker = str(seg.get("speaker") or seg.get("speaker_id") or "").strip()
+        out.append({
+            "start": float(seg.get("start") or 0),
+            "end": float(seg.get("end") or seg.get("start") or 0),
+            "text": text,
+            "speaker": speaker,
+            "idx": idx + 1,
+        })
+    return out
+
+
+def _write_transcript_outputs(json_path: Path, output_base: Path) -> dict:
+    data = json.loads(json_path.read_text(encoding="utf-8"))
+    segments = _transcript_segments(data)
+    text_parts = []
+    srt_parts = []
+    vtt_parts = ["WEBVTT", ""]
+    for i, seg in enumerate(segments, 1):
+        speaker = f"{seg['speaker']}: " if seg.get("speaker") else ""
+        line = f"{speaker}{seg['text']}".strip()
+        text_parts.append(line)
+        srt_parts.append(
+            f"{i}\n"
+            f"{_transcript_timestamp(seg['start'])} --> {_transcript_timestamp(seg['end'])}\n"
+            f"{line}\n"
+        )
+        vtt_parts.append(
+            f"{_transcript_timestamp(seg['start'], '.')} --> {_transcript_timestamp(seg['end'], '.')}\n"
+            f"{line}\n"
+        )
+    txt_path = output_base.with_suffix(".txt")
+    srt_path = output_base.with_suffix(".srt")
+    vtt_path = output_base.with_suffix(".vtt")
+    txt_path.write_text("\n".join(text_parts).strip() + "\n", encoding="utf-8")
+    srt_path.write_text("\n".join(srt_parts).strip() + "\n", encoding="utf-8")
+    vtt_path.write_text("\n".join(vtt_parts).strip() + "\n", encoding="utf-8")
+    return {"txt": str(txt_path), "srt": str(srt_path), "vtt": str(vtt_path), "segments": len(segments)}
 
 def setup_cookbook_routes() -> APIRouter:
     router = APIRouter(tags=["cookbook"])
@@ -335,6 +398,228 @@ def setup_cookbook_routes() -> APIRouter:
             return _decrypt_secret(env.get("hfToken") if isinstance(env, dict) else "")
         except Exception:
             return ""
+
+    def _state_tasks() -> tuple[dict, list]:
+        state = {}
+        tasks = []
+        if _cookbook_state_path.exists():
+            try:
+                state = json.loads(_cookbook_state_path.read_text(encoding="utf-8"))
+            except Exception:
+                state = {}
+        raw = state.get("tasks") if isinstance(state, dict) else []
+        if isinstance(raw, list):
+            tasks = raw
+        elif isinstance(raw, dict):
+            tasks = list(raw.values())
+        if not isinstance(state, dict):
+            state = {}
+        return state, [t for t in tasks if isinstance(t, dict)]
+
+    def _write_state_tasks(tasks: list, state: dict | None = None) -> None:
+        from core.atomic_io import atomic_write_json
+        if state is None:
+            state, _ = _state_tasks()
+        state["tasks"] = tasks
+        on_disk = {}
+        if _cookbook_state_path.exists():
+            try:
+                on_disk = json.loads(_cookbook_state_path.read_text(encoding="utf-8"))
+            except Exception:
+                on_disk = {}
+        atomic_write_json(str(_cookbook_state_path), _state_for_storage(state, on_disk), indent=2)
+
+    def _upsert_cookbook_task(task: dict) -> None:
+        state, tasks = _state_tasks()
+        sid = task.get("sessionId")
+        found = False
+        for idx, existing in enumerate(tasks):
+            if existing.get("sessionId") == sid:
+                tasks[idx] = {**existing, **task}
+                found = True
+                break
+        if not found:
+            tasks.append(task)
+        _write_state_tasks(tasks, state)
+
+    def _patch_cookbook_task(session_id: str, updates: dict) -> None:
+        state, tasks = _state_tasks()
+        for task in tasks:
+            if task.get("sessionId") == session_id:
+                task.update(updates)
+                break
+        _write_state_tasks(tasks, state)
+
+    def _personal_transcript_dir(owner: str | None) -> Path:
+        owner_segment = secure_filename((owner or "local").strip())[:80] or "local"
+        path = Path(PERSONAL_UPLOADS_DIR) / owner_segment / "transcripts"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def _create_transcript_document(title: str, content: str, owner: str | None) -> str:
+        from core.database import SessionLocal, Document, DocumentVersion
+        doc_id = str(uuid.uuid4())
+        ver_id = str(uuid.uuid4())
+        db = SessionLocal()
+        try:
+            doc = Document(
+                id=doc_id,
+                session_id=None,
+                title=title,
+                language="markdown",
+                current_content=content,
+                version_count=1,
+                is_active=True,
+                owner=owner,
+            )
+            ver = DocumentVersion(
+                id=ver_id,
+                document_id=doc_id,
+                version_number=1,
+                content=content,
+                summary="Imported audio transcript",
+                source="transcription",
+            )
+            db.add(doc)
+            db.add(ver)
+            db.commit()
+            return doc_id
+        finally:
+            db.close()
+
+    def _index_transcript_for_rag(path: Path, owner: str | None) -> dict:
+        try:
+            from src.rag_singleton import get_rag_manager
+            rag = get_rag_manager()
+            if not rag:
+                return {"ok": False, "message": "RAG system is not available"}
+            try:
+                rag.delete_by_source(str(path))
+            except Exception:
+                pass
+            text = path.read_text(encoding="utf-8", errors="replace")
+            indexed = 0
+            failed = 0
+            for i, chunk in enumerate(rag._split_into_chunks(text, chunk_size=500)):
+                metadata = {
+                    "source": str(path),
+                    "filename": path.name,
+                    "directory": str(path.parent),
+                    "type": ".txt",
+                    "kind": "transcript",
+                    "chunk_id": i,
+                }
+                if owner:
+                    metadata["owner"] = owner
+                if rag.add_document(chunk, metadata):
+                    indexed += 1
+                else:
+                    failed += 1
+            return {"ok": indexed > 0, "indexed_count": indexed, "failed_count": failed}
+        except Exception as exc:
+            logger.warning("Transcript RAG indexing failed for %s: %s", path, exc)
+            return {"ok": False, "message": str(exc)}
+
+    async def _run_transcription_job(session_id: str) -> None:
+        job = _TRANSCRIPTION_JOBS.get(session_id)
+        if not job:
+            return
+        input_path = Path(job["input_path"])
+        output_dir = Path(job["output_dir"])
+        output_base = output_dir / input_path.stem
+        diarize = bool(job.get("diarize"))
+        owner = job.get("owner") or None
+        cmd_name = "whisperx" if diarize else "whisper"
+        cmd_path = shutil.which(cmd_name)
+        cmd = [cmd_path] if cmd_path else [sys.executable, "-m", cmd_name]
+        cmd.extend([
+            str(input_path),
+            "--model", "large-v3",
+            "--output_dir", str(output_dir),
+            "--output_format", "json",
+        ])
+        if diarize:
+            cmd.append("--diarize")
+        else:
+            cmd.extend(["--task", "transcribe"])
+        job["output"] += f"[odysseus] Running: {' '.join(shlex.quote(c) for c in cmd)}\n"
+        job["progress"] = "starting"
+        _patch_cookbook_task(session_id, {"output": job["output"], "progress": job["progress"]})
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                cwd=str(output_dir),
+            )
+            job["pid"] = proc.pid
+            percent_re = re.compile(r"(\d{1,3})%")
+            while True:
+                line_b = await proc.stdout.readline() if proc.stdout else b""
+                if not line_b:
+                    break
+                line = line_b.decode("utf-8", errors="replace").replace("\r", "\n")
+                for part in [p.strip() for p in line.splitlines() if p.strip()]:
+                    m = percent_re.search(part)
+                    if m:
+                        job["progress"] = f"{min(100, int(m.group(1)))}%"
+                    elif "Transcribe" in part or "Align" in part or "Diar" in part:
+                        job["progress"] = part[:80]
+                    job["output"] = (job["output"] + part + "\n")[-12000:]
+                    _patch_cookbook_task(session_id, {"output": job["output"], "progress": job["progress"]})
+            rc = await proc.wait()
+            if rc != 0:
+                job["status"] = "error"
+                job["progress"] = "failed"
+                job["output"] += f"[odysseus] TRANSCRIPTION_FAILED exit {rc}\n"
+                _patch_cookbook_task(session_id, {"status": "error", "output": job["output"], "progress": job["progress"]})
+                return
+
+            json_candidates = sorted(output_dir.glob(input_path.stem + "*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+            if not json_candidates:
+                raise RuntimeError("Whisper finished but no JSON transcript was produced")
+            outputs = _write_transcript_outputs(json_candidates[0], output_base)
+            txt_path = Path(outputs["txt"])
+            transcript_text = txt_path.read_text(encoding="utf-8", errors="replace")
+            rag_result = _index_transcript_for_rag(txt_path, owner)
+            doc_id = ""
+            if transcript_text.strip():
+                doc_id = _create_transcript_document(f"Transcript: {input_path.stem}", transcript_text, owner)
+            personal_mgr = job.get("personal_docs_manager")
+            if personal_mgr and hasattr(personal_mgr, "add_directory"):
+                try:
+                    personal_mgr.add_directory(str(output_dir), index=False)
+                    personal_mgr.refresh_index()
+                except Exception:
+                    pass
+            job["status"] = "completed"
+            job["progress"] = "done"
+            job["outputs"] = outputs
+            job["doc_id"] = doc_id
+            job["rag_result"] = rag_result
+            job["output"] += (
+                "[odysseus] TRANSCRIPTION_OK\n"
+                f"[odysseus] TXT: {outputs['txt']}\n"
+                f"[odysseus] SRT: {outputs['srt']}\n"
+                f"[odysseus] VTT: {outputs['vtt']}\n"
+                f"[odysseus] RAG indexed chunks: {rag_result.get('indexed_count', 0)}\n"
+            )
+            _patch_cookbook_task(session_id, {
+                "status": "done",
+                "output": job["output"],
+                "progress": job["progress"],
+                "payload": {
+                    **(job.get("payload") or {}),
+                    "outputs": outputs,
+                    "doc_id": doc_id,
+                    "rag_result": rag_result,
+                },
+            })
+        except Exception as exc:
+            job["status"] = "error"
+            job["progress"] = "failed"
+            job["output"] += f"[odysseus] TRANSCRIPTION_FAILED {exc}\n"
+            _patch_cookbook_task(session_id, {"status": "error", "output": job["output"], "progress": job["progress"]})
 
     def _load_cookbook_tasks() -> list[dict]:
         if not _cookbook_state_path.exists():
@@ -1007,6 +1292,68 @@ def setup_cookbook_routes() -> APIRouter:
             pass
 
         return {"ok": True, "session_id": session_id, "remote": remote or "local", "download_info": download_info}
+
+    @router.post("/api/cookbook/transcribe")
+    async def cookbook_transcribe(
+        request: Request,
+        file: UploadFile = File(...),
+        diarize: bool = Form(False),
+    ):
+        """Transcribe a local audio/video file with Whisper large-v3."""
+        require_admin(request)
+        owner = require_privilege(request, "can_use_documents")
+        filename = secure_filename(os.path.basename(file.filename or "audio"))
+        ext = Path(filename).suffix.lower()
+        if ext not in _TRANSCRIBE_EXTS:
+            raise HTTPException(400, "Supported transcription files: mp3, m4a, wav, mp4")
+        output_dir = _personal_transcript_dir(owner)
+        session_id = f"transcribe-{uuid.uuid4().hex[:8]}"
+        stored_name = f"{Path(filename).stem}-{session_id}{ext}"
+        input_path = output_dir / stored_name
+        try:
+            with input_path.open("wb") as out:
+                while True:
+                    chunk = await file.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    out.write(chunk)
+        finally:
+            await file.close()
+        task = {
+            "id": session_id,
+            "sessionId": session_id,
+            "name": filename,
+            "type": "transcription",
+            "status": "running",
+            "output": "[odysseus] Queued local audio transcription with Whisper large-v3.\n",
+            "progress": "queued",
+            "ts": int(time.time() * 1000),
+            "payload": {
+                "input_path": str(input_path),
+                "output_dir": str(output_dir),
+                "model": "large-v3",
+                "diarize": diarize,
+                "formats": ["txt", "srt", "vtt"],
+            },
+            "remoteHost": "",
+            "sshPort": "",
+            "platform": "local",
+        }
+        _upsert_cookbook_task(task)
+        _TRANSCRIPTION_JOBS[session_id] = {
+            "session_id": session_id,
+            "status": "running",
+            "progress": "queued",
+            "output": task["output"],
+            "input_path": str(input_path),
+            "output_dir": str(output_dir),
+            "diarize": diarize,
+            "owner": owner,
+            "payload": task["payload"],
+            "personal_docs_manager": getattr(request.app.state, "personal_docs_manager", None),
+        }
+        asyncio.create_task(_run_transcription_job(session_id))
+        return {"ok": True, "session_id": session_id, "name": filename}
 
     @router.get("/api/model/cached")
     async def model_cached(request: Request, host: str | None = None, model_dir: str | None = None, ssh_port: str | None = None, platform: str | None = None):
@@ -3087,6 +3434,31 @@ def setup_cookbook_routes() -> APIRouter:
                 or ""
             )
             task_platform = task.get("platform", "")
+
+            if task_type == "transcription":
+                job = _TRANSCRIPTION_JOBS.get(session_id) or {}
+                status = job.get("status") or task.get("status") or "stopped"
+                if status == "done":
+                    status = "completed"
+                output = job.get("output") or task.get("output") or ""
+                progress = job.get("progress") or task.get("progress") or ""
+                results.append({
+                    "session_id": session_id,
+                    "type": task_type,
+                    "model": model,
+                    "status": "completed" if status == "completed" or status == "done" else status,
+                    "progress": progress[:120],
+                    "phase": progress[:120],
+                    "diagnosis": None,
+                    "output_tail": "\n".join(str(output).splitlines()[-12:]),
+                    "cmd": "",
+                    "tps": None,
+                    "reqs": None,
+                    "pct": None,
+                    "remote": "local",
+                    "download_progress": {},
+                })
+                continue
 
             # Check if session is alive + capture output
             _tport = task.get("sshPort", "")

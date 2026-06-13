@@ -1398,6 +1398,63 @@ function _wireTabEvents(body) {
     });
   }
 
+  const transDrop = document.getElementById('cookbook-transcribe-drop');
+  const transInput = document.getElementById('cookbook-transcribe-file');
+  const transPick = document.getElementById('cookbook-transcribe-pick');
+  const transDiarize = document.getElementById('cookbook-transcribe-diarize');
+  const startTranscription = async (files) => {
+    const file = files && files[0];
+    if (!file) return;
+    const ok = /\.(mp3|m4a|wav|mp4)$/i.test(file.name || '');
+    if (!ok) {
+      uiModule.showToast('Supported transcription files: mp3, m4a, wav, mp4', 7000);
+      return;
+    }
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('diarize', transDiarize?.checked ? 'true' : 'false');
+    if (transDrop) transDrop.classList.add('is-uploading');
+    try {
+      const res = await fetch('/api/cookbook/transcribe', {
+        method: 'POST',
+        credentials: 'same-origin',
+        body: fd,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        uiModule.showToast('Transcription failed: ' + (data.detail || data.error || res.statusText), 9000);
+        return;
+      }
+      _addTask(data.session_id, data.name || file.name, 'transcription', {
+        model: 'large-v3',
+        diarize: !!transDiarize?.checked,
+        formats: ['txt', 'srt', 'vtt'],
+      });
+      uiModule.showToast(`Transcribing ${data.name || file.name}...`);
+    } catch (e) {
+      uiModule.showToast('Transcription failed: ' + e.message, 9000);
+    } finally {
+      if (transDrop) transDrop.classList.remove('is-uploading');
+      if (transInput) transInput.value = '';
+    }
+  };
+  if (transPick && transInput) {
+    transPick.addEventListener('click', () => transInput.click());
+    transInput.addEventListener('change', () => startTranscription(transInput.files));
+  }
+  if (transDrop) {
+    transDrop.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      transDrop.classList.add('dragover');
+    });
+    transDrop.addEventListener('dragleave', () => transDrop.classList.remove('dragover'));
+    transDrop.addEventListener('drop', (e) => {
+      e.preventDefault();
+      transDrop.classList.remove('dragover');
+      startTranscription(e.dataTransfer.files);
+    });
+  }
+
   // Latest HF models that fit — collapsible card list
   // Foldable Download admin-card — h2 "Download" doubles as the chevron
   // toggle; collapses the entire card body (description + input + HF list).
@@ -1778,6 +1835,7 @@ function _renderRecipes() {
   html += '<div class="cookbook-tabs">';
   html += '<button class="cookbook-tab active" data-backend="Search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="7 14 12 19 17 14"/><line x1="12" y1="19" x2="12" y2="5"/><line x1="5" y1="21" x2="19" y2="21"/></svg>Download</button>';
   html += '<button class="cookbook-tab" data-backend="Serve"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-1px;margin-right:3px;"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><circle cx="6" cy="6" r="1"/><circle cx="6" cy="18" r="1"/></svg>Serve</button>';
+  html += '<button class="cookbook-tab" data-backend="Transcribe"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>Transcribe</button>';
   html += '<button class="cookbook-tab" data-backend="Dependencies"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-1px;margin-right:3px;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>Dependencies</button>';
   html += '<button class="cookbook-tab" data-backend="Settings"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-1px;margin-right:3px;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings</button>';
   html += '</div>';
@@ -1951,6 +2009,24 @@ function _renderRecipes() {
        + '</div>';
 
   html += '</div></div>';
+
+  html += '<div class="cookbook-group hidden" data-backend-group="Transcribe">';
+  html += '<div class="admin-card" style="display:flex;flex-direction:column;overflow:hidden;">';
+  html += '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px;">';
+  html += '<h2 style="margin:0;padding:0;line-height:1;">Audio Transcription</h2>';
+  html += '</div>';
+  html += '<p class="memory-desc doclib-desc" style="margin-top:6px;">Local Whisper large-v3 transcription for mp3, m4a, wav, and mp4. Outputs are saved as TXT, SRT, and VTT and indexed for chat search.</p>';
+  html += '<div id="cookbook-transcribe-drop" class="cookbook-transcribe-drop">';
+  html += '<input id="cookbook-transcribe-file" type="file" accept=".mp3,.m4a,.wav,.mp4,audio/*,video/mp4" style="display:none" />';
+  html += '<div class="cookbook-transcribe-title">Drop an audio or video file here</div>';
+  html += '<div class="cookbook-transcribe-meta">Whisper large-v3 · TXT/SRT/VTT · local processing</div>';
+  html += '<div class="cookbook-transcribe-actions">';
+  html += '<button type="button" id="cookbook-transcribe-pick" class="cookbook-btn">Choose file</button>';
+  html += '<label class="cookbook-transcribe-check"><input type="checkbox" id="cookbook-transcribe-diarize" /> Speaker diarization</label>';
+  html += '</div>';
+  html += '</div>';
+  html += '</div>';
+  html += '</div>';
 
   // Serve group
   html += '<div class="cookbook-group hidden" data-backend-group="Serve">';

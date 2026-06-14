@@ -48,6 +48,49 @@ function _taskBadge(task) {
   return { text: _statusLabel(task.status, task.type), cls: 'cookbook-task-' + task.status };
 }
 
+function _isWhisperChecksumFailure(text) {
+  return /sha256 checksum does not match|checksum does not match|Whisper model cache appears corrupted/i.test(String(text || ''));
+}
+
+function _transcriptionDiagnosis(task, outputText = '') {
+  if (!task || task.type !== 'transcription') return null;
+  const backend = task._backendDiagnosis;
+  const text = `${outputText || ''}\n${backend?.message || ''}\n${backend?.suggestion || ''}`;
+  if (!_isWhisperChecksumFailure(text)) return backend || null;
+  return {
+    message: 'Whisper model cache appears corrupted. Clear the Whisper cache and retry.',
+    suggestion: 'Suggested action: clear ~/.cache/whisper, then retry transcription so Whisper re-downloads large-v3.',
+    fixes: [
+      {
+        label: 'Clear Whisper cache',
+        action: async (panel) => {
+          if (!await window.styledConfirm('Clear ~/.cache/whisper? HuggingFace model downloads will not be touched.', { confirmText: 'Clear cache' })) return;
+          const res = await fetch('/api/cookbook/transcribe/clear-whisper-cache', {
+            method: 'POST',
+            credentials: 'same-origin',
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.ok) {
+            uiModule.showToast('Failed to clear Whisper cache: ' + (data.detail || data.error || res.statusText), 9000);
+            return;
+          }
+          const path = data.path || '~/.cache/whisper';
+          uiModule.showToast(data.cleared ? `Cleared ${path}` : `${path} was already clear`);
+          const taskEl = panel?.closest?.('.cookbook-task');
+          const sessionId = taskEl?.dataset?.taskId || task?.sessionId;
+          if (sessionId) {
+            const current = _loadTasks().find(t => t.sessionId === sessionId) || task;
+            _updateTask(sessionId, {
+              output: `${current.output || ''}\n[odysseus] Whisper cache cleared: ${path}\n[odysseus] Retry transcription to re-download large-v3.`.trim(),
+            });
+            _renderRunningTab();
+          }
+        },
+      },
+    ],
+  };
+}
+
 // A download task whose tmux output still shows an active per-shard line
 // (e.g. "model-00012-of-00082.safetensors: 56%|") is NOT actually finished —
 // the cookbook just lost track. The clear pill becomes a "reconnect" affordance
@@ -232,7 +275,7 @@ function _buildCrashReport(task, outputText) {
   const diag = _diagnose(capturedOutput);
   const started = task?.ts ? new Date(task.ts).toISOString() : '';
   const report = [
-    '## Odysseus Cookbook crash report',
+    '## MarketMatch AI Lab crash report',
     '',
     'Please review this report for secrets before posting it publicly.',
     '',
@@ -338,6 +381,27 @@ function _downloadProgressHtml(task) {
         ${expected ? `<span>${esc(expected)}</span>` : ''}
       </div>
     </div>`;
+}
+
+function _downloadCompactStatus(task) {
+  if (!task || task.type !== 'download') return '';
+  const p = task.downloadProgress || task.download_progress || task.payload?.download_info || null;
+  if (p) {
+    const total = Number(p.total_bytes || p.gguf_total_bytes || 0);
+    const downloaded = Number(p.downloaded_bytes || 0);
+    const pct = Number.isFinite(Number(p.percent)) ? Number(p.percent) : (total ? Math.round((downloaded / total) * 100) : 0);
+    const clippedPct = Math.max(0, Math.min(100, pct || 0));
+    const prefix = p.stalled ? 'stalled' : 'download';
+    if (clippedPct) return `${prefix} ${clippedPct}%`;
+    if (downloaded && total) return `${prefix} ${_fmtBytes(downloaded)} / ${_fmtBytes(total)}`;
+    if (downloaded) return `${prefix} ${_fmtBytes(downloaded)}`;
+    if (total) return `${prefix} 0%`;
+  }
+  if (task.progress) {
+    const pctMatch = String(task.progress).match(/(\d+)%/);
+    if (pctMatch) return `download ${pctMatch[0]}`;
+  }
+  return 'downloading';
 }
 
 function _updateDownloadProgressPanel(el, task) {
@@ -1963,9 +2027,13 @@ export function _renderRunningTab() {
       }
       const startNow = el.querySelector('.cookbook-task-start-now');
       if (startNow) startNow.style.display = (task.type === 'download' && task.status === 'queued') ? '' : 'none';
-      const terminalDiag = _terminalServeDiagnosis(task, el.querySelector('.cookbook-output-pre')?.textContent || task.output || '');
+      const outputText = el.querySelector('.cookbook-output-pre')?.textContent || task.output || '';
+      const terminalDiag = _terminalServeDiagnosis(task, outputText);
+      const transcriptionDiag = _transcriptionDiagnosis(task, outputText);
       if (terminalDiag) {
-        _showDiagnosis(el, terminalDiag, el.querySelector('.cookbook-output-pre')?.textContent || task.output || '');
+        _showDiagnosis(el, terminalDiag, outputText);
+      } else if (transcriptionDiag) {
+        _showDiagnosis(el, transcriptionDiag, outputText);
       } else {
         const existingDiag = el.querySelector('.cookbook-diagnosis');
         // Keep diagnosis for failed tasks even if output was cleared and we
@@ -2012,8 +2080,10 @@ export function _renderRunningTab() {
     if (_waveEl && task.status === 'running') _registerWaveEl(_waveEl);
 
     const terminalDiag = _terminalServeDiagnosis(task, task.output || '');
+    const transcriptionDiag = _transcriptionDiagnosis(task, task.output || '');
     if (terminalDiag) _showDiagnosis(el, terminalDiag, task.output || '');
-    if (!terminalDiag && (task.status === 'error' || task.status === 'crashed') && task._backendDiagnosis) {
+    if (!terminalDiag && transcriptionDiag) _showDiagnosis(el, transcriptionDiag, task.output || '');
+    if (!terminalDiag && !transcriptionDiag && (task.status === 'error' || task.status === 'crashed') && task._backendDiagnosis) {
       _showDiagnosis(el, task._backendDiagnosis, task.output || '');
     }
 
@@ -3697,13 +3767,9 @@ async function _pollBackgroundStatus() {
             statusEl.textContent = 'cooking';
           }
         } else {
-          var _dlProgress = '';
-          if (t.progress) {
-            var _pctMatch = t.progress.match(/(\d+)%/);
-            _dlProgress = _pctMatch ? ` ${_pctMatch[0]}` : '';
-          }
-          statusEl.textContent = `downloading${_dlProgress}`;
+          statusEl.textContent = _downloadCompactStatus(t);
         }
+        statusEl.style.color = '';
         statusEl.style.display = '';
       } else if (errorTasks.length > 0) {
         statusEl.textContent = 'error';

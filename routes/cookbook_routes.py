@@ -209,6 +209,31 @@ def _write_transcript_outputs(json_path: Path, output_base: Path) -> dict:
     vtt_path.write_text("\n".join(vtt_parts).strip() + "\n", encoding="utf-8")
     return {"txt": str(txt_path), "srt": str(srt_path), "vtt": str(vtt_path), "segments": len(segments)}
 
+
+WHISPER_CHECKSUM_CACHE_MESSAGE = "Whisper model cache appears corrupted. Clear the Whisper cache and retry."
+
+
+def _whisper_cache_dir() -> Path:
+    return Path.home() / ".cache" / "whisper"
+
+
+def _looks_like_whisper_checksum_error(text: str) -> bool:
+    return bool(re.search(r"sha256 checksum does not match|checksum does not match", str(text or ""), re.I))
+
+
+def _clear_whisper_cache_dir() -> dict:
+    cache_dir = _whisper_cache_dir()
+    expected = Path.home() / ".cache" / "whisper"
+    if cache_dir != expected:
+        raise RuntimeError("Refusing to clear unexpected Whisper cache path")
+    existed = cache_dir.exists() or cache_dir.is_symlink()
+    if cache_dir.is_symlink() or cache_dir.is_file():
+        cache_dir.unlink()
+    elif cache_dir.exists():
+        shutil.rmtree(cache_dir)
+    return {"ok": True, "cleared": existed, "path": str(cache_dir)}
+
+
 def setup_cookbook_routes() -> APIRouter:
     router = APIRouter(tags=["cookbook"])
     _cookbook_state_path = Path(COOKBOOK_STATE_FILE)
@@ -542,6 +567,8 @@ def setup_cookbook_routes() -> APIRouter:
             cmd.append("--diarize")
         else:
             cmd.extend(["--task", "transcribe"])
+        whisper_binary = cmd_path or f"{sys.executable} -m {cmd_name}"
+        job["output"] += f"[odysseus] Whisper binary: {whisper_binary}\n"
         job["output"] += f"[odysseus] Running: {' '.join(shlex.quote(c) for c in cmd)}\n"
         job["progress"] = "starting"
         _patch_cookbook_task(session_id, {"output": job["output"], "progress": job["progress"]})
@@ -571,8 +598,19 @@ def setup_cookbook_routes() -> APIRouter:
             if rc != 0:
                 job["status"] = "error"
                 job["progress"] = "failed"
+                diagnosis = None
+                if _looks_like_whisper_checksum_error(job.get("output", "")):
+                    job["progress"] = "cache corrupted"
+                    job["output"] += f"[odysseus] {WHISPER_CHECKSUM_CACHE_MESSAGE}\n"
+                    diagnosis = {
+                        "message": WHISPER_CHECKSUM_CACHE_MESSAGE,
+                        "suggestion": "Suggested action: clear ~/.cache/whisper, then retry transcription so Whisper re-downloads large-v3.",
+                    }
                 job["output"] += f"[odysseus] TRANSCRIPTION_FAILED exit {rc}\n"
-                _patch_cookbook_task(session_id, {"status": "error", "output": job["output"], "progress": job["progress"]})
+                updates = {"status": "error", "output": job["output"], "progress": job["progress"]}
+                if diagnosis:
+                    updates["diagnosis"] = diagnosis
+                _patch_cookbook_task(session_id, updates)
                 return
 
             json_candidates = sorted(output_dir.glob(input_path.stem + "*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
@@ -618,8 +656,19 @@ def setup_cookbook_routes() -> APIRouter:
         except Exception as exc:
             job["status"] = "error"
             job["progress"] = "failed"
+            diagnosis = None
+            if _looks_like_whisper_checksum_error(str(exc)):
+                job["progress"] = "cache corrupted"
+                job["output"] += f"[odysseus] {WHISPER_CHECKSUM_CACHE_MESSAGE}\n"
+                diagnosis = {
+                    "message": WHISPER_CHECKSUM_CACHE_MESSAGE,
+                    "suggestion": "Suggested action: clear ~/.cache/whisper, then retry transcription so Whisper re-downloads large-v3.",
+                }
             job["output"] += f"[odysseus] TRANSCRIPTION_FAILED {exc}\n"
-            _patch_cookbook_task(session_id, {"status": "error", "output": job["output"], "progress": job["progress"]})
+            updates = {"status": "error", "output": job["output"], "progress": job["progress"]}
+            if diagnosis:
+                updates["diagnosis"] = diagnosis
+            _patch_cookbook_task(session_id, updates)
 
     def _load_cookbook_tasks() -> list[dict]:
         if not _cookbook_state_path.exists():
@@ -1354,6 +1403,16 @@ def setup_cookbook_routes() -> APIRouter:
         }
         asyncio.create_task(_run_transcription_job(session_id))
         return {"ok": True, "session_id": session_id, "name": filename}
+
+    @router.post("/api/cookbook/transcribe/clear-whisper-cache")
+    async def cookbook_clear_whisper_cache(request: Request):
+        """Clear only the OpenAI Whisper model cache used by the Whisper CLI."""
+        require_admin(request)
+        require_privilege(request, "can_use_documents")
+        try:
+            return _clear_whisper_cache_dir()
+        except Exception as exc:
+            raise HTTPException(500, f"Failed to clear Whisper cache: {exc}")
 
     @router.get("/api/model/cached")
     async def model_cached(request: Request, host: str | None = None, model_dir: str | None = None, ssh_port: str | None = None, platform: str | None = None):
@@ -3442,6 +3501,7 @@ def setup_cookbook_routes() -> APIRouter:
                     status = "completed"
                 output = job.get("output") or task.get("output") or ""
                 progress = job.get("progress") or task.get("progress") or ""
+                diagnosis = job.get("diagnosis") or task.get("diagnosis")
                 results.append({
                     "session_id": session_id,
                     "type": task_type,
@@ -3449,7 +3509,7 @@ def setup_cookbook_routes() -> APIRouter:
                     "status": "completed" if status == "completed" or status == "done" else status,
                     "progress": progress[:120],
                     "phase": progress[:120],
-                    "diagnosis": None,
+                    "diagnosis": diagnosis if isinstance(diagnosis, dict) else None,
                     "output_tail": "\n".join(str(output).splitlines()[-12:]),
                     "cmd": "",
                     "tps": None,

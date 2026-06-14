@@ -1,6 +1,11 @@
 import json
+from pathlib import Path
 
-from routes.cookbook_routes import _write_transcript_outputs
+from routes.cookbook_routes import (
+    _clear_whisper_cache_dir,
+    _looks_like_whisper_checksum_error,
+    _write_transcript_outputs,
+)
 
 
 def test_write_transcript_outputs_creates_txt_srt_vtt(tmp_path):
@@ -28,3 +33,27 @@ def test_write_transcript_outputs_creates_txt_srt_vtt(tmp_path):
     assert "00:00:00,000 --> 00:00:01,250" in srt
     assert vtt.startswith("WEBVTT")
     assert "00:00:01.500 --> 00:00:03.000" in vtt
+
+
+def test_detects_whisper_checksum_mismatch():
+    output = "Model has been downloaded but the SHA256 checksum does not match."
+
+    assert _looks_like_whisper_checksum_error(output)
+
+
+def test_clear_whisper_cache_only_removes_whisper_cache(tmp_path, monkeypatch):
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    whisper_cache = tmp_path / ".cache" / "whisper"
+    hf_cache = tmp_path / ".cache" / "huggingface" / "hub"
+    whisper_cache.mkdir(parents=True)
+    hf_cache.mkdir(parents=True)
+    (whisper_cache / "large-v3.pt").write_text("corrupt", encoding="utf-8")
+    (hf_cache / "model.bin").write_text("keep", encoding="utf-8")
+
+    result = _clear_whisper_cache_dir()
+
+    assert result["ok"] is True
+    assert result["cleared"] is True
+    assert result["path"] == str(whisper_cache)
+    assert not whisper_cache.exists()
+    assert (hf_cache / "model.bin").read_text(encoding="utf-8") == "keep"

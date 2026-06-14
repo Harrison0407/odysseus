@@ -724,7 +724,7 @@ async function _fetchDependencies() {
       if (winBlocked) return `<span class="cookbook-dep-tag cookbook-dep-na">N/A</span>`;
       if (pkg.installed && isSystemDep) return `<span class="cookbook-dep-tag cookbook-dep-installed" title="Found on selected server">Installed</span>`;
       if (pkg.installed && pkg.pip_update_available === false) {
-        const tip = esc(pkg.update_note || pkg.status_note || 'Found externally; update outside Odysseus.');
+        const tip = esc(pkg.update_note || pkg.status_note || 'Found externally; update outside MarketMatch AI.');
         return `<span class="cookbook-dep-tag cookbook-dep-installed" title="${tip}">Installed</span>`;
       }
       if (pkg.installed) return `<button class="cookbook-dep-tag cookbook-dep-installed cookbook-dep-installed-btn" title="Installed — click for actions"><span class="cookbook-dep-installed-label">Installed</span><span class="cookbook-dep-caret">&#9662;</span></button>`;
@@ -779,7 +779,7 @@ async function _fetchDependencies() {
     const _serverDeps = pkgs.filter(p => p.target !== 'local');
 
     list.innerHTML = [
-      _viewingRemote ? '' : _section('Odysseus app', 'Run inside the Odysseus app itself.', _appDeps),
+      _viewingRemote ? '' : _section('MarketMatch AI app', 'Run inside the MarketMatch AI app itself.', _appDeps),
       _section('Server', 'Run on the server chosen above (Local, or a remote box over SSH).', _serverDeps),
     ].join('');
 
@@ -1401,19 +1401,47 @@ function _wireTabEvents(body) {
   const transDrop = document.getElementById('cookbook-transcribe-drop');
   const transInput = document.getElementById('cookbook-transcribe-file');
   const transPick = document.getElementById('cookbook-transcribe-pick');
+  const transStart = document.getElementById('cookbook-transcribe-start');
   const transDiarize = document.getElementById('cookbook-transcribe-diarize');
-  const startTranscription = async (files) => {
+  const transSelected = document.getElementById('cookbook-transcribe-selected');
+  const transSelectedName = document.getElementById('cookbook-transcribe-selected-name');
+  const transSelectedMeta = document.getElementById('cookbook-transcribe-selected-meta');
+  let transcribeFile = null;
+  const fmtFileSize = (bytes) => {
+    const n = Number(bytes || 0);
+    if (!n) return '0 KB';
+    if (n >= 1024 * 1024 * 1024) return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+    if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+    return `${Math.max(1, Math.round(n / 1024))} KB`;
+  };
+  const setSelectedTranscribeFile = (files) => {
     const file = files && files[0];
     if (!file) return;
     const ok = /\.(mp3|m4a|wav|mp4)$/i.test(file.name || '');
     if (!ok) {
+      transcribeFile = null;
+      if (transSelected) transSelected.style.display = 'none';
+      if (transStart) transStart.disabled = true;
       uiModule.showToast('Supported transcription files: mp3, m4a, wav, mp4', 7000);
+      return;
+    }
+    transcribeFile = file;
+    if (transSelected) transSelected.style.display = '';
+    if (transSelectedName) transSelectedName.textContent = file.name || 'Selected file';
+    if (transSelectedMeta) transSelectedMeta.textContent = `${fmtFileSize(file.size)} · ${file.type || 'type unknown'}`;
+    if (transStart) transStart.disabled = false;
+  };
+  const startTranscription = async () => {
+    const file = transcribeFile;
+    if (!file) {
+      uiModule.showToast('Choose an audio or video file first', 5000);
       return;
     }
     const fd = new FormData();
     fd.append('file', file);
     fd.append('diarize', transDiarize?.checked ? 'true' : 'false');
     if (transDrop) transDrop.classList.add('is-uploading');
+    if (transStart) transStart.disabled = true;
     try {
       const res = await fetch('/api/cookbook/transcribe', {
         method: 'POST',
@@ -1422,26 +1450,36 @@ function _wireTabEvents(body) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
-        uiModule.showToast('Transcription failed: ' + (data.detail || data.error || res.statusText), 9000);
+        let message = data.detail || data.error || res.statusText;
+        if (/Invalid token characters/i.test(message)) {
+          message = 'Saved HuggingFace token settings contain unsupported characters. Re-save the token in Settings, then try again.';
+        }
+        uiModule.showToast('Transcription failed: ' + message, 9000);
         return;
       }
       _addTask(data.session_id, data.name || file.name, 'transcription', {
+        ...(data.payload || {}),
         model: 'large-v3',
         diarize: !!transDiarize?.checked,
         formats: ['txt', 'srt', 'vtt'],
+        _initialOutput: data.output || '[odysseus] Queued local audio transcription with Whisper large-v3.\n',
       });
       uiModule.showToast(`Transcribing ${data.name || file.name}...`);
+      transcribeFile = null;
+      if (transSelected) transSelected.style.display = 'none';
     } catch (e) {
       uiModule.showToast('Transcription failed: ' + e.message, 9000);
     } finally {
       if (transDrop) transDrop.classList.remove('is-uploading');
+      if (transStart) transStart.disabled = !transcribeFile;
       if (transInput) transInput.value = '';
     }
   };
   if (transPick && transInput) {
     transPick.addEventListener('click', () => transInput.click());
-    transInput.addEventListener('change', () => startTranscription(transInput.files));
+    transInput.addEventListener('change', () => setSelectedTranscribeFile(transInput.files));
   }
+  if (transStart) transStart.addEventListener('click', startTranscription);
   if (transDrop) {
     transDrop.addEventListener('dragover', (e) => {
       e.preventDefault();
@@ -1451,7 +1489,7 @@ function _wireTabEvents(body) {
     transDrop.addEventListener('drop', (e) => {
       e.preventDefault();
       transDrop.classList.remove('dragover');
-      startTranscription(e.dataTransfer.files);
+      setSelectedTranscribeFile(e.dataTransfer.files);
     });
   }
 
@@ -1774,7 +1812,7 @@ export function _serverEntryHtml(s, i, defaultServer, forceRemote, isNew) {
     // sense once the server is saved.
     html += `<span style="margin-left:auto;display:inline-flex;gap:4px;align-items:center;">${_checkBtn}${_keyBtn}<button class="cookbook-server-cancel-btn" title="Discard this new server" style="height:22px;box-sizing:border-box;display:inline-flex;align-items:center;position:relative;top:-2px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;flex-shrink:0;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Cancel</button></span>`;
   } else {
-    html += `<span style="margin-left:auto;display:inline-flex;gap:4px;align-items:center;">${!isLocal ? _checkBtn + _keyBtn : ''}<span class="cookbook-srv-default${_isDefaultSrv ? ' active' : ''}" title="${_isDefaultSrv ? 'Default server — Cookbook opens here' : 'Make this the default server'}" data-srv-key="${esc(_srvKey)}">${_isDefaultSrv ? _MODELDIR_CHECK_ON : _MODELDIR_CHECK_OFF}<span class="cookbook-srv-default-label">default</span></span></span>`;
+    html += `<span style="margin-left:auto;display:inline-flex;gap:4px;align-items:center;">${!isLocal ? _checkBtn + _keyBtn : ''}<span class="cookbook-srv-default${_isDefaultSrv ? ' active' : ''}" title="${_isDefaultSrv ? 'Default server — AI Lab opens here' : 'Make this the default server'}" data-srv-key="${esc(_srvKey)}">${_isDefaultSrv ? _MODELDIR_CHECK_ON : _MODELDIR_CHECK_OFF}<span class="cookbook-srv-default-label">default</span></span></span>`;
   }
   html += `</span>`;
   html += `<div class="cookbook-server-row">`;
@@ -2024,6 +2062,13 @@ function _renderRecipes() {
   html += '<button type="button" id="cookbook-transcribe-pick" class="cookbook-btn">Choose file</button>';
   html += '<label class="cookbook-transcribe-check"><input type="checkbox" id="cookbook-transcribe-diarize" /> Speaker diarization</label>';
   html += '</div>';
+  html += '<div id="cookbook-transcribe-selected" class="cookbook-transcribe-selected" style="display:none;">';
+  html += '<div class="cookbook-transcribe-selected-name" id="cookbook-transcribe-selected-name"></div>';
+  html += '<div class="cookbook-transcribe-selected-meta" id="cookbook-transcribe-selected-meta"></div>';
+  html += '</div>';
+  html += '<div class="cookbook-transcribe-run-row">';
+  html += '<button type="button" id="cookbook-transcribe-start" class="cookbook-btn cookbook-primary" disabled>Transcribe</button>';
+  html += '</div>';
   html += '</div>';
   html += '</div>';
   html += '</div>';
@@ -2076,7 +2121,7 @@ function _renderRecipes() {
   html += _buildServerOpts(false);
   html += '</select>';
   html += '</div>';
-  html += '<p class="memory-desc doclib-desc">Optional packages that extend Odysseus capabilities.</p>';
+  html += '<p class="memory-desc doclib-desc">Optional packages that extend MarketMatch AI capabilities.</p>';
   html += '<div class="doclib-grid" id="cookbook-deps-list"></div>';
   html += '</div></div>';
 
@@ -2115,7 +2160,7 @@ function _renderRecipes() {
    // the same `.cal-add-btn-text` rules, so styling stays consistent.
   html += '<button class="cal-add-btn cal-add-btn-text" id="cookbook-server-add" title="Add server" style="margin-left:auto;"><span class="cal-add-plus">+</span><span class="cal-add-label">Add</span></button>';
   html += '</div>';
-  html += '<p class="memory-desc doclib-desc">Configure SSH servers, install Odysseus keys, choose model directories, and set the default server. Local is this machine.</p>';
+  html += '<p class="memory-desc doclib-desc">Configure SSH servers, install MarketMatch AI keys, choose model directories, and set the default server. Local is this machine.</p>';
   html += '<div class="memory-toolbar cookbook-servers-toolbar" style="margin-top:4px;">';
   html += `<div id="cookbook-servers-list">`;
   for (let i = 0; i < _es.servers.length; i++) {

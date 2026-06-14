@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import time
+import traceback
 import uuid
 import fnmatch
 from pathlib import Path
@@ -404,8 +405,12 @@ def setup_cookbook_routes() -> APIRouter:
         if isinstance(env, dict):
             incoming = env.get("hfToken")
             if incoming:
-                _validate_token(incoming)
-                env["hfToken"] = _encrypt_secret(incoming)
+                from src.secret_storage import is_encrypted
+                if is_encrypted(incoming):
+                    env["hfToken"] = incoming
+                else:
+                    _validate_token(incoming)
+                    env["hfToken"] = _encrypt_secret(incoming)
             elif disk_env.get("hfToken"):
                 env["hfToken"] = disk_env["hfToken"]
             else:
@@ -542,8 +547,9 @@ def setup_cookbook_routes() -> APIRouter:
                     failed += 1
             return {"ok": indexed > 0, "indexed_count": indexed, "failed_count": failed}
         except Exception as exc:
-            logger.warning("Transcript RAG indexing failed for %s: %s", path, exc)
-            return {"ok": False, "message": str(exc)}
+            tb = traceback.format_exc()
+            logger.warning("Transcript RAG indexing failed for %s: %s\n%s", path, exc, tb)
+            return {"ok": False, "message": str(exc), "traceback": tb}
 
     async def _run_transcription_job(session_id: str) -> None:
         job = _TRANSCRIPTION_JOBS.get(session_id)
@@ -568,10 +574,31 @@ def setup_cookbook_routes() -> APIRouter:
         else:
             cmd.extend(["--task", "transcribe"])
         whisper_binary = cmd_path or f"{sys.executable} -m {cmd_name}"
+        ffmpeg_path = shutil.which("ffmpeg")
         job["output"] += f"[odysseus] Whisper binary: {whisper_binary}\n"
+        job["output"] += f"[odysseus] ffmpeg: {ffmpeg_path or 'not found'}\n"
+        if ffmpeg_path:
+            try:
+                ffmpeg_probe = subprocess.run(
+                    [ffmpeg_path, "-version"],
+                    capture_output=True,
+                    text=True,
+                    timeout=3,
+                )
+                ffmpeg_version = (ffmpeg_probe.stdout or ffmpeg_probe.stderr or "").splitlines()[0].strip()
+                if ffmpeg_version:
+                    job["output"] += f"[odysseus] ffmpeg version: {ffmpeg_version}\n"
+            except Exception as exc:
+                job["output"] += f"[odysseus] ffmpeg version: unavailable ({exc})\n"
         job["output"] += f"[odysseus] Running: {' '.join(shlex.quote(c) for c in cmd)}\n"
         job["progress"] = "starting"
-        _patch_cookbook_task(session_id, {"output": job["output"], "progress": job["progress"]})
+        job["payload"] = {
+            **(job.get("payload") or {}),
+            "_cmd": " ".join(shlex.quote(c) for c in cmd),
+            "whisper_binary": whisper_binary,
+            "ffmpeg": ffmpeg_path or "",
+        }
+        _patch_cookbook_task(session_id, {"output": job["output"], "progress": job["progress"], "payload": job["payload"]})
         try:
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -580,6 +607,8 @@ def setup_cookbook_routes() -> APIRouter:
                 cwd=str(output_dir),
             )
             job["pid"] = proc.pid
+            job["output"] += f"[odysseus] Whisper pid: {proc.pid}\n"
+            _patch_cookbook_task(session_id, {"output": job["output"], "progress": job["progress"], "payload": job["payload"]})
             percent_re = re.compile(r"(\d{1,3})%")
             while True:
                 line_b = await proc.stdout.readline() if proc.stdout else b""
@@ -619,27 +648,51 @@ def setup_cookbook_routes() -> APIRouter:
             outputs = _write_transcript_outputs(json_candidates[0], output_base)
             txt_path = Path(outputs["txt"])
             transcript_text = txt_path.read_text(encoding="utf-8", errors="replace")
-            rag_result = _index_transcript_for_rag(txt_path, owner)
+            rag_result = {"ok": False, "indexed_count": 0, "failed_count": 0}
+            indexing_warnings = []
+            job["output"] += (
+                f"[odysseus] TXT: {outputs['txt']}\n"
+                f"[odysseus] SRT: {outputs['srt']}\n"
+                f"[odysseus] VTT: {outputs['vtt']}\n"
+            )
+            _patch_cookbook_task(session_id, {"output": job["output"], "progress": "writing outputs"})
+            try:
+                rag_result = _index_transcript_for_rag(txt_path, owner)
+                if not rag_result.get("ok"):
+                    indexing_warnings.append(f"RAG indexing warning: {rag_result.get('message') or 'no chunks indexed'}")
+                    if rag_result.get("traceback"):
+                        indexing_warnings.append(rag_result["traceback"])
+            except Exception as exc:
+                indexing_warnings.append(f"RAG indexing exception: {exc}")
+                indexing_warnings.append(traceback.format_exc())
             doc_id = ""
-            if transcript_text.strip():
-                doc_id = _create_transcript_document(f"Transcript: {input_path.stem}", transcript_text, owner)
+            try:
+                if transcript_text.strip():
+                    doc_id = _create_transcript_document(f"Transcript: {input_path.stem}", transcript_text, owner)
+            except Exception as exc:
+                indexing_warnings.append(f"Document library warning: {exc}")
+                indexing_warnings.append(traceback.format_exc())
             personal_mgr = job.get("personal_docs_manager")
             if personal_mgr and hasattr(personal_mgr, "add_directory"):
                 try:
                     personal_mgr.add_directory(str(output_dir), index=False)
                     personal_mgr.refresh_index()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    indexing_warnings.append(f"Personal document index warning: {exc}")
+                    indexing_warnings.append(traceback.format_exc())
             job["status"] = "completed"
-            job["progress"] = "done"
+            job["progress"] = "done with indexing warning" if indexing_warnings else "done"
             job["outputs"] = outputs
             job["doc_id"] = doc_id
             job["rag_result"] = rag_result
+            if indexing_warnings:
+                job["indexing_warning"] = "\n".join(w for w in indexing_warnings if w)
+                job["output"] += (
+                    "[odysseus] TRANSCRIPTION_INDEXING_WARNING\n"
+                    f"{job['indexing_warning']}\n"
+                )
             job["output"] += (
                 "[odysseus] TRANSCRIPTION_OK\n"
-                f"[odysseus] TXT: {outputs['txt']}\n"
-                f"[odysseus] SRT: {outputs['srt']}\n"
-                f"[odysseus] VTT: {outputs['vtt']}\n"
                 f"[odysseus] RAG indexed chunks: {rag_result.get('indexed_count', 0)}\n"
             )
             _patch_cookbook_task(session_id, {
@@ -651,6 +704,7 @@ def setup_cookbook_routes() -> APIRouter:
                     "outputs": outputs,
                     "doc_id": doc_id,
                     "rag_result": rag_result,
+                    "indexing_warning": job.get("indexing_warning", ""),
                 },
             })
         except Exception as exc:
@@ -664,7 +718,7 @@ def setup_cookbook_routes() -> APIRouter:
                     "message": WHISPER_CHECKSUM_CACHE_MESSAGE,
                     "suggestion": "Suggested action: clear ~/.cache/whisper, then retry transcription so Whisper re-downloads large-v3.",
                 }
-            job["output"] += f"[odysseus] TRANSCRIPTION_FAILED {exc}\n"
+            job["output"] += f"[odysseus] TRANSCRIPTION_FAILED {exc}\n{traceback.format_exc()}"
             updates = {"status": "error", "output": job["output"], "progress": job["progress"]}
             if diagnosis:
                 updates["diagnosis"] = diagnosis
@@ -764,6 +818,48 @@ def setup_cookbook_routes() -> APIRouter:
         except Exception:
             return False
 
+    def _active_local_hf_download_pid(task: dict) -> str:
+        """Best-effort detector for a live local HuggingFace download process."""
+        if IS_WINDOWS:
+            return ""
+        payload = task.get("payload") if isinstance(task.get("payload"), dict) else {}
+        if task.get("remoteHost") or payload.get("remote_host"):
+            return ""
+        repo_id = str(payload.get("repo_id") or task.get("repo_id") or task.get("repo") or task.get("name") or "")
+        if not repo_id or "/" not in repo_id:
+            return ""
+        include = str(payload.get("include") or "")
+        try:
+            proc = subprocess.run(
+                ["ps", "axo", "pid=,command="],
+                timeout=4,
+                capture_output=True,
+                text=True,
+            )
+        except Exception:
+            return ""
+        if proc.returncode != 0:
+            return ""
+        markers = ("hf download", "huggingface-cli download", "snapshot_download")
+        current_pid = str(os.getpid())
+        for raw in (proc.stdout or "").splitlines():
+            line = raw.strip()
+            if not line:
+                continue
+            parts = line.split(None, 1)
+            if len(parts) != 2:
+                continue
+            pid, cmdline = parts
+            if pid == current_pid:
+                continue
+            if repo_id not in cmdline:
+                continue
+            if include and include not in cmdline:
+                continue
+            if any(marker in cmdline for marker in markers):
+                return pid
+        return ""
+
     async def _existing_download_for_key(download_key: str) -> dict | None:
         remembered = _ACTIVE_DOWNLOAD_SESSIONS.get(download_key)
         candidates: list[dict] = []
@@ -786,6 +882,17 @@ def setup_cookbook_routes() -> APIRouter:
             if alive:
                 _ACTIVE_DOWNLOAD_SESSIONS[download_key] = task
                 return task
+            active_pid = _active_local_hf_download_pid(task)
+            if active_pid:
+                recovered = {**task, "status": "running", "activePid": active_pid}
+                _ACTIVE_DOWNLOAD_SESSIONS[download_key] = recovered
+                if sid:
+                    _patch_cookbook_task(sid, {
+                        "status": "running",
+                        "activePid": active_pid,
+                        "_retrying": False,
+                    })
+                return recovered
         _ACTIVE_DOWNLOAD_SESSIONS.pop(download_key, None)
         return None
 
@@ -1402,7 +1509,13 @@ def setup_cookbook_routes() -> APIRouter:
             "personal_docs_manager": getattr(request.app.state, "personal_docs_manager", None),
         }
         asyncio.create_task(_run_transcription_job(session_id))
-        return {"ok": True, "session_id": session_id, "name": filename}
+        return {
+            "ok": True,
+            "session_id": session_id,
+            "name": filename,
+            "output": task["output"],
+            "payload": task["payload"],
+        }
 
     @router.post("/api/cookbook/transcribe/clear-whisper-cache")
     async def cookbook_clear_whisper_cache(request: Request):
@@ -2826,6 +2939,44 @@ def setup_cookbook_routes() -> APIRouter:
 
             disk_tasks = on_disk.get("tasks") or [] if isinstance(on_disk, dict) else []
             incoming_tasks = data.get("tasks") if isinstance(data.get("tasks"), list) else []
+            disk_by_id = {
+                t.get("sessionId"): t
+                for t in disk_tasks
+                if isinstance(t, dict) and t.get("sessionId")
+            }
+            for _it in incoming_tasks:
+                if not isinstance(_it, dict) or _it.get("type") != "transcription":
+                    continue
+                _disk = disk_by_id.get(_it.get("sessionId")) or {}
+                if _disk.get("output") and not _it.get("output"):
+                    _it["output"] = _disk["output"]
+                if _disk.get("progress") and not _it.get("progress"):
+                    _it["progress"] = _disk["progress"]
+                if isinstance(_disk.get("payload"), dict):
+                    _it["payload"] = {**_disk["payload"], **(_it.get("payload") or {})}
+                if _disk.get("diagnosis") and not _it.get("diagnosis"):
+                    _it["diagnosis"] = _disk["diagnosis"]
+                if _disk.get("status") and _disk.get("status") != "running" and _it.get("status") == "running":
+                    _it["status"] = _disk["status"]
+            for _it in incoming_tasks:
+                if not isinstance(_it, dict) or _it.get("type") != "download":
+                    continue
+                _disk = disk_by_id.get(_it.get("sessionId")) or {}
+                if _disk.get("status") != "running":
+                    continue
+                if _it.get("status") in {"crashed", "error", "stopped", "failed", "killed"}:
+                    logger.info(
+                        "cookbook state POST: preserving active download state for %s over stale client status=%s",
+                        _it.get("sessionId"),
+                        _it.get("status"),
+                    )
+                    _it["status"] = "running"
+                    _it["_retrying"] = False
+                    for _field in ("progress", "downloadProgress", "activePid"):
+                        if _disk.get(_field) and not _it.get(_field):
+                            _it[_field] = _disk[_field]
+                    if _disk.get("output") and not _it.get("output"):
+                        _it["output"] = _disk["output"]
             # Anti-poisoning guard: a stale browser tab can keep POSTing a
             # download task as status='done' from before the strict-finish
             # fix landed, undoing any server-side correction. For each
@@ -3493,6 +3644,9 @@ def setup_cookbook_routes() -> APIRouter:
                 or ""
             )
             task_platform = task.get("platform", "")
+            active_download_pid = ""
+            if task_type == "download":
+                active_download_pid = _active_local_hf_download_pid(task)
 
             if task_type == "transcription":
                 job = _TRANSCRIPTION_JOBS.get(session_id) or {}
@@ -3502,6 +3656,7 @@ def setup_cookbook_routes() -> APIRouter:
                 output = job.get("output") or task.get("output") or ""
                 progress = job.get("progress") or task.get("progress") or ""
                 diagnosis = job.get("diagnosis") or task.get("diagnosis")
+                tail_lines = 80 if status in {"error", "failed", "stopped", "crashed"} else 20
                 results.append({
                     "session_id": session_id,
                     "type": task_type,
@@ -3510,8 +3665,8 @@ def setup_cookbook_routes() -> APIRouter:
                     "progress": progress[:120],
                     "phase": progress[:120],
                     "diagnosis": diagnosis if isinstance(diagnosis, dict) else None,
-                    "output_tail": "\n".join(str(output).splitlines()[-12:]),
-                    "cmd": "",
+                    "output_tail": "\n".join(str(output).splitlines()[-tail_lines:]),
+                    "cmd": str((task.get("payload") or {}).get("_cmd") or ""),
                     "tps": None,
                     "reqs": None,
                     "pct": None,
@@ -3618,7 +3773,7 @@ def setup_cookbook_routes() -> APIRouter:
                 _task_status = (task.get("status") or "").lower()
                 if _task_status in {"stopped", "done", "completed",
                                     "crashed", "error", "failed",
-                                    "ended", "killed"}:
+                                    "ended", "killed"} and not active_download_pid:
                     is_alive = False
                     # Keep the persisted output_tail for the UI — it's
                     # what the agent uses to diagnose past failures.
@@ -3727,8 +3882,41 @@ def setup_cookbook_routes() -> APIRouter:
                 diagnosis = {"message": "No matching files were downloaded. The model repo or filename/quant pattern may be wrong (for example a ':Q4_K_M' tag that does not exist in the repo). Check the repo and the include/quant pattern."}
             output_tail = "\n".join(full_snapshot.splitlines()[-12:]) if full_snapshot else ""
             download_progress = _download_progress_info(task, model, remote, str(_tport or "")) if task_type == "download" else {}
-            if task_type == "download" and status == "running" and download_progress.get("stalled"):
-                progress_text = f"stalled {int(download_progress.get('stall_seconds') or 0) // 60}m"
+            recovered_active_download = False
+            if task_type == "download":
+                progress_active = (
+                    bool(download_progress.get("has_incomplete"))
+                    and not bool(download_progress.get("stalled"))
+                    and float(download_progress.get("speed_bps") or 0) > 0
+                )
+                if (active_download_pid or progress_active) and status in {"stopped", "error", "unknown"}:
+                    status = "running"
+                    recovered_active_download = True
+                    if not progress_text:
+                        pct = download_progress.get("percent")
+                        progress_text = f"downloading {pct}%" if pct is not None else "downloading"
+                if status == "running" and download_progress.get("stalled"):
+                    progress_text = f"stalled {int(download_progress.get('stall_seconds') or 0) // 60}m"
+                if active_download_pid:
+                    active_note = f"[odysseus] Active HuggingFace download process detected: PID {active_download_pid}"
+                    if recovered_active_download:
+                        output_tail = active_note
+                    elif active_note not in output_tail:
+                        output_tail = "\n".join([x for x in [output_tail, active_note] if x])
+                persisted_updates = {}
+                if status == "running" and task.get("status") != "running":
+                    persisted_updates["status"] = "running"
+                    persisted_updates["_retrying"] = False
+                if active_download_pid and task.get("activePid") != active_download_pid:
+                    persisted_updates["activePid"] = active_download_pid
+                if progress_text and task.get("progress") != progress_text:
+                    persisted_updates["progress"] = progress_text
+                if download_progress:
+                    persisted_updates["downloadProgress"] = download_progress
+                if recovered_active_download and output_tail:
+                    persisted_updates["output"] = output_tail
+                if persisted_updates:
+                    _patch_cookbook_task(session_id, persisted_updates)
 
             results.append({
                 "session_id": session_id,
@@ -3745,6 +3933,8 @@ def setup_cookbook_routes() -> APIRouter:
                 "pct": phase_info.get("pct"),
                 "remote": remote or "local",
                 "download_progress": download_progress,
+                "active_pid": active_download_pid,
+                "recovered_active_download": recovered_active_download,
             })
 
         return {"tasks": results}

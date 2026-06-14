@@ -56,7 +56,7 @@ function _transcriptionDiagnosis(task, outputText = '') {
   if (!task || task.type !== 'transcription') return null;
   const backend = task._backendDiagnosis;
   const text = `${outputText || ''}\n${backend?.message || ''}\n${backend?.suggestion || ''}`;
-  if (!_isWhisperChecksumFailure(text)) return backend || null;
+  if (!_isWhisperChecksumFailure(text)) return null;
   return {
     message: 'Whisper model cache appears corrupted. Clear the Whisper cache and retry.',
     suggestion: 'Suggested action: clear ~/.cache/whisper, then retry transcription so Whisper re-downloads large-v3.',
@@ -87,6 +87,29 @@ function _transcriptionDiagnosis(task, outputText = '') {
           }
         },
       },
+    ],
+  };
+}
+
+function _transcriptionFailureDiagnosis(task, outputText = '') {
+  const checksum = _transcriptionDiagnosis(task, outputText);
+  if (checksum) return checksum;
+  if (!task || task.type !== 'transcription') return null;
+  if (task._backendDiagnosis) return task._backendDiagnosis;
+  if (!['stopped', 'error', 'crashed', 'failed'].includes(task.status || '')) return null;
+  const text = String(outputText || task.output || '').trim();
+  if (!text) {
+    return {
+      message: 'Transcription stopped before logs were captured.',
+      suggestion: 'Suggested action: retry transcription, then copy the card output if it fails again.',
+      fixes: [],
+    };
+  }
+  return {
+    message: 'Transcription stopped before completion.',
+    suggestion: 'Suggested action: review the captured Whisper output below, then retry after fixing the reported issue.',
+    fixes: [
+      { label: 'Copy last 50 lines', action: () => _copyText(text.split('\n').slice(-50).join('\n')) },
     ],
   };
 }
@@ -831,6 +854,9 @@ export function _addTask(sessionId, name, type, payload) {
   const remoteHost = (payload && payload.remote_host) || _envState.remoteHost || '';
   const sshPort = (payload && payload.ssh_port) || _getPort(remoteHost) || '';
   const platform = (payload && payload.platform) || _getPlatform(remoteHost) || '';
+  const initialOutput = payload && payload._initialOutput ? String(payload._initialOutput) : '';
+  const taskPayload = payload ? { ...payload } : null;
+  if (taskPayload) delete taskPayload._initialOutput;
   // Serving a model supersedes its finished download — clear the matching
   // finished download card (covers serving directly from the Serve tab, not just
   // via the download card's "Serve →" button).
@@ -845,7 +871,7 @@ export function _addTask(sessionId, name, type, payload) {
       return !(key && t.type === 'download' && t.status === 'queued' && _downloadDedupeKey(t) === key);
     });
   }
-  const task = _stripTaskSecrets({ id: sessionId, sessionId, name, type, status: 'running', output: '', ts: Date.now(), payload: payload || null, remoteHost, sshPort, platform });
+  const task = _stripTaskSecrets({ id: sessionId, sessionId, name, type, status: 'running', output: initialOutput, ts: Date.now(), payload: taskPayload, remoteHost, sshPort, platform });
   tasks.push(task);
   _saveTasks(tasks);
   // New action → collapse all other cards, leave only this one open.
@@ -1230,6 +1256,28 @@ export async function _syncFromServer() {
     for (const t of serverTasks) {
       if (!localIds.has(t.sessionId) && !_isTombstoned(t.sessionId)) {
         merged.push(t);
+        continue;
+      }
+      const idx = merged.findIndex(local => local.sessionId === t.sessionId);
+      if (idx < 0 || _isTombstoned(t.sessionId)) continue;
+      const local = merged[idx];
+      const serverStatus = t.status || '';
+      const serverDownloadProgress = t.downloadProgress || t.download_progress || null;
+      const serverShowsActiveDownload = local.type === 'download' && (
+        serverStatus === 'running'
+        || !!serverDownloadProgress
+        || !!t.activePid
+        || !!t.active_pid
+      );
+      if (serverShowsActiveDownload) {
+        merged[idx] = _stripTaskSecrets({
+          ...local,
+          ...t,
+          payload: { ...(local.payload || {}), ...(t.payload || {}) },
+          downloadProgress: serverDownloadProgress || local.downloadProgress,
+          activePid: t.activePid || t.active_pid || local.activePid,
+          _retrying: serverStatus === 'running' ? false : local._retrying,
+        });
       }
     }
     localStorage.setItem(TASKS_KEY, JSON.stringify(merged.map(_stripTaskSecrets)));
@@ -2029,7 +2077,7 @@ export function _renderRunningTab() {
       if (startNow) startNow.style.display = (task.type === 'download' && task.status === 'queued') ? '' : 'none';
       const outputText = el.querySelector('.cookbook-output-pre')?.textContent || task.output || '';
       const terminalDiag = _terminalServeDiagnosis(task, outputText);
-      const transcriptionDiag = _transcriptionDiagnosis(task, outputText);
+      const transcriptionDiag = _transcriptionFailureDiagnosis(task, outputText);
       if (terminalDiag) {
         _showDiagnosis(el, terminalDiag, outputText);
       } else if (transcriptionDiag) {
@@ -2080,7 +2128,7 @@ export function _renderRunningTab() {
     if (_waveEl && task.status === 'running') _registerWaveEl(_waveEl);
 
     const terminalDiag = _terminalServeDiagnosis(task, task.output || '');
-    const transcriptionDiag = _transcriptionDiagnosis(task, task.output || '');
+    const transcriptionDiag = _transcriptionFailureDiagnosis(task, task.output || '');
     if (terminalDiag) _showDiagnosis(el, terminalDiag, task.output || '');
     if (!terminalDiag && transcriptionDiag) _showDiagnosis(el, transcriptionDiag, task.output || '');
     if (!terminalDiag && !transcriptionDiag && (task.status === 'error' || task.status === 'crashed') && task._backendDiagnosis) {
@@ -2382,15 +2430,19 @@ export function _renderRunningTab() {
           }});
         }
         // Copy the last 50 lines of the task's output/log.
-        items.push({ label: 'Copy last 50 lines', action: 'copy-log', custom: () => {
+        items.push({ label: 'Copy last 50 lines', action: 'copy-log', custom: async () => {
           const out = (el.querySelector('.cookbook-output-pre')?.textContent || task.output || '');
           const last = out.split('\n').slice(-50).join('\n');
           if (!last.trim()) {
             uiModule.showToast('No log content available yet');
             return;
           }
-          _copyText(last);
-          uiModule.showToast('Copied last 50 lines');
+          try {
+            await _copyText(last);
+            uiModule.showToast('Copied last 50 lines');
+          } catch (_) {
+            uiModule.showToast('Clipboard copy failed. Use the output copy button instead.', 7000);
+          }
         }});
         // Label matches behavior — the kill handler ALWAYS first kills
         // the live tmux session and (for serve tasks) deletes the
@@ -3619,31 +3671,50 @@ async function _pollBackgroundStatus() {
         const live = statusById.get(task.sessionId);
         if (!live) continue;
         const updates = {};
+        const liveDownloadProgress = live.download_progress || live.downloadProgress || null;
+        const liveDownloadLooksActive = task.type === 'download' && liveDownloadProgress && (
+          !!live.active_pid
+          || !!live.activePid
+          || (
+            !!liveDownloadProgress.has_incomplete
+            && !liveDownloadProgress.stalled
+            && Number(liveDownloadProgress.speed_bps || 0) > 0
+          )
+        );
+        const effectiveLiveStatus = liveDownloadLooksActive && ['stopped', 'error', 'unknown'].includes(live.status)
+          ? 'running'
+          : live.status;
         // A finished dependency install whose tmux pane is gone is reported
         // "stopped" by the backend (its pip package is never in the HF cache the
         // dead-session check inspects). Recover "done" from the retained output's
         // exit-0 sentinel so a clean install isn't downgraded to crashed.
         const depDone = !!task.payload?._dep && _depInstallSucceeded(task.output);
-        const nextStatus = live.status === 'completed'
+        const nextStatus = effectiveLiveStatus === 'completed'
           ? 'done'
-          : (live.status === 'error'
+          : (effectiveLiveStatus === 'error'
             ? 'error'
-            : (live.status === 'stopped'
+            : (effectiveLiveStatus === 'stopped'
                 ? (depDone ? 'done' : (task.type === 'download' ? 'crashed' : 'stopped'))
                 : null));
         if (nextStatus && task.status !== nextStatus) {
           updates.status = nextStatus;
           if (nextStatus === 'done' && task.payload?._dep) completedDeps.push(task);
         }
-        if ((live.status === 'running' || live.status === 'ready') && task.status !== live.status) {
-          updates.status = live.status === 'ready' ? 'ready' : 'running';
+        if ((effectiveLiveStatus === 'running' || effectiveLiveStatus === 'ready') && task.status !== effectiveLiveStatus) {
+          updates.status = effectiveLiveStatus === 'ready' ? 'ready' : 'running';
+          if (task.type === 'download') updates._retrying = false;
         }
         if (live.progress && live.progress !== task.progress) updates.progress = live.progress;
-        if (live.download_progress) updates.downloadProgress = live.download_progress;
+        if (liveDownloadProgress) updates.downloadProgress = liveDownloadProgress;
+        if (live.active_pid || live.activePid) updates.activePid = live.active_pid || live.activePid;
         if (live.output_tail) {
           const previous = String(task.output || '');
           const tail = String(live.output_tail || '');
-          if (tail && !previous.endsWith(tail)) {
+          if (task.type === 'download' && live.recovered_active_download && tail) {
+            updates.output = tail;
+          } else if (task.type === 'transcription' && tail && (!previous.trim() || previous.length < tail.length)) {
+            updates.output = tail;
+          } else if (tail && !previous.endsWith(tail)) {
             updates.output = `${previous ? `${previous}\n` : ''}${tail}`.slice(-5000);
           }
         }

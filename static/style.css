@@ -1,5 +1,5 @@
 /* ============================================ */
-/* Odysseus UI — Consolidated Stylesheet        */
+/* MarketMatch AI UI — Consolidated Stylesheet  */
 /* ============================================ */
 
 
@@ -17,16 +17,16 @@
 
 :root {
   /* Core palette */
-  --bg: #282c34;
-  --fg: #9cdef2;
-  --panel: #111;
-  --border: #355a66;
-  --red: #e06c75;
+  --bg: #FFFFFF;
+  --fg: #111827;
+  --panel: #FFFFFF;
+  --border: #E5E7EB;
+  --red: #00A99D;
   /* Were `var(--green)` / `var(--warn)` — self-referential, so they
      resolved to invalid and every site fell back to its own literal
      (or, for sites with no fallback, painted as transparent/inherit).
      Anchor them to real hex so the token layer actually works. */
-  --green: #50fa7b;
+  --green: #00A99D;
   --warn: #f0ad4e;
 
   /* Syntax highlighting */
@@ -51,12 +51,12 @@
   --color-recording-hover: #d63031;
   --color-muted: #888;
   --color-muted-alt: #6b7280;
-  --color-accent: #00aaff;
+  --color-accent: #00A99D;
   --color-agent-active: #00ff00;
-  --color-brand-blue: #3b82f6;
+  --color-brand-blue: #002D72;
   --color-blind-orange: #ff9800;
   --color-save-green: var(--color-success);
-  --color-link-hover: #66c7ff;
+  --color-link-hover: #00A99D;
   --color-subheader: #6b8a94;
   --select-bg: var(--bg);
   --select-fg: var(--fg);
@@ -65,7 +65,7 @@
   --select-option-active-bg: color-mix(in srgb, var(--accent, var(--red)) 24%, var(--panel));
   /* Warm accent — used by the Goals/Today UI in Notes. Lives as a token so
      themes can override without touching the goal CSS. */
-  --accent-warm: #d19a66;
+  --accent-warm: #00A99D;
 }
 
 :root.light {
@@ -102,7 +102,7 @@ body {
      below so left + right docks can coexist without skewing the whole body. */
   transition: padding-left 160ms cubic-bezier(0.22, 0.61, 0.36, 1),
               padding-right 160ms cubic-bezier(0.22, 0.61, 0.36, 1);
-  font-family: var(--font-family, 'Fira Code', monospace);
+  font-family: var(--font-family, 'Avenir Next', Avenir, 'Helvetica Neue', Helvetica, Arial, sans-serif);
   display: flex;
   height: 100%;
   height: 100dvh; /* dynamic viewport height — adapts when mobile keyboard opens */
@@ -115,7 +115,8 @@ body {
 @font-face { font-family: 'Fira Code'; font-weight: 600; font-style: normal; font-display: swap; src: url('/static/fonts/FiraCode-SemiBold.woff2') format('woff2'); }
 
 /* Code block baseline */
-pre, code, .hljs {
+pre, code, .hljs, kbd, samp, .log-output, .terminal-output {
+  font-family: 'Fira Code', monospace;
   font-size: 0.95em;
   line-height: 1.5;
 }
@@ -557,19 +558,35 @@ body.bg-pattern-sparkles {
     .sidebar-brand {
       display: flex;
       align-items: center;
+      gap: 8px;
       flex-shrink: 0;
       min-height: 24px;
     }
+    .sidebar-brand-logo {
+      display: block;
+      object-fit: contain;
+      flex-shrink: 0;
+    }
+    .sidebar-brand-logo-compact {
+      width: 34px;
+      height: 34px;
+      border-radius: 6px;
+    }
+    .sidebar-brand-logo-wide {
+      width: min(179px, 100%);
+      max-height: 36px;
+      display: none;
+    }
     .sidebar-brand-title {
-      font-size: 1rem;
+      font-size: 0.95rem;
       font-weight: 600;
       line-height: 1.35;
-      color: var(--brand-color, var(--red));
+      color: var(--brand-color, #002D72);
       white-space: nowrap;
       user-select: none;
       position: relative;
       top: 0;
-      left: -10px;
+      left: 0;
     }
     .sidebar-sep {
       display: none;
@@ -1785,9 +1802,10 @@ body.bg-pattern-sparkles {
       margin-bottom:8px;
       white-space:normal;
       min-height:0;
-      --chat-max: 800px;
+      --chat-max: 920px;
       padding-left: max(0px, calc((100% - var(--chat-max)) / 2));
       padding-right: max(12px, calc((100% - var(--chat-max)) / 2 + 12px));
+      padding-bottom: 132px;
     }
     /* Sortable Cookbook column headers had no visual cue, so users couldn't tell
        a header was clickable (the Newest sort on the Model column was invisible).
@@ -1813,7 +1831,7 @@ body.bg-pattern-sparkles {
     #welcome-screen .welcome-sub,
     #welcome-screen .welcome-version {
       transition: opacity 0.25s ease, max-height 0.25s ease, margin 0.25s ease;
-      max-height: 60px;
+      max-height: 90px;
       overflow: hidden;
     }
     /* The tip is a full sentence that wraps to 4-5 lines on narrow phones,
@@ -1848,33 +1866,42 @@ body.bg-pattern-sparkles {
     }
     @media (max-width: 768px) {
       #welcome-screen { top: 42%; }
-      #welcome-screen .welcome-name { margin-bottom: 2px; }
+      #welcome-screen .welcome-name { margin-bottom: 0; }
       #welcome-screen .welcome-sub { margin-bottom: 0; }
       #welcome-screen .incognito-btn { margin-top: 6px; }
     }
     #welcome-screen .welcome-name {
-      font-size:2.2rem;
-      font-weight:700;
-      background: linear-gradient(135deg, var(--brand-color, var(--red)), color-mix(in srgb, var(--brand-color, var(--red)) 60%, var(--fg)));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      letter-spacing:0.03em;
-      margin-bottom:10px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-bottom:2px;
+    }
+    #welcome-screen .welcome-logo {
+      display: block;
+      width: min(540px, 86vw);
+      max-height: 132px;
+      object-fit: contain;
+    }
+    #welcome-screen .welcome-name-fallback {
+      color: var(--brand-color, #002D72);
+      font-size: 2.2rem;
+      font-weight: 700;
+      display: none;
     }
     .welcome-boat {
       width: 1.8rem;
       height: 1.8rem;
       margin-right: 0.4rem;
       vertical-align: -0.15em;
-      color: var(--brand-color, var(--red));
+      color: var(--brand-color, #002D72);
     }
     #welcome-screen .welcome-sub {
       font-size:0.85rem;
-      color:color-mix(in srgb, var(--fg) 60%, transparent);
-      opacity:0.6;
-      line-height:1.5;
-      max-width:300px;
+      color:color-mix(in srgb, var(--fg) 88%, transparent);
+      opacity:0.82;
+      line-height:1.35;
+      max-width:360px;
+      margin-top: -2px;
     }
     #welcome-screen .welcome-version {
       font-size:0.7rem;
@@ -1930,21 +1957,25 @@ body.bg-pattern-sparkles {
     /* When welcome is active, push input bar up toward center */
     .chat-container .chat-input-bar {
       transition: margin 0.3s ease, max-width 0.3s ease;
+      margin-bottom: 26px;
     }
     .chat-container.welcome-active .chat-input-bar {
       margin-bottom:30vh;
       margin-left:auto;
       margin-right:auto;
-      max-width: 800px;
+      max-width: 860px;
       width: 100%;
     }
     @media (max-width:768px) {
       #welcome-screen .welcome-name { font-size:1.8rem; }
       #welcome-screen .welcome-sub { font-size:0.8rem; }
       .chat-container.welcome-active .chat-input-bar {
-        margin-bottom:0;
+        margin-bottom:10px;
         margin-left:0;
         margin-right:0;
+      }
+      .chat-container:not(.welcome-active) .chat-input-bar {
+        margin-bottom: 10px;
       }
     }
     .msg {
@@ -1986,8 +2017,8 @@ body.bg-pattern-sparkles {
       border: 1px solid var(--bubble-border, var(--border));
       border-radius: 18px 18px 18px 0;
       align-self: flex-start;
-      width: 85%;
-      max-width: 85%;
+      width: 90%;
+      max-width: 90%;
       min-width: 80px;
       word-wrap: break-word;
       overflow-wrap: break-word;
@@ -2221,7 +2252,7 @@ body.bg-pattern-sparkles {
       display: flex;
       flex-direction: column;
       gap: 8px;
-      max-width: 800px;
+      max-width: 860px;
       margin-left: auto;
       margin-right: auto;
       width: 100%;
@@ -6370,7 +6401,7 @@ pre { background: var(--code-bg, var(--hl-bg, #282c34)) !important; }
     mark.search-highlight {
       /* Was orange-on-orange (0.35 alpha bg + orange text) — too low-contrast
          to read. Solid accent fill with bg-colored text reads clearly. */
-      background: var(--accent, #e8a830);
+      background: var(--accent, #00A99D);
       color: var(--bg, #1a1a1a);
       border-radius: 2px;
       padding: 0 2px;
@@ -6378,7 +6409,7 @@ pre { background: var(--code-bg, var(--hl-bg, #282c34)) !important; }
     }
     /* Document library search-term highlight — clear, high-contrast. */
     mark.doclib-search-hl {
-      background: var(--accent, #e8a830);
+      background: var(--accent, #00A99D);
       color: var(--bg, #1a1a1a);
       border-radius: 2px;
       padding: 0 2px;
@@ -8285,7 +8316,7 @@ button.hamburger {
   gap: 6px;
   flex-wrap: wrap;
   padding: 2px 8px;
-  max-width: 800px;
+  max-width: 860px;
   width: 100%;
   margin-left: auto;
   margin-right: auto;
@@ -12784,7 +12815,7 @@ mark.doc-find-mark.current {
   gap: 10px;
   padding: 8px 12px;
   margin: 0 auto 6px;
-  max-width: 800px;
+  max-width: 860px;
   background: var(--panel);
   border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
   border-left: 3px solid var(--accent);
@@ -20012,13 +20043,13 @@ body.gallery-selecting .gallery-dl-btn,
 .cookbook-transcribe-drop {
   border: 1px dashed color-mix(in srgb, var(--fg) 24%, transparent);
   border-radius: 8px;
-  min-height: 190px;
+  min-height: 116px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  padding: 24px;
+  gap: 7px;
+  padding: 14px 16px;
   background: color-mix(in srgb, var(--panel) 86%, var(--fg) 4%);
   transition: border-color 0.15s ease, background 0.15s ease;
 }
@@ -20028,7 +20059,7 @@ body.gallery-selecting .gallery-dl-btn,
   background: color-mix(in srgb, var(--accent, var(--red)) 10%, var(--panel));
 }
 .cookbook-transcribe-title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
 }
 .cookbook-transcribe-meta {
@@ -20048,6 +20079,43 @@ body.gallery-selecting .gallery-dl-btn,
   gap: 6px;
   font-size: 12px;
   color: var(--fg);
+}
+.cookbook-btn.cookbook-primary {
+  background: var(--brand-color, #002D72);
+  border-color: var(--brand-color, #002D72);
+  color: #fff;
+}
+.cookbook-btn.cookbook-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.cookbook-transcribe-selected {
+  width: min(380px, 100%);
+  margin: 0 auto;
+  border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+  border-radius: 8px;
+  padding: 9px 12px;
+  background: color-mix(in srgb, var(--panel) 94%, var(--fg) 3%);
+  text-align: center;
+}
+.cookbook-transcribe-selected-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cookbook-transcribe-selected-meta {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--fg-muted, #999);
+}
+.cookbook-transcribe-run-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
 }
 .cookbook-task-status {
   font-size: 9px;

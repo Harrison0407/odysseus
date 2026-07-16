@@ -1,0 +1,333 @@
+{
+  "canonical_form": {
+    "digest": "SHA-256",
+    "digest_excludes": [
+      "canonical_sha256"
+    ],
+    "encoding": "UTF-8",
+    "json": "RFC8259 object with sorted keys and compact separators",
+    "terminal_newline": true
+  },
+  "canonical_sha256": "2cf74c5a3955bc972deb5f3099233c13459ee9b999e11ad5baaf7550c65ae0aa",
+  "capture_attestation": {
+    "allowed_capture_method": "SYNTHETIC_LAUNCHER_FIXTURE",
+    "exact_keys": [
+      "attestation_version",
+      "fixture_id",
+      "source_classification",
+      "capture_method",
+      "proof_scope",
+      "logical_chunk_completeness",
+      "real_source_capture_authorized",
+      "real_chroma_access_performed",
+      "owner_registry",
+      "workflow_registry",
+      "document_registry",
+      "upload_registry",
+      "fixture_attestation"
+    ],
+    "registry_keys": {
+      "document": [
+        "document_id",
+        "owner"
+      ],
+      "owner": [
+        "active",
+        "retired",
+        "legacy_approved",
+        "internal"
+      ],
+      "upload": [
+        "upload_id",
+        "owner"
+      ],
+      "workflow": [
+        "workflow_id",
+        "workflow_type",
+        "owner",
+        "source_path_tokens",
+        "document_ids",
+        "upload_id",
+        "upload_derivation_status",
+        "upload_derivation_failure_reason"
+      ]
+    },
+    "workflow_source_path_keys": [
+      "call_transcript",
+      "call_summary",
+      "video_transcript",
+      "video_summary"
+    ]
+  },
+  "collection_contract": {
+    "allowed_capture_status": "COMPLETE_SYNTHETIC_FIXTURE",
+    "allowed_families": [
+      "rag",
+      "memory",
+      "tool_index"
+    ],
+    "allowed_lanes": [
+      "legacy",
+      "custom",
+      "fastembed"
+    ],
+    "exact_record_keys": [
+      "collection_name",
+      "family",
+      "lane",
+      "record_count",
+      "metadata_digest",
+      "capture_pass_1_digest",
+      "capture_pass_2_digest",
+      "capture_status"
+    ],
+    "physical_collections": {
+      "odysseus_memories": {
+        "family": "memory",
+        "lane": "legacy"
+      },
+      "odysseus_memories_custom": {
+        "family": "memory",
+        "lane": "custom"
+      },
+      "odysseus_memories_fastembed": {
+        "family": "memory",
+        "lane": "fastembed"
+      },
+      "odysseus_rag": {
+        "family": "rag",
+        "lane": "legacy"
+      },
+      "odysseus_rag_custom": {
+        "family": "rag",
+        "lane": "custom"
+      },
+      "odysseus_rag_fastembed": {
+        "family": "rag",
+        "lane": "fastembed"
+      },
+      "odysseus_tool_index": {
+        "family": "tool_index",
+        "lane": "legacy"
+      },
+      "odysseus_tool_index_custom": {
+        "family": "tool_index",
+        "lane": "custom"
+      },
+      "odysseus_tool_index_fastembed": {
+        "family": "tool_index",
+        "lane": "fastembed"
+      }
+    }
+  },
+  "contract_name": "marketmatch-synthetic-chroma-metadata-snapshot-v1",
+  "fixture_gate": {
+    "classification": "SYNTHETIC_DISPOSABLE_FIXTURE",
+    "general_override": false,
+    "launcher_sentinel": ".launcher-chroma-snapshot-sentinel",
+    "required_environment": [
+      "MARKETMATCH_CHROMA_SNAPSHOT_TEST_ROOT",
+      "MARKETMATCH_CHROMA_SNAPSHOT_SENTINEL",
+      "MARKETMATCH_CHROMA_SNAPSHOT_SENTINEL_FD",
+      "MARKETMATCH_CHROMA_SNAPSHOT_LAUNCHER_FD",
+      "MARKETMATCH_CHROMA_SNAPSHOT_LAUNCHER_PID"
+    ],
+    "required_flag": "--fixture-only",
+    "required_launcher_capability": "READ_ONLY_FD_TO_EXACT_CHECKED_IN_LAUNCHER_INODE_AND_DIGEST",
+    "required_launcher_sha256": "eef5f3361a6682cf0463a38056012460400a47b5b9b59cf4f01e17c0925aacf0",
+    "required_parent_process": "DEDICATED_TEST_LAUNCHER",
+    "required_read_only_capability": "INHERITED_SENTINEL_FILE_DESCRIPTOR",
+    "snapshot_parent": "snapshots"
+  },
+  "limits": {
+    "capture_attestation_bytes": 1048576,
+    "collections_bytes": 1048576,
+    "manifest_bytes": 1048576,
+    "maximum_collections": 9,
+    "maximum_document_ids_per_record": 16,
+    "maximum_records": 10000,
+    "record_line_bytes": 65536,
+    "records_bytes": 8388608
+  },
+  "manifest_version": 1,
+  "privacy_contract": {
+    "allowed_output_values": "aliases, fixed classifications, counts, booleans, fixed finding codes, and fixed-length digests only",
+    "error_values": "fixed codes only",
+    "prohibited_input_keys": [
+      "raw_record_id",
+      "username",
+      "path",
+      "absolute_path",
+      "filename",
+      "directory",
+      "document",
+      "documents",
+      "embedding",
+      "embeddings",
+      "uri",
+      "uris",
+      "chunk_text",
+      "text",
+      "prompt",
+      "transcript",
+      "summary",
+      "response",
+      "credential",
+      "credentials",
+      "endpoint_url",
+      "api_key",
+      "token",
+      "password"
+    ],
+    "raw_values_in_reports": false
+  },
+  "record_contract": {
+    "alias_grammars": {
+      "document": "^document_[0-9a-f]{32}$",
+      "owner": "^owner_[0-9a-f]{32}$",
+      "path": "^path_[0-9a-f]{32}$",
+      "raw_record": "^rr_(rag|memory|tool_index)_(legacy|custom|fastembed)_[0-9a-f]{32}$",
+      "upload": "^upload_[0-9a-f]{32}$",
+      "workflow": "^workflow_[0-9a-f]{32}$"
+    },
+    "allowed_failure_reasons": [
+      "DOCUMENT_LINK_CONFLICT",
+      "OWNER_MISMATCH",
+      "SOURCE_MISMATCH",
+      "UPLOAD_MANIFEST_MISSING",
+      "UPLOAD_MISSING",
+      "UPLOAD_OWNER_MISMATCH"
+    ],
+    "allowed_findings": [
+      "AMBIGUOUS_WORKFLOW_IDENTIFIER",
+      "CROSS_OWNER_DOCUMENT_LINKAGE",
+      "CROSS_OWNER_UPLOAD_LINKAGE",
+      "CROSS_OWNER_WORKFLOW_LINKAGE",
+      "EMPTY_OWNER",
+      "INTERNAL_OWNER",
+      "MISSING_DOCUMENT_IDS",
+      "MISSING_WORKFLOW_IDENTIFIER",
+      "RETIRED_OWNER",
+      "SQL_DERIVED_VALUE_DISAGREEMENT",
+      "UNKNOWN_OWNER",
+      "UPLOAD_DERIVATION_AMBIGUOUS_WORKFLOW",
+      "UPLOAD_DERIVATION_DOCUMENT_LINK_CONFLICT",
+      "UPLOAD_DERIVATION_MISSING_WORKFLOW",
+      "UPLOAD_DERIVATION_OWNER_MISMATCH",
+      "UPLOAD_DERIVATION_SOURCE_MISMATCH",
+      "UPLOAD_DERIVATION_UPLOAD_MANIFEST_MISSING",
+      "UPLOAD_DERIVATION_UPLOAD_MISSING",
+      "UPLOAD_DERIVATION_UPLOAD_OWNER_MISMATCH"
+    ],
+    "allowed_kinds": {
+      "marketmatch": [
+        "call_transcript",
+        "call_summary",
+        "video_transcript",
+        "video_summary"
+      ],
+      "non_marketmatch": [
+        "memory",
+        "non_marketmatch_rag",
+        "tool_index"
+      ]
+    },
+    "allowed_native_fields": [
+      "owner",
+      "source_path_token",
+      "call_or_video_id",
+      "document_ids",
+      "chunk_id",
+      "kind"
+    ],
+    "allowed_sql_derived_fields": [
+      "upload_id"
+    ],
+    "exact_keys": [
+      "collection_name",
+      "raw_record_id_alias",
+      "owner",
+      "source_path_token",
+      "call_or_video_id",
+      "document_ids",
+      "upload_id",
+      "chunk_id",
+      "kind",
+      "native_fields",
+      "sql_derived_fields",
+      "operator_supplied_fields",
+      "validation_findings"
+    ],
+    "pinned_internal_owners": [
+      "internal-tool",
+      "api",
+      "demo",
+      "system"
+    ],
+    "provenance_fields": [
+      "owner",
+      "source_path_token",
+      "call_or_video_id",
+      "document_ids",
+      "upload_id",
+      "chunk_id",
+      "kind"
+    ]
+  },
+  "report_invariants": {
+    "logical_chunk_completeness": false,
+    "proof_scope": "OBSERVED_PHYSICAL_METADATA_ROWS_ONLY",
+    "real_chroma_access_performed": false,
+    "real_source_capture_authorized": false
+  },
+  "snapshot_layout": {
+    "allowed_files": [
+      "snapshot-manifest.json",
+      "collections.json",
+      "records.jsonl",
+      "capture-attestation.json"
+    ],
+    "capture_attestation_file": "capture-attestation.json",
+    "collections_document_keys": [
+      "collections"
+    ],
+    "collections_file": "collections.json",
+    "manifest_exact_keys": [
+      "manifest_version",
+      "contract_name",
+      "contract_sha256",
+      "source_classification",
+      "fixture_id",
+      "sealed",
+      "declared_collections",
+      "files",
+      "tree_sha256",
+      "canonical_sha256"
+    ],
+    "manifest_file_record_keys": [
+      "path",
+      "size",
+      "sha256"
+    ],
+    "manifest_hashed_files": [
+      "capture-attestation.json",
+      "collections.json",
+      "records.jsonl"
+    ],
+    "manifest_file": "snapshot-manifest.json",
+    "records_file": "records.jsonl"
+  },
+  "usage_policy": {
+    "application_imports": "PROHIBITED",
+    "chroma_access": "PROHIBITED",
+    "database_access": "PROHIBITED",
+    "embeddings": "PROHIBITED",
+    "logical_workflow_completeness": "UNPROVABLE",
+    "network_access": "PROHIBITED",
+    "phase_3c_integration": "NOT_AUTHORIZED",
+    "real_source_capture": "NOT_AUTHORIZED",
+    "runtime_integration": "NOT_AUTHORIZED",
+    "synthetic_fixtures_only": true,
+    "threat_boundary": "NON_MALICIOUS_SAME_USER_UNMODIFIED_CHECKED_IN_CODE"
+  }
+}

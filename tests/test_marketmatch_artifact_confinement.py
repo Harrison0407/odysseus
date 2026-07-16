@@ -21,6 +21,8 @@ from src.marketmatch_artifacts import (
     ArtifactPathError,
     ArtifactRoot,
     construct_output_path,
+    open_absolute_artifact_for_read,
+    open_artifact_for_read,
     resolve_absolute_artifact_for_read,
     resolve_artifact_for_read,
     revalidate_artifact_for_read,
@@ -636,6 +638,426 @@ class MarketMatchArtifactConfinementTests(unittest.TestCase):
         self.assertNotIn("private-filename-canary", repr(result))
 
 
+class MarketMatchArtifactDescriptorIOTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory(prefix="marketmatch-io-synthetic-")
+        self.base = Path(self.temp.name)
+        self.calls = self.base / "calls"
+        self.videos = self.base / "videos"
+        self.calls.mkdir()
+        self.videos.mkdir()
+        self.calls_root = ArtifactRoot(ArtifactDomain.CALLS, self.calls)
+        self.videos_root = ArtifactRoot(ArtifactDomain.VIDEOS, self.videos)
+
+    def tearDown(self) -> None:
+        self.temp.cleanup()
+
+    def assert_code(self, expected: ArtifactPathCode, operation) -> ArtifactPathError:
+        with self.assertRaises(ArtifactPathError) as caught:
+            operation()
+        self.assertIs(caught.exception.code, expected)
+        self.assertEqual(str(caught.exception), expected.value)
+        return caught.exception
+
+    def require_symlinks(self) -> None:
+        if not hasattr(os, "symlink"):
+            self.skipTest("symlinks are unsupported")
+
+    def require_hardlinks(self) -> None:
+        if not hasattr(os, "link"):
+            self.skipTest("hard links are unsupported")
+
+    def resolve_calls(self, candidate):
+        return resolve_artifact_for_read(
+            self.calls_root,
+            candidate,
+            expected_domain=ArtifactDomain.CALLS,
+        )
+
+    def open_calls(self, candidate, *, validated=None):
+        return open_artifact_for_read(
+            self.calls_root,
+            candidate,
+            expected_domain=ArtifactDomain.CALLS,
+            validated=validated,
+        )
+
+    def assert_descriptor_closed(self, descriptor: int) -> None:
+        with self.assertRaises(OSError):
+            os.fstat(descriptor)
+
+    def test_read_capability_opens_and_reads_valid_file(self) -> None:
+        artifact = self.calls / "artifact.bin"
+        artifact.write_bytes(b"descriptor-safe-content")
+
+        with self.open_calls("artifact.bin") as stream:
+            self.assertIsInstance(stream, io.FileIO)
+            self.assertEqual(stream.read(), b"descriptor-safe-content")
+
+    def test_read_stream_is_backed_by_the_opened_descriptor(self) -> None:
+        artifact = self.calls / "artifact.bin"
+        artifact.write_bytes(b"content")
+
+        with self.open_calls("artifact.bin") as stream:
+            self.assertIsInstance(stream.name, int)
+            descriptor_metadata = os.fstat(stream.fileno())
+            artifact_metadata = artifact.stat()
+            self.assertEqual(
+                (descriptor_metadata.st_dev, descriptor_metadata.st_ino),
+                (artifact_metadata.st_dev, artifact_metadata.st_ino),
+            )
+
+    def test_read_rejects_candidate_replaced_before_open(self) -> None:
+        artifact = self.calls / "artifact.bin"
+        held = self.calls / "artifact-held.bin"
+        artifact.write_bytes(b"original")
+        validated = self.resolve_calls("artifact.bin")
+
+        def race(stage: str) -> None:
+            if stage == "before_read_final_open":
+                artifact.rename(held)
+                artifact.write_bytes(b"replacement")
+
+        with mock.patch.object(artifacts, "_io_checkpoint", side_effect=race):
+            self.assert_code(
+                ArtifactPathCode.IDENTITY_CHANGED,
+                lambda: self.open_calls("artifact.bin", validated=validated).__enter__(),
+            )
+
+    def test_replacement_after_descriptor_open_does_not_redirect_read(self) -> None:
+        artifact = self.calls / "artifact.bin"
+        held = self.calls / "artifact-held.bin"
+        artifact.write_bytes(b"original-descriptor-content")
+
+        def race(stage: str) -> None:
+            if stage == "read_descriptor_opened":
+                artifact.rename(held)
+                artifact.write_bytes(b"replacement-path-content")
+
+        with mock.patch.object(artifacts, "_io_checkpoint", side_effect=race):
+            with self.open_calls("artifact.bin") as stream:
+                self.assertEqual(stream.read(), b"original-descriptor-content")
+                self.assertEqual(artifact.read_bytes(), b"replacement-path-content")
+
+    def test_read_rejects_final_symlink(self) -> None:
+        self.require_symlinks()
+        outside = self.base / "outside.bin"
+        outside.write_bytes(b"outside")
+        os.symlink(outside, self.calls / "artifact.bin")
+        self.assert_code(
+            ArtifactPathCode.PATH_COMPONENT_SYMLINK,
+            lambda: self.open_calls("artifact.bin").__enter__(),
+        )
+
+    def test_read_rejects_symlink_directory_component(self) -> None:
+        self.require_symlinks()
+        outside = self.base / "outside"
+        outside.mkdir()
+        (outside / "artifact.bin").write_bytes(b"outside")
+        os.symlink(outside, self.calls / "linked")
+        self.assert_code(
+            ArtifactPathCode.PATH_COMPONENT_SYMLINK,
+            lambda: self.open_calls("linked/artifact.bin").__enter__(),
+        )
+
+    def test_read_detects_directory_component_replacement_before_open(self) -> None:
+        nested = self.calls / "nested"
+        held = self.calls / "nested-held"
+        nested.mkdir()
+        (nested / "artifact.bin").write_bytes(b"original")
+
+        def race(stage: str) -> None:
+            if stage == "before_read_final_open":
+                nested.rename(held)
+                nested.mkdir()
+                (nested / "artifact.bin").write_bytes(b"replacement")
+
+        try:
+            with mock.patch.object(artifacts, "_io_checkpoint", side_effect=race):
+                self.assert_code(
+                    ArtifactPathCode.IDENTITY_CHANGED,
+                    lambda: self.open_calls("nested/artifact.bin").__enter__(),
+                )
+        finally:
+            if held.exists():
+                if (nested / "artifact.bin").exists():
+                    (nested / "artifact.bin").unlink()
+                if nested.exists():
+                    nested.rmdir()
+                held.rename(nested)
+
+    def test_read_rejects_hard_linked_file(self) -> None:
+        self.require_hardlinks()
+        artifact = self.calls / "artifact.bin"
+        artifact.write_bytes(b"content")
+        try:
+            os.link(artifact, self.calls / "artifact-link.bin")
+        except OSError:
+            self.skipTest("hard links are unavailable to the test process")
+        self.assert_code(
+            ArtifactPathCode.ARTIFACT_HARDLINKED,
+            lambda: self.open_calls("artifact.bin").__enter__(),
+        )
+
+    def test_read_rejects_fifo_without_blocking(self) -> None:
+        if not hasattr(os, "mkfifo"):
+            self.skipTest("FIFOs are unsupported")
+        fifo = self.calls / "artifact.fifo"
+        os.mkfifo(fifo)
+        self.assert_code(
+            ArtifactPathCode.ARTIFACT_NOT_REGULAR,
+            lambda: self.open_calls("artifact.fifo").__enter__(),
+        )
+
+    def test_read_rejects_unix_socket(self) -> None:
+        if not hasattr(socket, "AF_UNIX"):
+            self.skipTest("Unix sockets are unsupported")
+        with tempfile.TemporaryDirectory(prefix="mm-io-", dir="/tmp") as short_temp:
+            root_path = Path(short_temp) / "calls"
+            root_path.mkdir()
+            root = ArtifactRoot(ArtifactDomain.CALLS, root_path)
+            socket_path = root_path / "s"
+            server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            try:
+                server.bind(os.fspath(socket_path))
+                self.assert_code(
+                    ArtifactPathCode.ARTIFACT_NOT_REGULAR,
+                    lambda: open_artifact_for_read(
+                        root,
+                        "s",
+                        expected_domain=ArtifactDomain.CALLS,
+                    ).__enter__(),
+                )
+            finally:
+                server.close()
+
+    def test_read_rejects_directory(self) -> None:
+        (self.calls / "directory").mkdir()
+        self.assert_code(
+            ArtifactPathCode.ARTIFACT_NOT_REGULAR,
+            lambda: self.open_calls("directory").__enter__(),
+        )
+
+    def test_read_rejects_missing_file(self) -> None:
+        self.assert_code(
+            ArtifactPathCode.ARTIFACT_NOT_FOUND,
+            lambda: self.open_calls("missing.bin").__enter__(),
+        )
+
+    def test_read_rejects_root_replacement(self) -> None:
+        artifact = self.calls / "artifact.bin"
+        artifact.write_bytes(b"content")
+        held_root = self.base / "calls-held"
+
+        def race(stage: str) -> None:
+            if stage == "read_root_opened":
+                self.calls.rename(held_root)
+                self.calls.mkdir()
+
+        try:
+            with mock.patch.object(artifacts, "_io_checkpoint", side_effect=race):
+                self.assert_code(
+                    ArtifactPathCode.IDENTITY_CHANGED,
+                    lambda: self.open_calls("artifact.bin").__enter__(),
+                )
+        finally:
+            if held_root.exists():
+                if self.calls.exists():
+                    self.calls.rmdir()
+                held_root.rename(self.calls)
+
+    def test_read_rejects_root_domain_confusion(self) -> None:
+        artifact = self.calls / "artifact.bin"
+        artifact.write_bytes(b"content")
+        self.assert_code(
+            ArtifactPathCode.ROOT_DOMAIN_MISMATCH,
+            lambda: open_artifact_for_read(
+                self.calls_root,
+                "artifact.bin",
+                expected_domain=ArtifactDomain.VIDEOS,
+            ).__enter__(),
+        )
+
+    def test_read_closes_final_descriptor_on_success(self) -> None:
+        artifact = self.calls / "artifact.bin"
+        artifact.write_bytes(b"content")
+        with self.open_calls("artifact.bin") as stream:
+            descriptor = stream.fileno()
+        self.assert_descriptor_closed(descriptor)
+
+    def test_read_closes_every_descriptor_on_success(self) -> None:
+        nested = self.calls / "nested"
+        nested.mkdir()
+        (nested / "artifact.bin").write_bytes(b"content")
+        descriptors: set[int] = set()
+        real_fstat = os.fstat
+
+        def tracking_fstat(descriptor: int):
+            descriptors.add(descriptor)
+            return real_fstat(descriptor)
+
+        with mock.patch.object(artifacts.os, "fstat", side_effect=tracking_fstat):
+            with self.open_calls("nested/artifact.bin") as stream:
+                self.assertEqual(stream.read(), b"content")
+        self.assertTrue(descriptors)
+        for descriptor in descriptors:
+            self.assert_descriptor_closed(descriptor)
+
+    def test_read_closes_descriptor_when_context_body_raises(self) -> None:
+        artifact = self.calls / "artifact.bin"
+        artifact.write_bytes(b"content")
+        descriptors: list[int] = []
+
+        class SyntheticCancellation(BaseException):
+            pass
+
+        with self.assertRaises(SyntheticCancellation):
+            with self.open_calls("artifact.bin") as stream:
+                descriptors.append(stream.fileno())
+                raise SyntheticCancellation()
+        self.assert_descriptor_closed(descriptors[0])
+
+    def test_read_closes_every_descriptor_on_failure(self) -> None:
+        nested = self.calls / "nested"
+        nested.mkdir()
+        (nested / "artifact.bin").write_bytes(b"content")
+        descriptors: set[int] = set()
+        real_fstat = os.fstat
+
+        def tracking_fstat(descriptor: int):
+            descriptors.add(descriptor)
+            return real_fstat(descriptor)
+
+        def fail_after_open(stage: str) -> None:
+            if stage == "read_descriptor_opened":
+                raise ArtifactPathError(ArtifactPathCode.OPEN_FAILED)
+
+        with (
+            mock.patch.object(artifacts.os, "fstat", side_effect=tracking_fstat),
+            mock.patch.object(artifacts, "_io_checkpoint", side_effect=fail_after_open),
+        ):
+            self.assert_code(
+                ArtifactPathCode.OPEN_FAILED,
+                lambda: self.open_calls("nested/artifact.bin").__enter__(),
+            )
+        self.assertTrue(descriptors)
+        for descriptor in descriptors:
+            self.assert_descriptor_closed(descriptor)
+
+    def test_stream_wrapping_cancellation_closes_every_descriptor(self) -> None:
+        artifact = self.calls / "artifact.bin"
+        artifact.write_bytes(b"content")
+        descriptors: set[int] = set()
+        real_fstat = os.fstat
+
+        class SyntheticCancellation(BaseException):
+            pass
+
+        def tracking_fstat(descriptor: int):
+            descriptors.add(descriptor)
+            return real_fstat(descriptor)
+
+        with (
+            mock.patch.object(artifacts.os, "fstat", side_effect=tracking_fstat),
+            mock.patch.object(artifacts.io, "FileIO", side_effect=SyntheticCancellation),
+        ):
+            with self.assertRaises(SyntheticCancellation):
+                self.open_calls("artifact.bin").__enter__()
+        self.assertTrue(descriptors)
+        for descriptor in descriptors:
+            self.assert_descriptor_closed(descriptor)
+
+    def test_read_double_close_is_safe(self) -> None:
+        artifact = self.calls / "artifact.bin"
+        artifact.write_bytes(b"content")
+        with self.open_calls("artifact.bin") as stream:
+            stream.close()
+            stream.close()
+        self.assertTrue(stream.closed)
+
+    def test_generator_abandonment_closes_descriptor(self) -> None:
+        artifact = self.calls / "artifact.bin"
+        artifact.write_bytes(b"content")
+        manager = self.open_calls("artifact.bin")
+        stream = manager.__enter__()
+        descriptor = stream.fileno()
+
+        manager.gen.close()
+
+        self.assertTrue(stream.closed)
+        self.assert_descriptor_closed(descriptor)
+
+    def test_read_use_after_close_is_rejected(self) -> None:
+        artifact = self.calls / "artifact.bin"
+        artifact.write_bytes(b"content")
+        with self.open_calls("artifact.bin") as stream:
+            pass
+        with self.assertRaises(ValueError):
+            stream.read()
+
+    def test_absolute_read_requires_explicit_compatibility_capability(self) -> None:
+        artifact = self.calls / "artifact.bin"
+        artifact.write_bytes(b"content")
+        absolute = artifact.resolve(strict=True)
+        self.assert_code(
+            ArtifactPathCode.ABSOLUTE_PATH_NOT_ALLOWED,
+            lambda: self.open_calls(absolute).__enter__(),
+        )
+        with open_absolute_artifact_for_read(
+            self.calls_root,
+            absolute,
+            expected_domain=ArtifactDomain.CALLS,
+        ) as stream:
+            self.assertEqual(stream.read(), b"content")
+
+    def test_read_capability_does_not_modify_file(self) -> None:
+        artifact = self.calls / "artifact.bin"
+        artifact.write_bytes(b"immutable-content")
+        before = artifact.stat()
+
+        with self.open_calls("artifact.bin") as stream:
+            self.assertEqual(stream.read(), b"immutable-content")
+
+        after = artifact.stat()
+        self.assertEqual(artifact.read_bytes(), b"immutable-content")
+        self.assertEqual(after.st_dev, before.st_dev)
+        self.assertEqual(after.st_ino, before.st_ino)
+        self.assertEqual(after.st_size, before.st_size)
+        self.assertEqual(after.st_mtime_ns, before.st_mtime_ns)
+        self.assertEqual(after.st_mode, before.st_mode)
+
+    def test_read_capability_leaves_directory_inventory_unchanged(self) -> None:
+        nested = self.calls / "nested"
+        nested.mkdir()
+        (nested / "artifact.bin").write_bytes(b"content")
+        before = sorted(str(path.relative_to(self.base)) for path in self.base.rglob("*"))
+
+        with self.open_calls("nested/artifact.bin") as stream:
+            self.assertEqual(stream.read(), b"content")
+
+        after = sorted(str(path.relative_to(self.base)) for path in self.base.rglob("*"))
+        self.assertEqual(after, before)
+
+    def test_descriptor_io_privacy_and_hostile_pathlike(self) -> None:
+        canary = "PRIVATE-DESCRIPTOR-IO-CANARY"
+
+        class HostilePathLike:
+            def __fspath__(self):
+                raise OSError(canary)
+
+        operations = (lambda: self.open_calls(HostilePathLike()).__enter__(),)
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            for operation in operations:
+                with self.assertRaises(ArtifactPathError) as caught:
+                    operation()
+                self.assertNotIn(canary, str(caught.exception))
+                self.assertNotIn(canary, repr(caught.exception))
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertEqual(stderr.getvalue(), "")
+
+
 class MarketMatchArtifactStaticBoundaryTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -687,7 +1109,7 @@ class MarketMatchArtifactStaticBoundaryTests(unittest.TestCase):
             if isinstance(node.func, ast.Name):
                 calls.append(node.func.id)
             elif isinstance(node.func, ast.Attribute):
-                # os.open is used only for no-follow directory descriptors.
+                # Descriptor-only os.open is the Phase 3K-R security primitive.
                 if node.func.attr != "open":
                     calls.append(node.func.attr)
         self.assertEqual(set(calls) & forbidden_names, set())
@@ -707,6 +1129,66 @@ class MarketMatchArtifactStaticBoundaryTests(unittest.TestCase):
             ):
                 attributes.add(node.func.attr)
         self.assertEqual(attributes & forbidden, set())
+
+    def test_production_ast_has_no_writable_artifact_io(self) -> None:
+        mutating_calls = {
+            "chmod", "chown", "link", "makedirs", "mkdir", "remove", "rename",
+            "replace", "rmdir", "symlink", "truncate", "unlink", "write",
+        }
+        mutating_flags = {"O_CREAT", "O_EXCL", "O_TRUNC", "O_WRONLY", "O_RDWR"}
+        observed_calls = set()
+        observed_flags = set()
+        writable_modes = []
+
+        for node in ast.walk(self.tree):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                if isinstance(node.func.value, ast.Name) and node.func.value.id == "os":
+                    observed_calls.add(node.func.attr)
+                if (
+                    isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == "io"
+                    and node.func.attr == "FileIO"
+                ):
+                    arguments = list(node.args[1:]) + [
+                        keyword.value for keyword in node.keywords if keyword.arg == "mode"
+                    ]
+                    writable_modes.extend(
+                        argument.value
+                        for argument in arguments
+                        if isinstance(argument, ast.Constant) and isinstance(argument.value, str)
+                    )
+            if (
+                isinstance(node, ast.Attribute)
+                and isinstance(node.value, ast.Name)
+                and node.value.id == "os"
+                and node.attr in mutating_flags
+            ):
+                observed_flags.add(node.attr)
+
+        self.assertEqual(observed_calls & mutating_calls, set())
+        self.assertEqual(observed_flags, set())
+        self.assertTrue(writable_modes)
+        self.assertTrue(all(mode == "rb" for mode in writable_modes))
+
+        prohibited_definitions = {
+            "create_artifact_for_write", "_create_output_writer",
+            "ExclusiveArtifactWriter", "commit", "_abort",
+        }
+        defined = {
+            node.name
+            for node in ast.walk(self.tree)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+        }
+        self.assertEqual(defined & prohibited_definitions, set())
+
+    def test_no_prohibited_runtime_references(self) -> None:
+        prohibited = (
+            "sqlalchemy", "chromadb", "ffmpeg", "upload_handler",
+            "background_worker", "create_all(", "include_router(",
+        )
+        lowered = self.source.lower()
+        for token in prohibited:
+            self.assertNotIn(token, lowered)
 
     def test_production_does_not_log_or_print(self) -> None:
         self.assertNotIn("logging", self.source)

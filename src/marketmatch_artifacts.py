@@ -1,35 +1,39 @@
 """Confined path validation for future MarketMatch artifacts.
 
-This module deliberately has no application dependencies and performs no file
-content I/O.  Persisted artifact paths are untrusted.  Callers must supply an
-explicit, domain-bound root and must not treat filename sanitization as a
-security boundary.
+This module deliberately has no application dependencies and performs no
+filesystem mutation.  Persisted artifact paths are untrusted.  Callers must
+supply an explicit, domain-bound root and must not treat filename sanitization
+as a security boundary.
 
 The read resolver uses descriptor-relative, no-follow metadata checks when the
 host can provide them.  It returns a validated path record, not an open file
 descriptor.  Validation only describes the filesystem identities observed at
-the end of the call: a returned path is not safe indefinitely.  A future
-content reader must use a descriptor-safe open anchored to the validated root,
-or immediately revalidate with :func:`revalidate_artifact_for_read` before an
-otherwise safe access.
+the end of the call: a returned path is not safe indefinitely.
+The descriptor-safe read capability traverses from that explicit root and
+yields a binary stream backed directly by the acquired final descriptor.  A
+directory-entry replacement after acquisition does not redirect that open
+descriptor.  The capability protects the opened file object, not a future
+pathname lookup: callers must consume the yielded stream and must never close
+it and reopen the persisted path.
 
-The output constructor also creates nothing.  A future writer must create the
-returned single-component name with descriptor-relative ``O_EXCL`` and
-``O_NOFOLLOW`` semantics, or perform equivalent immediate revalidation.
+The Phase 3J output constructor still creates nothing.  This module provides no
+writable capability or publication operation.
 """
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
 import errno
+import io
 import ntpath
 import os
 from pathlib import Path
 import re
 import stat
 import unicodedata
-from typing import Union
+from typing import Iterator, Union
 
 
 PathInput = Union[str, os.PathLike[str]]
@@ -61,6 +65,7 @@ class ArtifactPathCode(str, Enum):
     INVALID_EXTENSION = "INVALID_EXTENSION"
     UNSUPPORTED_PLATFORM_GUARANTEE = "UNSUPPORTED_PLATFORM_GUARANTEE"
     IDENTITY_CHANGED = "IDENTITY_CHANGED"
+    OPEN_FAILED = "OPEN_FAILED"
 
 
 class ArtifactPathError(Exception):
@@ -155,6 +160,12 @@ def _validation_checkpoint(stage: str) -> None:
     del stage
 
 
+def _io_checkpoint(stage: str) -> None:
+    """Internal deterministic descriptor-race test seam; no runtime behavior."""
+
+    del stage
+
+
 def _validate_text(value: object, code: ArtifactPathCode) -> str:
     try:
         raw = os.fspath(value)  # type: ignore[arg-type]
@@ -192,6 +203,12 @@ def _require_platform_guarantees() -> None:
         _fail(ArtifactPathCode.UNSUPPORTED_PLATFORM_GUARANTEE)
 
 
+def _require_read_capability_guarantees() -> None:
+    _require_platform_guarantees()
+    if not hasattr(os, "O_NONBLOCK"):
+        _fail(ArtifactPathCode.UNSUPPORTED_PLATFORM_GUARANTEE)
+
+
 def _identity(metadata: os.stat_result) -> _Identity:
     device = getattr(metadata, "st_dev", None)
     inode = getattr(metadata, "st_ino", None)
@@ -205,6 +222,13 @@ def _identity(metadata: os.stat_result) -> _Identity:
 
 def _same_identity(left: _Identity, right: _Identity) -> bool:
     return left.device == right.device and left.inode == right.inode
+
+
+def _fstat_with_code(descriptor: int, code: ArtifactPathCode) -> os.stat_result:
+    try:
+        return os.fstat(descriptor)
+    except OSError:
+        _fail(code)
 
 
 def _strict_realpath(path: str, code: ArtifactPathCode) -> str:
@@ -641,3 +665,245 @@ def construct_output_path(
             os.close(state.descriptor)
         except OSError:
             pass
+
+
+def _candidate_parts_for_capability(
+    state: _RootState,
+    candidate: PathInput,
+    *,
+    allow_absolute: bool,
+) -> tuple[str, ...]:
+    candidate_text = _validate_text(candidate, ArtifactPathCode.INVALID_CANDIDATE)
+    host_absolute = os.path.isabs(candidate_text)
+    portable_absolute = host_absolute or ntpath.isabs(candidate_text)
+    if portable_absolute and not allow_absolute:
+        _fail(ArtifactPathCode.ABSOLUTE_PATH_NOT_ALLOWED)
+    if allow_absolute:
+        if not host_absolute:
+            _fail(ArtifactPathCode.INVALID_CANDIDATE)
+        return _absolute_relative_parts(state, candidate_text)
+    return _relative_parts(candidate_text)
+
+
+def _require_regular_single_link(
+    metadata: os.stat_result,
+    *,
+    non_regular_code: ArtifactPathCode,
+    hardlink_code: ArtifactPathCode,
+) -> _Identity:
+    if not stat.S_ISREG(metadata.st_mode):
+        _fail(non_regular_code)
+    if metadata.st_nlink != 1:
+        _fail(hardlink_code)
+    return _identity(metadata)
+
+
+def _open_read_descriptor(
+    allowed_root: ArtifactRoot,
+    candidate: PathInput,
+    *,
+    expected_domain: ArtifactDomain,
+    validated: ValidatedArtifactPath | None,
+    allow_absolute: bool,
+) -> int:
+    _require_read_capability_guarantees()
+    if validated is not None and not isinstance(validated, ValidatedArtifactPath):
+        _fail(ArtifactPathCode.INVALID_CANDIDATE)
+
+    state = _open_root(allowed_root, expected_domain)
+    opened_descriptors: list[int] = [state.descriptor]
+    records: list[_ComponentRecord] = []
+    try:
+        if validated is not None:
+            if validated.domain is not expected_domain:
+                _fail(ArtifactPathCode.ROOT_DOMAIN_MISMATCH)
+            if not _same_identity(validated._root_identity, state.canonical_identity):
+                _fail(ArtifactPathCode.IDENTITY_CHANGED)
+
+        parts = _candidate_parts_for_capability(
+            state,
+            candidate,
+            allow_absolute=allow_absolute,
+        )
+        _io_checkpoint("read_root_opened")
+        _revalidate_root(state)
+
+        parent_descriptor = state.descriptor
+        for component in parts[:-1]:
+            metadata = _stat_at(
+                parent_descriptor,
+                component,
+                ArtifactPathCode.ARTIFACT_NOT_FOUND,
+            )
+            if stat.S_ISLNK(metadata.st_mode):
+                _fail(ArtifactPathCode.PATH_COMPONENT_SYMLINK)
+            if not stat.S_ISDIR(metadata.st_mode):
+                _fail(ArtifactPathCode.ARTIFACT_NOT_FOUND)
+            identity = _identity(metadata)
+            records.append(
+                _ComponentRecord(
+                    parent_descriptor=parent_descriptor,
+                    name=component,
+                    identity=identity,
+                    is_final=False,
+                )
+            )
+            parent_descriptor = _open_directory_at(parent_descriptor, component, identity)
+            opened_descriptors.append(parent_descriptor)
+
+        final_name = parts[-1]
+        final_metadata = _stat_at(
+            parent_descriptor,
+            final_name,
+            ArtifactPathCode.ARTIFACT_NOT_FOUND,
+        )
+        if stat.S_ISLNK(final_metadata.st_mode):
+            _fail(ArtifactPathCode.PATH_COMPONENT_SYMLINK)
+        final_identity = _require_regular_single_link(
+            final_metadata,
+            non_regular_code=ArtifactPathCode.ARTIFACT_NOT_REGULAR,
+            hardlink_code=ArtifactPathCode.ARTIFACT_HARDLINKED,
+        )
+        if validated is not None and not _same_identity(
+            validated._artifact_identity,
+            final_identity,
+        ):
+            _fail(ArtifactPathCode.IDENTITY_CHANGED)
+        records.append(
+            _ComponentRecord(
+                parent_descriptor=parent_descriptor,
+                name=final_name,
+                identity=final_identity,
+                is_final=True,
+            )
+        )
+
+        _io_checkpoint("before_read_final_open")
+        _revalidate_root(state)
+        _revalidate_components(records)
+
+        flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
+        if hasattr(os, "O_CLOEXEC"):
+            flags |= os.O_CLOEXEC
+        if hasattr(os, "O_NOCTTY"):
+            flags |= os.O_NOCTTY
+        try:
+            final_descriptor = os.open(
+                final_name,
+                flags,
+                dir_fd=parent_descriptor,
+            )
+        except OSError as exc:
+            if exc.errno == errno.ELOOP:
+                _fail(ArtifactPathCode.PATH_COMPONENT_SYMLINK)
+            _fail(ArtifactPathCode.OPEN_FAILED)
+        opened_descriptors.append(final_descriptor)
+
+        opened_metadata = _fstat_with_code(final_descriptor, ArtifactPathCode.OPEN_FAILED)
+        opened_identity = _require_regular_single_link(
+            opened_metadata,
+            non_regular_code=ArtifactPathCode.ARTIFACT_NOT_REGULAR,
+            hardlink_code=ArtifactPathCode.ARTIFACT_HARDLINKED,
+        )
+        if not _same_identity(final_identity, opened_identity):
+            _fail(ArtifactPathCode.IDENTITY_CHANGED)
+        if validated is not None and not _same_identity(
+            validated._artifact_identity,
+            opened_identity,
+        ):
+            _fail(ArtifactPathCode.IDENTITY_CHANGED)
+
+        _io_checkpoint("read_descriptor_opened")
+        post_checkpoint_identity = _require_regular_single_link(
+            _fstat_with_code(final_descriptor, ArtifactPathCode.OPEN_FAILED),
+            non_regular_code=ArtifactPathCode.ARTIFACT_NOT_REGULAR,
+            hardlink_code=ArtifactPathCode.ARTIFACT_HARDLINKED,
+        )
+        if not _same_identity(opened_identity, post_checkpoint_identity):
+            _fail(ArtifactPathCode.IDENTITY_CHANGED)
+        if opened_descriptors[-1] != final_descriptor:
+            _fail(ArtifactPathCode.IDENTITY_CHANGED)
+        return opened_descriptors.pop()
+    finally:
+        for descriptor in reversed(opened_descriptors):
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+
+
+@contextmanager
+def open_artifact_for_read(
+    allowed_root: ArtifactRoot,
+    candidate: PathInput,
+    *,
+    expected_domain: ArtifactDomain,
+    validated: ValidatedArtifactPath | None = None,
+) -> Iterator[io.FileIO]:
+    """Yield a binary stream backed by one descriptor-relative read open.
+
+    The final pathname is not reopened after its descriptor is acquired.
+    Supplying a prior validation additionally binds the open descriptor to the
+    root and artifact device/inode identities recorded by that validation.
+    """
+
+    descriptor = _open_read_descriptor(
+        allowed_root,
+        candidate,
+        expected_domain=expected_domain,
+        validated=validated,
+        allow_absolute=False,
+    )
+    try:
+        stream = io.FileIO(descriptor, mode="rb", closefd=True)
+    except BaseException as original:
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+        if not isinstance(original, Exception):
+            raise
+        _fail(ArtifactPathCode.OPEN_FAILED)
+    try:
+        yield stream
+    finally:
+        try:
+            stream.close()
+        except OSError:
+            _fail(ArtifactPathCode.OPEN_FAILED)
+
+
+@contextmanager
+def open_absolute_artifact_for_read(
+    allowed_root: ArtifactRoot,
+    candidate: PathInput,
+    *,
+    expected_domain: ArtifactDomain,
+    validated: ValidatedArtifactPath | None = None,
+) -> Iterator[io.FileIO]:
+    """Explicit absolute-path compatibility form of the read capability."""
+
+    descriptor = _open_read_descriptor(
+        allowed_root,
+        candidate,
+        expected_domain=expected_domain,
+        validated=validated,
+        allow_absolute=True,
+    )
+    try:
+        stream = io.FileIO(descriptor, mode="rb", closefd=True)
+    except BaseException as original:
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+        if not isinstance(original, Exception):
+            raise
+        _fail(ArtifactPathCode.OPEN_FAILED)
+    try:
+        yield stream
+    finally:
+        try:
+            stream.close()
+        except OSError:
+            _fail(ArtifactPathCode.OPEN_FAILED)

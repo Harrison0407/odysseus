@@ -33,7 +33,7 @@ def _compose_env_names(path: Path) -> set[str]:
 
 def _upload_limit_env_names() -> set[str]:
     source = (ROOT / "src" / "upload_limits.py").read_text(encoding="utf-8")
-    return set(re.findall(r'"(ODYSSEUS_[A-Z_]*BYTES)"', source)) | {
+    return set(re.findall(r'"((?:ODYSSEUS|MARKETMATCH)_[A-Z_]*BYTES)"', source)) | {
         "ODYSSEUS_CHAT_UPLOAD_MAX_BYTES"
     }
 

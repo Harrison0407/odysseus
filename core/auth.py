@@ -28,6 +28,7 @@ DEFAULT_PRIVILEGES = {
     "can_use_bash": False,
     "can_use_documents": True,
     "can_use_research": True,
+    "can_use_marketmatch": True,
     "can_generate_images": True,
     "can_manage_memory": True,
     "max_messages_per_day": 0,
@@ -102,6 +103,11 @@ class AuthManager:
         self._sessions_path = os.path.join(os.path.dirname(auth_path), "sessions.json")
         self._config: Dict[str, Any] = {}
         self._sessions: Dict[str, Dict[str, Any]] = {}  # token -> {username, expiry}
+        # Exact rename pairs that may be compensated if the immediately
+        # following owner migration fails. This is process-local on purpose:
+        # it is an authorization guard for the active route operation, not a
+        # second persistent identity system.
+        self._pending_rename_rollbacks: set[tuple[str, str]] = set()
         # Guards mutations of self._sessions and the on-disk sessions.json.
         # Validate/create/revoke run concurrently from the FastAPI threadpool.
         self._sessions_lock = threading.RLock()
@@ -156,14 +162,16 @@ class AuthManager:
             logger.error(f"Failed to load sessions: {e}")
             self._sessions = {}
 
-    def _save_sessions(self):
+    def _save_sessions(self) -> bool:
         """Persist session tokens to disk (atomic, lock-guarded)."""
         try:
             with self._sessions_lock:
                 snapshot = dict(self._sessions)
             _atomic_write_json(self._sessions_path, snapshot)
+            return True
         except Exception as e:
             logger.error(f"Failed to save sessions: {e}")
+            return False
 
     def _migrate_single_user(self):
         """Migrate old single-user format to multi-user format."""
@@ -232,6 +240,29 @@ class AuthManager:
     def users(self) -> Dict[str, Any]:
         return self._config.get("users", {})
 
+    def _retired_usernames_locked(self) -> Optional[set[str]]:
+        """Return normalized retired names while ``_config_lock`` is held.
+
+        A malformed persisted value fails closed for account creation,
+        deletion, and rename. Treating it as an empty collection would make a
+        damaged auth config silently reusable as an ownership key registry.
+        """
+        raw = self._config.get("retired_usernames", [])
+        if not isinstance(raw, list):
+            logger.error("Malformed retired_usernames in auth config; refusing identity mutation")
+            return None
+        return {
+            str(username or "").strip().lower()
+            for username in raw
+            if str(username or "").strip()
+        }
+
+    def _set_retired_usernames_locked(self, usernames: set[str]) -> None:
+        self._config["retired_usernames"] = sorted(usernames)
+
+    def _username_has_pending_rename_locked(self, username: str) -> bool:
+        return any(username in pair for pair in self._pending_rename_rollbacks)
+
     @property
     def signup_enabled(self) -> bool:
         return self._config.get("signup_enabled", False)
@@ -275,7 +306,8 @@ class AuthManager:
             logger.warning("Refused to create reserved username '%s'", username)
             return False
         with self._config_lock:
-            if username in self.users:
+            retired = self._retired_usernames_locked()
+            if retired is None or username in retired or username in self.users:
                 return False
             if "users" not in self._config:
                 self._config["users"] = {}
@@ -299,7 +331,12 @@ class AuthManager:
         """
         username = username.strip().lower()
         with self._config_lock:
+            retired = self._retired_usernames_locked()
+            if retired is None:
+                return False
             if username not in self.users:
+                return False
+            if self._username_has_pending_rename_locked(username):
                 return False
             if username == requesting_user:
                 return False
@@ -321,8 +358,17 @@ class AuthManager:
             except Exception:
                 logger.warning(f"Failed to revoke API tokens for deleted user '{username}'")
                 return False
-            del self._config["users"][username]
-            self._save()
+            deleted_user = self._config["users"].pop(username)
+            retired_before = set(retired)
+            retired.add(username)
+            self._set_retired_usernames_locked(retired)
+            try:
+                self._save()
+            except Exception:
+                self._config["users"][username] = deleted_user
+                self._set_retired_usernames_locked(retired_before)
+                logger.exception("Failed to persist deletion and retirement for user '%s'", username)
+                return False
         # Purge all sessions belonging to this user. validate_token doesn't
         # cross-check `self.users`, so without this step a deleted user's
         # cookie keeps authenticating.
@@ -338,8 +384,66 @@ class AuthManager:
         logger.info(f"Deleted user '{username}' (by {requesting_user}); revoked {revoked} active session(s)")
         return True
 
-    def rename_user(self, old_username: str, new_username: str, requesting_user: str) -> bool:
-        """Rename a user in auth config and active sessions. Admin only."""
+    def rename_user(
+        self,
+        old_username: str,
+        new_username: str,
+        requesting_user: str,
+        *,
+        prepare_rollback: bool = False,
+    ) -> bool:
+        """Rename a user and permanently retire its prior ownership key."""
+        return self._rename_user_identity(
+            old_username,
+            new_username,
+            requesting_user,
+            rollback=False,
+            prepare_rollback=prepare_rollback,
+        )
+
+    def rollback_user_rename(
+        self,
+        renamed_username: str,
+        original_username: str,
+        requesting_user: str,
+    ) -> bool:
+        """Restore an auth rename after its owner migration was rolled back.
+
+        This is deliberately separate from ``rename_user``: an ordinary
+        rename may never target a retired name, while a compensating rollback
+        must restore that exact source name and remove only the retirement
+        marker created by the failed operation.
+        """
+        return self._rename_user_identity(
+            renamed_username,
+            original_username,
+            requesting_user,
+            rollback=True,
+            prepare_rollback=False,
+        )
+
+    def finalize_user_rename(self, renamed_username: str, original_username: str) -> bool:
+        """Close the rollback window after owner migration commits."""
+        pair = (
+            (renamed_username or "").strip().lower(),
+            (original_username or "").strip().lower(),
+        )
+        with self._config_lock:
+            if pair not in self._pending_rename_rollbacks:
+                return False
+            self._pending_rename_rollbacks.remove(pair)
+        return True
+
+    def _rename_user_identity(
+        self,
+        old_username: str,
+        new_username: str,
+        requesting_user: str,
+        *,
+        rollback: bool,
+        prepare_rollback: bool,
+    ) -> bool:
+        """Apply or compensate an auth rename under the config/session locks."""
         old_username = old_username.strip().lower()
         new_username = new_username.strip().lower()
         requesting_user = (requesting_user or "").strip().lower()
@@ -349,27 +453,98 @@ class AuthManager:
             logger.warning("Refused to rename '%s' into reserved username '%s'", old_username, new_username)
             return False
         with self._config_lock:
+            retired = self._retired_usernames_locked()
+            if retired is None:
+                return False
             if old_username not in self.users:
                 return False
             if new_username in self.users:
                 return False
             if not self.users.get(requesting_user, {}).get("is_admin"):
                 return False
-            self._config.setdefault("users", {})[new_username] = self._config["users"].pop(old_username)
-            self._save()
+            if rollback:
+                if (old_username, new_username) not in self._pending_rename_rollbacks:
+                    logger.error(
+                        "Refused auth rename rollback %s -> %s without exact pending pair",
+                        old_username,
+                        new_username,
+                    )
+                    return False
+                if new_username not in retired:
+                    logger.error(
+                        "Refused auth rename rollback %s -> %s without source retirement marker",
+                        old_username,
+                        new_username,
+                    )
+                    return False
+            else:
+                if (
+                    self._username_has_pending_rename_locked(old_username)
+                    or self._username_has_pending_rename_locked(new_username)
+                ):
+                    return False
+                if new_username in retired:
+                    logger.warning("Refused to rename '%s' into retired username '%s'", old_username, new_username)
+                    return False
 
-        renamed_sessions = 0
-        with self._sessions_lock:
-            for sess in self._sessions.values():
-                sess_user = str((sess or {}).get("username") or "").strip().lower()
-                if sess_user == old_username:
-                    sess["username"] = new_username
-                    renamed_sessions += 1
-        if renamed_sessions:
-            self._save_sessions()
+            with self._sessions_lock:
+                users = self._config.setdefault("users", {})
+                user_record = users.pop(old_username)
+                users[new_username] = user_record
+                retired_before = set(retired)
+                if rollback:
+                    retired.discard(new_username)
+                else:
+                    retired.add(old_username)
+                self._set_retired_usernames_locked(retired)
+
+                renamed_sessions = {}
+                for token, sess in self._sessions.items():
+                    sess_user = str((sess or {}).get("username") or "").strip().lower()
+                    if sess_user == old_username:
+                        renamed_sessions[token] = sess.get("username")
+                        sess["username"] = new_username
+
+                try:
+                    self._save()
+                    if renamed_sessions and not self._save_sessions():
+                        raise OSError("failed to persist renamed sessions")
+                except Exception:
+                    users[old_username] = users.pop(new_username)
+                    self._set_retired_usernames_locked(retired_before)
+                    for token, original_session_username in renamed_sessions.items():
+                        session = self._sessions.get(token)
+                        if session is not None:
+                            session["username"] = original_session_username
+                    try:
+                        self._save()
+                    except Exception:
+                        logger.exception(
+                            "Failed to restore auth config after rename persistence failure %s -> %s",
+                            old_username,
+                            new_username,
+                        )
+                    if renamed_sessions:
+                        self._save_sessions()
+                    logger.exception(
+                        "Failed to persist auth rename %s -> %s; restored prior identity state",
+                        old_username,
+                        new_username,
+                    )
+                    return False
+
+                if rollback:
+                    self._pending_rename_rollbacks.remove((old_username, new_username))
+                elif prepare_rollback:
+                    self._pending_rename_rollbacks.add((new_username, old_username))
+
         logger.info(
-            "Renamed user '%s' -> '%s' (by %s); updated %d active session(s)",
-            old_username, new_username, requesting_user, renamed_sessions,
+            "%s user '%s' -> '%s' (by %s); updated %d active session(s)",
+            "Rolled back rename for" if rollback else "Renamed",
+            old_username,
+            new_username,
+            requesting_user,
+            len(renamed_sessions),
         )
         return True
 

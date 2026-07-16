@@ -592,9 +592,16 @@ def test_rename_updates_usage_sidecar_keys(rename_endpoint):
 
 
 def test_rename_no_skills_dir_does_not_crash(rename_endpoint):
-    endpoint, _am, tmp_path = rename_endpoint
+    endpoint, am, tmp_path = rename_endpoint
     res = asyncio.run(endpoint("alice", SimpleNamespace(username="alice2"), _request(tmp_path)))
     assert res["ok"] is True
+    am.rename_user.assert_called_once_with(
+        "alice",
+        "alice2",
+        "admin",
+        prepare_rollback=True,
+    )
+    am.finalize_user_rename.assert_called_once_with("alice2", "alice")
 
 
 def test_rename_skill_md_owner_case_insensitive(rename_endpoint):
@@ -656,9 +663,12 @@ def test_owner_migration_failure_rolls_back_auth_rename(monkeypatch, tmp_path):
     assert "alice" in am.users
     assert "alice2" not in am.users
     assert am.get_username_for_token(alice_token) == "alice"
-    saved_users = json.loads((tmp_path / "auth.json").read_text(encoding="utf-8"))["users"]
+    saved_auth = json.loads((tmp_path / "auth.json").read_text(encoding="utf-8"))
+    saved_users = saved_auth["users"]
     assert "alice" in saved_users
     assert "alice2" not in saved_users
+    assert saved_auth.get("retired_usernames", []) == []
+    assert am.create_user("alice2", "replacement-password") is True
 
 
 def test_self_rename_owner_migration_failure_rolls_back_auth_session(monkeypatch, tmp_path):
@@ -684,9 +694,12 @@ def test_self_rename_owner_migration_failure_rolls_back_auth_session(monkeypatch
     assert "admin" in am.users
     assert "chief" not in am.users
     assert am.get_username_for_token(admin_token) == "admin"
-    saved_users = json.loads((tmp_path / "auth.json").read_text(encoding="utf-8"))["users"]
+    saved_auth = json.loads((tmp_path / "auth.json").read_text(encoding="utf-8"))
+    saved_users = saved_auth["users"]
     assert "admin" in saved_users
     assert "chief" not in saved_users
+    assert saved_auth.get("retired_usernames", []) == []
+    assert am.create_user("chief", "replacement-password") is True
 
 
 # ---------------------------------------------------------------------------

@@ -109,9 +109,13 @@ def require_user(request: Request) -> str:
     raise HTTPException(401, "Not authenticated")
 
 
-def require_privilege(request: Request, key: str) -> str:
+def require_privilege(request: Request, key: str, *, strict: bool = False) -> str:
     """Reject callers whose `auth.json` privilege flag for `key` is False.
     Returns the username so the route handler can keep using it.
+
+    ``strict=True`` additionally fails closed when the manager, mapping, or
+    requested key is unavailable. The default remains intentionally fail-open
+    for existing upstream callers.
 
     Admins always have every privilege via `auth_manager.get_privileges`
     (which returns ADMIN_PRIVILEGES wholesale), so this is a no-op for
@@ -120,19 +124,29 @@ def require_privilege(request: Request, key: str) -> str:
     """
     user = require_user(request)
     if not user:
+        if strict and not _auth_disabled():
+            raise HTTPException(401, "Not authenticated")
         return user
     auth_mgr = getattr(request.app.state, "auth_manager", None)
     if auth_mgr is None:
+        if strict:
+            raise HTTPException(403, "Privilege state is unavailable.")
         return user
     try:
-        privs = auth_mgr.get_privileges(user) or {}
+        privs = auth_mgr.get_privileges(user)
     except Exception:
+        if strict:
+            raise HTTPException(403, "Privilege state is unavailable.")
         return user
     if not isinstance(privs, dict):
+        if strict:
+            raise HTTPException(403, "Privilege state is unavailable.")
         privs = {}
-    # True = permitted; missing key defaults to permitted (unknown privileges
-    # fail open — the UI gates display-side).
-    if not privs.get(key, True):
+    # Strict callers require the literal boolean True so malformed truthy
+    # values cannot accidentally grant access. Existing callers retain the
+    # upstream truthiness check and missing-key fail-open default.
+    allowed = privs.get(key, not strict)
+    if (strict and allowed is not True) or (not strict and not allowed):
         raise HTTPException(403, f"Your account is not allowed to {key.replace('_', ' ')}.")
     return user
 

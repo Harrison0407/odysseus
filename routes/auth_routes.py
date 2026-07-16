@@ -323,7 +323,12 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         # succeeding — doing it last meant a rejected rename (e.g. reserved
         # username) left file-backed owner fields already rewritten with no
         # way to roll them back.
-        ok = auth_manager.rename_user(old_username, new_username, user)
+        ok = auth_manager.rename_user(
+            old_username,
+            new_username,
+            user,
+            prepare_rollback=True,
+        )
         if not ok:
             raise HTTPException(400, "Cannot rename user")
 
@@ -332,7 +337,13 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
             # username, so the rollback must authenticate as the new user.
             rollback_user = new_username if user == old_username else user
             try:
-                return bool(auth_manager.rename_user(new_username, old_username, rollback_user))
+                return bool(
+                    auth_manager.rollback_user_rename(
+                        new_username,
+                        old_username,
+                        rollback_user,
+                    )
+                )
             except Exception as rollback_err:
                 logger.error(
                     "Failed to roll back auth rename %s -> %s after owner migration failure: %s",
@@ -371,6 +382,13 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
                     old_username, new_username,
                 )
             raise HTTPException(500, "Failed to rename user data")
+
+        if not auth_manager.finalize_user_rename(new_username, old_username):
+            logger.error(
+                "Auth rename rollback window was missing after owner migration %s -> %s",
+                old_username,
+                new_username,
+            )
 
         # Per-user prefs are JSON-backed, not SQL-backed.
         try:

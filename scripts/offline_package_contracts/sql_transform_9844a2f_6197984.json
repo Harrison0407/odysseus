@@ -1,0 +1,1923 @@
+{
+  "alias_domains": [
+    "owner",
+    "workflow",
+    "upload",
+    "document",
+    "rag-record",
+    "path",
+    "generic-record"
+  ],
+  "allowed_actions": [
+    "COPY_METADATA",
+    "ALIAS_OWNER",
+    "ALIAS_IDENTIFIER",
+    "PRESERVE_NULL",
+    "CONSTANT_REDACTED",
+    "OMIT",
+    "REJECT_IF_PRESENT",
+    "GENERALIZE",
+    "DERIVE_APPROVED_REFERENCE"
+  ],
+  "canonical_form": {
+    "digest": "SHA-256",
+    "digest_excludes": [
+      "canonical_sha256"
+    ],
+    "encoding": "UTF-8",
+    "json": "RFC8259 object with sorted keys and compact separators",
+    "terminal_newline": true
+  },
+  "canonical_sha256": "706c3a8d341ab53ae8b61d973928a3181b200824f1c03a42ea7fc21f1fbae86c",
+  "contract_name": "marketmatch-synthetic-fixture-sql-transform-9844a2f-6197984-v1",
+  "manifest_version": 1,
+  "schema_contract": {
+    "canonical_sha256": "bcdfdb9120a805212e7ee3cd87a9708dd52bfac20681ad7f75cd36f185618ef0",
+    "relative_path": "scripts/schema_contracts/combined_9844a2f_6197984.json"
+  },
+  "source_snapshots": {
+    "marketmatch_checkpoint": "6197984ccec995b630006253cf6eb62c43908d5f",
+    "upstream": "9844a2f9a1996b8c8135a9e7bbde6a72f41df5ed"
+  },
+  "tables": {
+    "api_tokens": {
+      "column_order": [
+        "id",
+        "owner",
+        "name",
+        "token_hash",
+        "token_prefix",
+        "scopes",
+        "is_active",
+        "last_used_at",
+        "created_at",
+        "updated_at"
+      ],
+      "columns": {
+        "created_at": {
+          "action": "OMIT"
+        },
+        "id": {
+          "action": "OMIT"
+        },
+        "is_active": {
+          "action": "OMIT"
+        },
+        "last_used_at": {
+          "action": "OMIT"
+        },
+        "name": {
+          "action": "OMIT"
+        },
+        "owner": {
+          "action": "OMIT"
+        },
+        "scopes": {
+          "action": "OMIT"
+        },
+        "token_hash": {
+          "action": "OMIT"
+        },
+        "token_prefix": {
+          "action": "OMIT"
+        },
+        "updated_at": {
+          "action": "OMIT"
+        }
+      },
+      "row_policy": "OMIT_ALL_ROWS"
+    },
+    "caldav_deleted_events": {
+      "column_order": [
+        "uid",
+        "owner",
+        "calendar_id",
+        "remote_href",
+        "remote_etag",
+        "caldav_base_url",
+        "summary",
+        "last_error",
+        "created_at",
+        "updated_at"
+      ],
+      "columns": {
+        "caldav_base_url": {
+          "action": "OMIT"
+        },
+        "calendar_id": {
+          "action": "OMIT"
+        },
+        "created_at": {
+          "action": "OMIT"
+        },
+        "last_error": {
+          "action": "OMIT"
+        },
+        "owner": {
+          "action": "OMIT"
+        },
+        "remote_etag": {
+          "action": "OMIT"
+        },
+        "remote_href": {
+          "action": "OMIT"
+        },
+        "summary": {
+          "action": "OMIT"
+        },
+        "uid": {
+          "action": "OMIT"
+        },
+        "updated_at": {
+          "action": "OMIT"
+        }
+      },
+      "row_policy": "OMIT_ALL_ROWS"
+    },
+    "calendar_events": {
+      "column_order": [
+        "uid",
+        "calendar_id",
+        "summary",
+        "description",
+        "location",
+        "dtstart",
+        "dtend",
+        "all_day",
+        "is_utc",
+        "rrule",
+        "recurrence_exdates",
+        "color",
+        "status",
+        "importance",
+        "event_type",
+        "last_pinged",
+        "origin",
+        "remote_href",
+        "remote_etag",
+        "caldav_sync_pending",
+        "created_at",
+        "updated_at"
+      ],
+      "columns": {
+        "all_day": {
+          "action": "OMIT"
+        },
+        "caldav_sync_pending": {
+          "action": "OMIT"
+        },
+        "calendar_id": {
+          "action": "OMIT"
+        },
+        "color": {
+          "action": "OMIT"
+        },
+        "created_at": {
+          "action": "OMIT"
+        },
+        "description": {
+          "action": "OMIT"
+        },
+        "dtend": {
+          "action": "OMIT"
+        },
+        "dtstart": {
+          "action": "OMIT"
+        },
+        "event_type": {
+          "action": "OMIT"
+        },
+        "importance": {
+          "action": "OMIT"
+        },
+        "is_utc": {
+          "action": "OMIT"
+        },
+        "last_pinged": {
+          "action": "OMIT"
+        },
+        "location": {
+          "action": "OMIT"
+        },
+        "origin": {
+          "action": "OMIT"
+        },
+        "recurrence_exdates": {
+          "action": "OMIT"
+        },
+        "remote_etag": {
+          "action": "OMIT"
+        },
+        "remote_href": {
+          "action": "OMIT"
+        },
+        "rrule": {
+          "action": "OMIT"
+        },
+        "status": {
+          "action": "OMIT"
+        },
+        "summary": {
+          "action": "OMIT"
+        },
+        "uid": {
+          "action": "OMIT"
+        },
+        "updated_at": {
+          "action": "OMIT"
+        }
+      },
+      "row_policy": "OMIT_ALL_ROWS"
+    },
+    "calendars": {
+      "column_order": [
+        "id",
+        "owner",
+        "name",
+        "color",
+        "source",
+        "account_id",
+        "caldav_base_url",
+        "created_at",
+        "updated_at"
+      ],
+      "columns": {
+        "account_id": {
+          "action": "OMIT"
+        },
+        "caldav_base_url": {
+          "action": "OMIT"
+        },
+        "color": {
+          "action": "OMIT"
+        },
+        "created_at": {
+          "action": "OMIT"
+        },
+        "id": {
+          "action": "OMIT"
+        },
+        "name": {
+          "action": "OMIT"
+        },
+        "owner": {
+          "action": "OMIT"
+        },
+        "source": {
+          "action": "OMIT"
+        },
+        "updated_at": {
+          "action": "OMIT"
+        }
+      },
+      "row_policy": "OMIT_ALL_ROWS"
+    },
+    "chat_messages": {
+      "column_order": [
+        "id",
+        "session_id",
+        "role",
+        "content",
+        "metadata",
+        "timestamp"
+      ],
+      "columns": {
+        "content": {
+          "action": "OMIT"
+        },
+        "id": {
+          "action": "OMIT"
+        },
+        "metadata": {
+          "action": "OMIT"
+        },
+        "role": {
+          "action": "OMIT"
+        },
+        "session_id": {
+          "action": "OMIT"
+        },
+        "timestamp": {
+          "action": "OMIT"
+        }
+      },
+      "row_policy": "OMIT_ALL_ROWS"
+    },
+    "comparisons": {
+      "column_order": [
+        "id",
+        "session_id",
+        "owner",
+        "prompt",
+        "model_a",
+        "model_b",
+        "endpoint_a",
+        "endpoint_b",
+        "response_a",
+        "response_b",
+        "metrics_a",
+        "metrics_b",
+        "winner",
+        "is_blind",
+        "blind_mapping",
+        "voted_at",
+        "created_at",
+        "updated_at"
+      ],
+      "columns": {
+        "blind_mapping": {
+          "action": "OMIT"
+        },
+        "created_at": {
+          "action": "OMIT"
+        },
+        "endpoint_a": {
+          "action": "OMIT"
+        },
+        "endpoint_b": {
+          "action": "OMIT"
+        },
+        "id": {
+          "action": "OMIT"
+        },
+        "is_blind": {
+          "action": "OMIT"
+        },
+        "metrics_a": {
+          "action": "OMIT"
+        },
+        "metrics_b": {
+          "action": "OMIT"
+        },
+        "model_a": {
+          "action": "OMIT"
+        },
+        "model_b": {
+          "action": "OMIT"
+        },
+        "owner": {
+          "action": "OMIT"
+        },
+        "prompt": {
+          "action": "OMIT"
+        },
+        "response_a": {
+          "action": "OMIT"
+        },
+        "response_b": {
+          "action": "OMIT"
+        },
+        "session_id": {
+          "action": "OMIT"
+        },
+        "updated_at": {
+          "action": "OMIT"
+        },
+        "voted_at": {
+          "action": "OMIT"
+        },
+        "winner": {
+          "action": "OMIT"
+        }
+      },
+      "row_policy": "OMIT_ALL_ROWS"
+    },
+    "crew_members": {
+      "column_order": [
+        "id",
+        "owner",
+        "name",
+        "avatar",
+        "user_name",
+        "personality",
+        "model",
+        "endpoint_url",
+        "greeting",
+        "enabled_tools",
+        "session_id",
+        "is_active",
+        "sort_order",
+        "is_default_assistant",
+        "timezone",
+        "created_at",
+        "updated_at"
+      ],
+      "columns": {
+        "avatar": {
+          "action": "OMIT"
+        },
+        "created_at": {
+          "action": "OMIT"
+        },
+        "enabled_tools": {
+          "action": "OMIT"
+        },
+        "endpoint_url": {
+          "action": "OMIT"
+        },
+        "greeting": {
+          "action": "OMIT"
+        },
+        "id": {
+          "action": "OMIT"
+        },
+        "is_active": {
+          "action": "OMIT"
+        },
+        "is_default_assistant": {
+          "action": "OMIT"
+        },
+        "model": {
+          "action": "OMIT"
+        },
+        "name": {
+          "action": "OMIT"
+        },
+        "owner": {
+          "action": "OMIT"
+        },
+        "personality": {
+          "action": "OMIT"
+        },
+        "session_id": {
+          "action": "OMIT"
+        },
+        "sort_order": {
+          "action": "OMIT"
+        },
+        "timezone": {
+          "action": "OMIT"
+        },
+        "updated_at": {
+          "action": "OMIT"
+        },
+        "user_name": {
+          "action": "OMIT"
+        }
+      },
+      "row_policy": "OMIT_ALL_ROWS"
+    },
+    "document_versions": {
+      "column_order": [
+        "id",
+        "document_id",
+        "version_number",
+        "content",
+        "summary",
+        "source",
+        "created_at"
+      ],
+      "columns": {
+        "content": {
+          "action": "OMIT"
+        },
+        "created_at": {
+          "action": "OMIT"
+        },
+        "document_id": {
+          "action": "OMIT"
+        },
+        "id": {
+          "action": "OMIT"
+        },
+        "source": {
+          "action": "OMIT"
+        },
+        "summary": {
+          "action": "OMIT"
+        },
+        "version_number": {
+          "action": "OMIT"
+        }
+      },
+      "row_policy": "OMIT_ALL_ROWS"
+    },
+    "documents": {
+      "column_order": [
+        "id",
+        "session_id",
+        "title",
+        "language",
+        "current_content",
+        "version_count",
+        "is_active",
+        "archived",
+        "owner",
+        "tidy_verdict",
+        "source_email_uid",
+        "source_email_folder",
+        "source_email_account_id",
+        "source_email_message_id",
+        "created_at",
+        "updated_at"
+      ],
+      "columns": {
+        "archived": {
+          "action": "PRESERVE_NULL"
+        },
+        "created_at": {
+          "action": "CONSTANT_REDACTED",
+          "value": "2000-01-01 00:00:00"
+        },
+        "current_content": {
+          "action": "CONSTANT_REDACTED",
+          "value": "REDACTED_CONTENT"
+        },
+        "id": {
+          "action": "ALIAS_IDENTIFIER",
+          "domain": "document"
+        },
+        "is_active": {
+          "action": "PRESERVE_NULL"
+        },
+        "language": {
+          "action": "PRESERVE_NULL"
+        },
+        "owner": {
+          "action": "ALIAS_OWNER"
+        },
+        "session_id": {
+          "action": "ALIAS_IDENTIFIER",
+          "domain": "generic-record",
+          "nullable": true
+        },
+        "source_email_account_id": {
+          "action": "CONSTANT_REDACTED",
+          "value": null
+        },
+        "source_email_folder": {
+          "action": "CONSTANT_REDACTED",
+          "value": null
+        },
+        "source_email_message_id": {
+          "action": "CONSTANT_REDACTED",
+          "value": null
+        },
+        "source_email_uid": {
+          "action": "CONSTANT_REDACTED",
+          "value": null
+        },
+        "tidy_verdict": {
+          "action": "PRESERVE_NULL"
+        },
+        "title": {
+          "action": "CONSTANT_REDACTED",
+          "value": "REDACTED"
+        },
+        "updated_at": {
+          "action": "CONSTANT_REDACTED",
+          "value": "2000-01-01 00:00:00"
+        },
+        "version_count": {
+          "action": "PRESERVE_NULL"
+        }
+      },
+      "row_policy": "TRANSFORM_ROWS"
+    },
+    "editor_drafts": {
+      "column_order": [
+        "id",
+        "owner",
+        "name",
+        "source_image_id",
+        "width",
+        "height",
+        "payload",
+        "thumbnail",
+        "is_active",
+        "created_at",
+        "updated_at"
+      ],
+      "columns": {
+        "created_at": {
+          "action": "OMIT"
+        },
+        "height": {
+          "action": "OMIT"
+        },
+        "id": {
+          "action": "OMIT"
+        },
+        "is_active": {
+          "action": "OMIT"
+        },
+        "name": {
+          "action": "OMIT"
+        },
+        "owner": {
+          "action": "OMIT"
+        },
+        "payload": {
+          "action": "OMIT"
+        },
+        "source_image_id": {
+          "action": "OMIT"
+        },
+        "thumbnail": {
+          "action": "OMIT"
+        },
+        "updated_at": {
+          "action": "OMIT"
+        },
+        "width": {
+          "action": "OMIT"
+        }
+      },
+      "row_policy": "OMIT_ALL_ROWS"
+    },
+    "email_accounts": {
+      "column_order": [
+        "id",
+        "owner",
+        "name",
+        "is_default",
+        "enabled",
+        "imap_host",
+        "imap_port",
+        "imap_user",
+        "imap_password",
+        "imap_starttls",
+        "smtp_host",
+        "smtp_port",
+        "smtp_security",
+        "smtp_user",
+        "smtp_password",
+        "from_address",
+        "display_name",
+        "oauth_provider",
+        "oauth_access_token",
+        "oauth_refresh_token",
+        "oauth_token_expiry",
+        "created_at",
+        "updated_at"
+      ],
+      "columns": {
+        "created_at": {
+          "action": "OMIT"
+        },
+        "display_name": {
+          "action": "OMIT"
+        },
+        "enabled": {
+          "action": "OMIT"
+        },
+        "from_address": {
+          "action": "OMIT"
+        },
+        "id": {
+          "action": "OMIT"
+        },
+        "imap_host": {
+          "action": "OMIT"
+        },
+        "imap_password": {
+          "action": "OMIT"
+        },
+        "imap_port": {
+          "action": "OMIT"
+        },
+        "imap_starttls": {
+          "action": "OMIT"
+        },
+        "imap_user": {
+          "action": "OMIT"
+        },
+        "is_default": {
+          "action": "OMIT"
+        },
+        "name": {
+          "action": "OMIT"
+        },
+        "oauth_access_token": {
+          "action": "OMIT"
+        },
+        "oauth_provider": {
+          "action": "OMIT"
+        },
+        "oauth_refresh_token": {
+          "action": "OMIT"
+        },
+        "oauth_token_expiry": {
+          "action": "OMIT"
+        },
+        "owner": {
+          "action": "OMIT"
+        },
+        "smtp_host": {
+          "action": "OMIT"
+        },
+        "smtp_password": {
+          "action": "OMIT"
+        },
+        "smtp_port": {
+          "action": "OMIT"
+        },
+        "smtp_security": {
+          "action": "OMIT"
+        },
+        "smtp_user": {
+          "action": "OMIT"
+        },
+        "updated_at": {
+          "action": "OMIT"
+        }
+      },
+      "row_policy": "OMIT_ALL_ROWS"
+    },
+    "gallery_albums": {
+      "column_order": [
+        "id",
+        "name",
+        "description",
+        "cover_id",
+        "owner",
+        "created_at",
+        "updated_at"
+      ],
+      "columns": {
+        "cover_id": {
+          "action": "OMIT"
+        },
+        "created_at": {
+          "action": "OMIT"
+        },
+        "description": {
+          "action": "OMIT"
+        },
+        "id": {
+          "action": "OMIT"
+        },
+        "name": {
+          "action": "OMIT"
+        },
+        "owner": {
+          "action": "OMIT"
+        },
+        "updated_at": {
+          "action": "OMIT"
+        }
+      },
+      "row_policy": "OMIT_ALL_ROWS"
+    },
+    "gallery_images": {
+      "column_order": [
+        "id",
+        "filename",
+        "prompt",
+        "caption",
+        "model",
+        "size",
+        "quality",
+        "tags",
+        "ai_tags",
+        "session_id",
+        "album_id",
+        "owner",
+        "is_active",
+        "favorite",
+        "file_hash",
+        "taken_at",
+        "camera_make",
+        "camera_model",
+        "gps_lat",
+        "gps_lng",
+        "width",
+        "height",
+        "file_size",
+        "created_at",
+        "updated_at"
+      ],
+      "columns": {
+        "ai_tags": {
+          "action": "OMIT"
+        },
+        "album_id": {
+          "action": "OMIT"
+        },
+        "camera_make": {
+          "action": "OMIT"
+        },
+        "camera_model": {
+          "action": "OMIT"
+        },
+        "caption": {
+          "action": "OMIT"
+        },
+        "created_at": {
+          "action": "OMIT"
+        },
+        "favorite": {
+          "action": "OMIT"
+        },
+        "file_hash": {
+          "action": "OMIT"
+        },
+        "file_size": {
+          "action": "OMIT"
+        },
+        "filename": {
+          "action": "OMIT"
+        },
+        "gps_lat": {
+          "action": "OMIT"
+        },
+        "gps_lng": {
+          "action": "OMIT"
+        },
+        "height": {
+          "action": "OMIT"
+        },
+        "id": {
+          "action": "OMIT"
+        },
+        "is_active": {
+          "action": "OMIT"
+        },
+        "model": {
+          "action": "OMIT"
+        },
+        "owner": {
+          "action": "OMIT"
+        },
+        "prompt": {
+          "action": "OMIT"
+        },
+        "quality": {
+          "action": "OMIT"
+        },
+        "session_id": {
+          "action": "OMIT"
+        },
+        "size": {
+          "action": "OMIT"
+        },
+        "tags": {
+          "action": "OMIT"
+        },
+        "taken_at": {
+          "action": "OMIT"
+        },
+        "updated_at": {
+          "action": "OMIT"
+        },
+        "width": {
+          "action": "OMIT"
+        }
+      },
+      "row_policy": "OMIT_ALL_ROWS"
+    },
+    "integrations": {
+      "column_order": [
+        "id",
+        "owner",
+        "name",
+        "type",
+        "config",
+        "enabled",
+        "created_at",
+        "updated_at"
+      ],
+      "columns": {
+        "config": {
+          "action": "OMIT"
+        },
+        "created_at": {
+          "action": "OMIT"
+        },
+        "enabled": {
+          "action": "OMIT"
+        },
+        "id": {
+          "action": "OMIT"
+        },
+        "name": {
+          "action": "OMIT"
+        },
+        "owner": {
+          "action": "OMIT"
+        },
+        "type": {
+          "action": "OMIT"
+        },
+        "updated_at": {
+          "action": "OMIT"
+        }
+      },
+      "row_policy": "OMIT_ALL_ROWS"
+    },
+    "marketmatch_calls": {
+      "column_order": [
+        "id",
+        "owner",
+        "original_filename",
+        "stored_audio_path",
+        "transcript_path",
+        "summary_path",
+        "rag_markdown_path",
+        "status",
+        "language",
+        "duration_seconds",
+        "upload_id",
+        "document_id",
+        "summary_document_id",
+        "evidence_id",
+        "btc_id",
+        "workflow_id",
+        "error_message",
+        "rag_status",
+        "created_at",
+        "updated_at"
+      ],
+      "columns": {
+        "btc_id": {
+          "action": "REJECT_IF_PRESENT"
+        },
+        "created_at": {
+          "action": "CONSTANT_REDACTED",
+          "value": "2000-01-01 00:00:00"
+        },
+        "document_id": {
+          "action": "ALIAS_IDENTIFIER",
+          "domain": "document",
+          "nullable": true
+        },
+        "duration_seconds": {
+          "action": "COPY_METADATA",
+          "value_type": "nonnegative_integer_or_null"
+        },
+        "error_message": {
+          "action": "CONSTANT_REDACTED",
+          "value": null
+        },
+        "evidence_id": {
+          "action": "REJECT_IF_PRESENT"
+        },
+        "id": {
+          "action": "ALIAS_IDENTIFIER",
+          "domain": "workflow"
+        },
+        "language": {
+          "action": "CONSTANT_REDACTED",
+          "value": null
+        },
+        "original_filename": {
+          "action": "CONSTANT_REDACTED",
+          "value": "REDACTED.fixture"
+        },
+        "owner": {
+          "action": "ALIAS_OWNER"
+        },
+        "rag_markdown_path": {
+          "action": "CONSTANT_REDACTED",
+          "value": null
+        },
+        "rag_status": {
+          "action": "CONSTANT_REDACTED",
+          "value": "RAG_EXPORT_NOT_AVAILABLE"
+        },
+        "status": {
+          "action": "COPY_METADATA",
+          "allowed_values": [
+            "pending",
+            "processing",
+            "complete",
+            "failed"
+          ]
+        },
+        "stored_audio_path": {
+          "action": "DERIVE_APPROVED_REFERENCE",
+          "category": "call-audio",
+          "domain": "path",
+          "source_column": "upload_id"
+        },
+        "summary_document_id": {
+          "action": "ALIAS_IDENTIFIER",
+          "domain": "document",
+          "nullable": true
+        },
+        "summary_path": {
+          "action": "CONSTANT_REDACTED",
+          "value": null
+        },
+        "transcript_path": {
+          "action": "CONSTANT_REDACTED",
+          "value": null
+        },
+        "updated_at": {
+          "action": "CONSTANT_REDACTED",
+          "value": "2000-01-01 00:00:00"
+        },
+        "upload_id": {
+          "action": "ALIAS_IDENTIFIER",
+          "domain": "upload",
+          "nullable": true
+        },
+        "workflow_id": {
+          "action": "ALIAS_IDENTIFIER",
+          "domain": "workflow",
+          "nullable": true
+        }
+      },
+      "row_policy": "TRANSFORM_ROWS"
+    },
+    "marketmatch_videos": {
+      "column_order": [
+        "id",
+        "owner",
+        "original_filename",
+        "stored_video_path",
+        "extracted_audio_path",
+        "transcript_path",
+        "summary_path",
+        "rag_markdown_path",
+        "clips_json_path",
+        "status",
+        "language",
+        "duration_seconds",
+        "upload_id",
+        "document_id",
+        "summary_document_id",
+        "error_message",
+        "rag_status",
+        "created_at",
+        "updated_at"
+      ],
+      "columns": {
+        "clips_json_path": {
+          "action": "CONSTANT_REDACTED",
+          "value": null
+        },
+        "created_at": {
+          "action": "CONSTANT_REDACTED",
+          "value": "2000-01-01 00:00:00"
+        },
+        "document_id": {
+          "action": "ALIAS_IDENTIFIER",
+          "domain": "document",
+          "nullable": true
+        },
+        "duration_seconds": {
+          "action": "COPY_METADATA",
+          "value_type": "nonnegative_integer_or_null"
+        },
+        "error_message": {
+          "action": "CONSTANT_REDACTED",
+          "value": null
+        },
+        "extracted_audio_path": {
+          "action": "CONSTANT_REDACTED",
+          "value": null
+        },
+        "id": {
+          "action": "ALIAS_IDENTIFIER",
+          "domain": "workflow"
+        },
+        "language": {
+          "action": "CONSTANT_REDACTED",
+          "value": null
+        },
+        "original_filename": {
+          "action": "CONSTANT_REDACTED",
+          "value": "REDACTED.fixture"
+        },
+        "owner": {
+          "action": "ALIAS_OWNER"
+        },
+        "rag_markdown_path": {
+          "action": "CONSTANT_REDACTED",
+          "value": null
+        },
+        "rag_status": {
+          "action": "CONSTANT_REDACTED",
+          "value": "RAG_EXPORT_NOT_AVAILABLE"
+        },
+        "status": {
+          "action": "COPY_METADATA",
+          "allowed_values": [
+            "pending",
+            "processing",
+            "complete",
+            "failed"
+          ]
+        },
+        "stored_video_path": {
+          "action": "DERIVE_APPROVED_REFERENCE",
+          "category": "video-media",
+          "domain": "path",
+          "source_column": "upload_id"
+        },
+        "summary_document_id": {
+          "action": "ALIAS_IDENTIFIER",
+          "domain": "document",
+          "nullable": true
+        },
+        "summary_path": {
+          "action": "CONSTANT_REDACTED",
+          "value": null
+        },
+        "transcript_path": {
+          "action": "CONSTANT_REDACTED",
+          "value": null
+        },
+        "updated_at": {
+          "action": "CONSTANT_REDACTED",
+          "value": "2000-01-01 00:00:00"
+        },
+        "upload_id": {
+          "action": "ALIAS_IDENTIFIER",
+          "domain": "upload",
+          "nullable": true
+        }
+      },
+      "row_policy": "TRANSFORM_ROWS"
+    },
+    "mcp_servers": {
+      "column_order": [
+        "id",
+        "name",
+        "transport",
+        "command",
+        "args",
+        "env",
+        "url",
+        "is_enabled",
+        "oauth_config",
+        "disabled_tools",
+        "oauth_tokens",
+        "created_at",
+        "updated_at"
+      ],
+      "columns": {
+        "args": {
+          "action": "OMIT"
+        },
+        "command": {
+          "action": "OMIT"
+        },
+        "created_at": {
+          "action": "OMIT"
+        },
+        "disabled_tools": {
+          "action": "OMIT"
+        },
+        "env": {
+          "action": "OMIT"
+        },
+        "id": {
+          "action": "OMIT"
+        },
+        "is_enabled": {
+          "action": "OMIT"
+        },
+        "name": {
+          "action": "OMIT"
+        },
+        "oauth_config": {
+          "action": "OMIT"
+        },
+        "oauth_tokens": {
+          "action": "OMIT"
+        },
+        "transport": {
+          "action": "OMIT"
+        },
+        "updated_at": {
+          "action": "OMIT"
+        },
+        "url": {
+          "action": "OMIT"
+        }
+      },
+      "row_policy": "OMIT_ALL_ROWS"
+    },
+    "memories": {
+      "column_order": [
+        "id",
+        "text",
+        "category",
+        "source",
+        "owner",
+        "session_id",
+        "timestamp"
+      ],
+      "columns": {
+        "category": {
+          "action": "OMIT"
+        },
+        "id": {
+          "action": "OMIT"
+        },
+        "owner": {
+          "action": "OMIT"
+        },
+        "session_id": {
+          "action": "OMIT"
+        },
+        "source": {
+          "action": "OMIT"
+        },
+        "text": {
+          "action": "OMIT"
+        },
+        "timestamp": {
+          "action": "OMIT"
+        }
+      },
+      "row_policy": "OMIT_ALL_ROWS"
+    },
+    "model_endpoints": {
+      "column_order": [
+        "id",
+        "name",
+        "base_url",
+        "api_key",
+        "is_enabled",
+        "hidden_models",
+        "cached_models",
+        "pinned_models",
+        "model_type",
+        "endpoint_kind",
+        "model_refresh_mode",
+        "model_refresh_interval",
+        "model_refresh_timeout",
+        "supports_tools",
+        "owner",
+        "provider_auth_id",
+        "created_at",
+        "updated_at"
+      ],
+      "columns": {
+        "api_key": {
+          "action": "OMIT"
+        },
+        "base_url": {
+          "action": "OMIT"
+        },
+        "cached_models": {
+          "action": "OMIT"
+        },
+        "created_at": {
+          "action": "OMIT"
+        },
+        "endpoint_kind": {
+          "action": "OMIT"
+        },
+        "hidden_models": {
+          "action": "OMIT"
+        },
+        "id": {
+          "action": "OMIT"
+        },
+        "is_enabled": {
+          "action": "OMIT"
+        },
+        "model_refresh_interval": {
+          "action": "OMIT"
+        },
+        "model_refresh_mode": {
+          "action": "OMIT"
+        },
+        "model_refresh_timeout": {
+          "action": "OMIT"
+        },
+        "model_type": {
+          "action": "OMIT"
+        },
+        "name": {
+          "action": "OMIT"
+        },
+        "owner": {
+          "action": "OMIT"
+        },
+        "pinned_models": {
+          "action": "OMIT"
+        },
+        "provider_auth_id": {
+          "action": "OMIT"
+        },
+        "supports_tools": {
+          "action": "OMIT"
+        },
+        "updated_at": {
+          "action": "OMIT"
+        }
+      },
+      "row_policy": "OMIT_ALL_ROWS"
+    },
+    "notes": {
+      "column_order": [
+        "id",
+        "owner",
+        "title",
+        "content",
+        "items",
+        "note_type",
+        "color",
+        "label",
+        "pinned",
+        "archived",
+        "due_date",
+        "source",
+        "session_id",
+        "sort_order",
+        "image_url",
+        "repeat",
+        "ai_classification",
+        "ai_content_hash",
+        "agent_session_id",
+        "created_at",
+        "updated_at"
+      ],
+      "columns": {
+        "agent_session_id": {
+          "action": "OMIT"
+        },
+        "ai_classification": {
+          "action": "OMIT"
+        },
+        "ai_content_hash": {
+          "action": "OMIT"
+        },
+        "archived": {
+          "action": "OMIT"
+        },
+        "color": {
+          "action": "OMIT"
+        },
+        "content": {
+          "action": "OMIT"
+        },
+        "created_at": {
+          "action": "OMIT"
+        },
+        "due_date": {
+          "action": "OMIT"
+        },
+        "id": {
+          "action": "OMIT"
+        },
+        "image_url": {
+          "action": "OMIT"
+        },
+        "items": {
+          "action": "OMIT"
+        },
+        "label": {
+          "action": "OMIT"
+        },
+        "note_type": {
+          "action": "OMIT"
+        },
+        "owner": {
+          "action": "OMIT"
+        },
+        "pinned": {
+          "action": "OMIT"
+        },
+        "repeat": {
+          "action": "OMIT"
+        },
+        "session_id": {
+          "action": "OMIT"
+        },
+        "sort_order": {
+          "action": "OMIT"
+        },
+        "source": {
+          "action": "OMIT"
+        },
+        "title": {
+          "action": "OMIT"
+        },
+        "updated_at": {
+          "action": "OMIT"
+        }
+      },
+      "row_policy": "OMIT_ALL_ROWS"
+    },
+    "provider_auth_sessions": {
+      "column_order": [
+        "id",
+        "provider",
+        "owner",
+        "label",
+        "base_url",
+        "access_token",
+        "refresh_token",
+        "last_refresh",
+        "auth_mode",
+        "created_at",
+        "updated_at"
+      ],
+      "columns": {
+        "access_token": {
+          "action": "OMIT"
+        },
+        "auth_mode": {
+          "action": "OMIT"
+        },
+        "base_url": {
+          "action": "OMIT"
+        },
+        "created_at": {
+          "action": "OMIT"
+        },
+        "id": {
+          "action": "OMIT"
+        },
+        "label": {
+          "action": "OMIT"
+        },
+        "last_refresh": {
+          "action": "OMIT"
+        },
+        "owner": {
+          "action": "OMIT"
+        },
+        "provider": {
+          "action": "OMIT"
+        },
+        "refresh_token": {
+          "action": "OMIT"
+        },
+        "updated_at": {
+          "action": "OMIT"
+        }
+      },
+      "row_policy": "OMIT_ALL_ROWS"
+    },
+    "scheduled_tasks": {
+      "column_order": [
+        "id",
+        "owner",
+        "name",
+        "prompt",
+        "task_type",
+        "action",
+        "schedule",
+        "scheduled_time",
+        "scheduled_day",
+        "scheduled_date",
+        "trigger_type",
+        "trigger_event",
+        "trigger_count",
+        "trigger_counter",
+        "next_run",
+        "last_run",
+        "status",
+        "output_target",
+        "session_id",
+        "model",
+        "endpoint_url",
+        "run_count",
+        "cron_expression",
+        "then_task_id",
+        "webhook_token",
+        "crew_member_id",
+        "character_id",
+        "max_steps",
+        "email_results",
+        "notifications_enabled",
+        "created_at",
+        "updated_at"
+      ],
+      "columns": {
+        "action": {
+          "action": "OMIT"
+        },
+        "character_id": {
+          "action": "OMIT"
+        },
+        "created_at": {
+          "action": "OMIT"
+        },
+        "crew_member_id": {
+          "action": "OMIT"
+        },
+        "cron_expression": {
+          "action": "OMIT"
+        },
+        "email_results": {
+          "action": "OMIT"
+        },
+        "endpoint_url": {
+          "action": "OMIT"
+        },
+        "id": {
+          "action": "OMIT"
+        },
+        "last_run": {
+          "action": "OMIT"
+        },
+        "max_steps": {
+          "action": "OMIT"
+        },
+        "model": {
+          "action": "OMIT"
+        },
+        "name": {
+          "action": "OMIT"
+        },
+        "next_run": {
+          "action": "OMIT"
+        },
+        "notifications_enabled": {
+          "action": "OMIT"
+        },
+        "output_target": {
+          "action": "OMIT"
+        },
+        "owner": {
+          "action": "OMIT"
+        },
+        "prompt": {
+          "action": "OMIT"
+        },
+        "run_count": {
+          "action": "OMIT"
+        },
+        "schedule": {
+          "action": "OMIT"
+        },
+        "scheduled_date": {
+          "action": "OMIT"
+        },
+        "scheduled_day": {
+          "action": "OMIT"
+        },
+        "scheduled_time": {
+          "action": "OMIT"
+        },
+        "session_id": {
+          "action": "OMIT"
+        },
+        "status": {
+          "action": "OMIT"
+        },
+        "task_type": {
+          "action": "OMIT"
+        },
+        "then_task_id": {
+          "action": "OMIT"
+        },
+        "trigger_count": {
+          "action": "OMIT"
+        },
+        "trigger_counter": {
+          "action": "OMIT"
+        },
+        "trigger_event": {
+          "action": "OMIT"
+        },
+        "trigger_type": {
+          "action": "OMIT"
+        },
+        "updated_at": {
+          "action": "OMIT"
+        },
+        "webhook_token": {
+          "action": "OMIT"
+        }
+      },
+      "row_policy": "OMIT_ALL_ROWS"
+    },
+    "sessions": {
+      "column_order": [
+        "id",
+        "name",
+        "endpoint_url",
+        "model",
+        "owner",
+        "rag",
+        "archived",
+        "folder",
+        "headers",
+        "last_accessed",
+        "last_message_at",
+        "is_important",
+        "message_count",
+        "total_input_tokens",
+        "total_output_tokens",
+        "mode",
+        "crew_member_id",
+        "created_at",
+        "updated_at"
+      ],
+      "columns": {
+        "archived": {
+          "action": "PRESERVE_NULL"
+        },
+        "created_at": {
+          "action": "CONSTANT_REDACTED",
+          "value": "2000-01-01 00:00:00"
+        },
+        "crew_member_id": {
+          "action": "PRESERVE_NULL"
+        },
+        "endpoint_url": {
+          "action": "CONSTANT_REDACTED",
+          "value": "REDACTED"
+        },
+        "folder": {
+          "action": "PRESERVE_NULL"
+        },
+        "headers": {
+          "action": "GENERALIZE",
+          "allowed_keys": [
+            "fixture_label"
+          ],
+          "format": "JSON_OBJECT",
+          "output": {}
+        },
+        "id": {
+          "action": "ALIAS_IDENTIFIER",
+          "domain": "generic-record"
+        },
+        "is_important": {
+          "action": "PRESERVE_NULL"
+        },
+        "last_accessed": {
+          "action": "PRESERVE_NULL"
+        },
+        "last_message_at": {
+          "action": "PRESERVE_NULL"
+        },
+        "message_count": {
+          "action": "PRESERVE_NULL"
+        },
+        "mode": {
+          "action": "CONSTANT_REDACTED",
+          "value": null
+        },
+        "model": {
+          "action": "CONSTANT_REDACTED",
+          "value": "REDACTED"
+        },
+        "name": {
+          "action": "CONSTANT_REDACTED",
+          "value": "REDACTED"
+        },
+        "owner": {
+          "action": "ALIAS_OWNER"
+        },
+        "rag": {
+          "action": "PRESERVE_NULL"
+        },
+        "total_input_tokens": {
+          "action": "PRESERVE_NULL"
+        },
+        "total_output_tokens": {
+          "action": "PRESERVE_NULL"
+        },
+        "updated_at": {
+          "action": "CONSTANT_REDACTED",
+          "value": "2000-01-01 00:00:00"
+        }
+      },
+      "row_policy": "TRANSFORM_ROWS"
+    },
+    "signatures": {
+      "column_order": [
+        "id",
+        "owner",
+        "name",
+        "data_png",
+        "width",
+        "height",
+        "svg",
+        "created_at",
+        "updated_at"
+      ],
+      "columns": {
+        "created_at": {
+          "action": "OMIT"
+        },
+        "data_png": {
+          "action": "OMIT"
+        },
+        "height": {
+          "action": "OMIT"
+        },
+        "id": {
+          "action": "OMIT"
+        },
+        "name": {
+          "action": "OMIT"
+        },
+        "owner": {
+          "action": "OMIT"
+        },
+        "svg": {
+          "action": "OMIT"
+        },
+        "updated_at": {
+          "action": "OMIT"
+        },
+        "width": {
+          "action": "OMIT"
+        }
+      },
+      "row_policy": "OMIT_ALL_ROWS"
+    },
+    "task_runs": {
+      "column_order": [
+        "id",
+        "task_id",
+        "started_at",
+        "finished_at",
+        "status",
+        "result",
+        "error",
+        "tokens_used",
+        "steps",
+        "model"
+      ],
+      "columns": {
+        "error": {
+          "action": "OMIT"
+        },
+        "finished_at": {
+          "action": "OMIT"
+        },
+        "id": {
+          "action": "OMIT"
+        },
+        "model": {
+          "action": "OMIT"
+        },
+        "result": {
+          "action": "OMIT"
+        },
+        "started_at": {
+          "action": "OMIT"
+        },
+        "status": {
+          "action": "OMIT"
+        },
+        "steps": {
+          "action": "OMIT"
+        },
+        "task_id": {
+          "action": "OMIT"
+        },
+        "tokens_used": {
+          "action": "OMIT"
+        }
+      },
+      "row_policy": "OMIT_ALL_ROWS"
+    },
+    "user_tool_data": {
+      "column_order": [
+        "id",
+        "tool_id",
+        "key",
+        "value",
+        "created_at",
+        "updated_at"
+      ],
+      "columns": {
+        "created_at": {
+          "action": "OMIT"
+        },
+        "id": {
+          "action": "OMIT"
+        },
+        "key": {
+          "action": "OMIT"
+        },
+        "tool_id": {
+          "action": "OMIT"
+        },
+        "updated_at": {
+          "action": "OMIT"
+        },
+        "value": {
+          "action": "OMIT"
+        }
+      },
+      "row_policy": "OMIT_ALL_ROWS"
+    },
+    "user_tools": {
+      "column_order": [
+        "id",
+        "name",
+        "description",
+        "icon",
+        "html_content",
+        "scope",
+        "session_id",
+        "owner",
+        "is_pinned",
+        "is_active",
+        "version",
+        "author",
+        "created_at",
+        "updated_at"
+      ],
+      "columns": {
+        "author": {
+          "action": "OMIT"
+        },
+        "created_at": {
+          "action": "OMIT"
+        },
+        "description": {
+          "action": "OMIT"
+        },
+        "html_content": {
+          "action": "OMIT"
+        },
+        "icon": {
+          "action": "OMIT"
+        },
+        "id": {
+          "action": "OMIT"
+        },
+        "is_active": {
+          "action": "OMIT"
+        },
+        "is_pinned": {
+          "action": "OMIT"
+        },
+        "name": {
+          "action": "OMIT"
+        },
+        "owner": {
+          "action": "OMIT"
+        },
+        "scope": {
+          "action": "OMIT"
+        },
+        "session_id": {
+          "action": "OMIT"
+        },
+        "updated_at": {
+          "action": "OMIT"
+        },
+        "version": {
+          "action": "OMIT"
+        }
+      },
+      "row_policy": "OMIT_ALL_ROWS"
+    },
+    "webhooks": {
+      "column_order": [
+        "id",
+        "name",
+        "url",
+        "secret",
+        "events",
+        "is_active",
+        "last_triggered_at",
+        "last_status_code",
+        "last_error",
+        "created_at",
+        "updated_at"
+      ],
+      "columns": {
+        "created_at": {
+          "action": "OMIT"
+        },
+        "events": {
+          "action": "OMIT"
+        },
+        "id": {
+          "action": "OMIT"
+        },
+        "is_active": {
+          "action": "OMIT"
+        },
+        "last_error": {
+          "action": "OMIT"
+        },
+        "last_status_code": {
+          "action": "OMIT"
+        },
+        "last_triggered_at": {
+          "action": "OMIT"
+        },
+        "name": {
+          "action": "OMIT"
+        },
+        "secret": {
+          "action": "OMIT"
+        },
+        "updated_at": {
+          "action": "OMIT"
+        },
+        "url": {
+          "action": "OMIT"
+        }
+      },
+      "row_policy": "OMIT_ALL_ROWS"
+    }
+  },
+  "usage_policy": {
+    "accepted_source_classification": "SYNTHETIC_DISPOSABLE_FIXTURE",
+    "existing_database_ddl": "NOT_AUTHORIZED",
+    "rag_export": "RAG_EXPORT_NOT_AVAILABLE",
+    "raw_historical_sql_variants": "UNAPPROVED",
+    "real_data": "NOT_AUTHORIZED",
+    "source_page_copy": "PROHIBITED"
+  }
+}

@@ -1,0 +1,245 @@
+{
+  "alias_contract": {
+    "algorithm": "HMAC-SHA-256",
+    "domains": [
+      "owner",
+      "workflow",
+      "upload",
+      "document",
+      "rag-record",
+      "path",
+      "generic-record"
+    ],
+    "package_secret": "RANDOM_IN_MEMORY_ONLY",
+    "pinned_internal_owners": [
+      "internal-tool",
+      "api",
+      "demo",
+      "system"
+    ],
+    "secret_serialization": "PROHIBITED"
+  },
+  "artifact_contract": {
+    "destination_type": "zero-byte regular placeholder",
+    "hard_links": "PROHIBITED",
+    "source_absolute_path_output": "PROHIBITED",
+    "source_content_read": "PROHIBITED",
+    "source_filename_output": "PROHIBITED",
+    "special_files": "PROHIBITED",
+    "symlinks": "PROHIBITED"
+  },
+  "canonical_form": {
+    "digest": "SHA-256",
+    "digest_excludes": [
+      "canonical_sha256"
+    ],
+    "encoding": "UTF-8",
+    "json": "RFC8259 object with sorted keys and compact separators",
+    "terminal_newline": true
+  },
+  "canonical_sha256": "7bb8f02a5387ba038b36ad9c70f7516dd114f9ff50f05c24b74a26ecf97189fc",
+  "contract_dependencies": {
+    "schema": {
+      "canonical_sha256": "bcdfdb9120a805212e7ee3cd87a9708dd52bfac20681ad7f75cd36f185618ef0",
+      "relative_path": "scripts/schema_contracts/combined_9844a2f_6197984.json"
+    },
+    "transform": {
+      "canonical_sha256": "706c3a8d341ab53ae8b61d973928a3181b200824f1c03a42ea7fc21f1fbae86c",
+      "relative_path": "scripts/offline_package_contracts/sql_transform_9844a2f_6197984.json"
+    }
+  },
+  "contract_name": "marketmatch-synthetic-fixture-offline-package-v1",
+  "fixture_gate": {
+    "classification": "SYNTHETIC_DISPOSABLE_FIXTURE",
+    "general_override": false,
+    "launcher_sentinel": ".launcher-fixture-sentinel",
+    "required_destination_parent": "destinations",
+    "required_environment": [
+      "MARKETMATCH_OFFLINE_PACKAGE_TEST_ROOT",
+      "MARKETMATCH_OFFLINE_PACKAGE_SENTINEL",
+      "MARKETMATCH_OFFLINE_PACKAGE_SENTINEL_FD",
+      "MARKETMATCH_OFFLINE_PACKAGE_LAUNCHER_FD",
+      "MARKETMATCH_OFFLINE_PACKAGE_LAUNCHER_PID"
+    ],
+    "required_flag": "--fixture-only",
+    "required_parent_process": "DEDICATED_TEST_LAUNCHER",
+    "required_launcher_capability": "READ_ONLY_FD_TO_EXACT_CHECKED_IN_LAUNCHER_INODE_AND_DIGEST",
+    "required_launcher_sha256": "7308b92389d867f6353c4811e5a7c38d7227a00dbe92b8f8a7668a3702845dd8",
+    "required_read_only_capability": "INHERITED_SENTINEL_FILE_DESCRIPTOR",
+    "required_source_parent": "sources",
+    "source_provenance": "provenance.json",
+    "source_sentinel": ".fixture-sentinel.json"
+  },
+  "manifest_version": 1,
+  "output_contract": {
+    "artifact_record_keys": [
+      "approved_relative_path_token",
+      "artifact_category",
+      "sanitized_linkage_identifier",
+      "source_status",
+      "observed_source_size",
+      "destination_size",
+      "destination_device",
+      "destination_inode",
+      "hard_link_count",
+      "root_category"
+    ],
+    "authorization": "NOT_AUTHORIZED_FOR_REAL_INSPECTION",
+    "auxiliary_status": "NOT_INCLUDED_FIXTURE_ONLY",
+    "complete": false,
+    "owner_registry_keys": [
+      "active",
+      "retired",
+      "legacy_approved",
+      "internal"
+    ],
+    "rag_file_generation": false,
+    "rag_status": "RAG_EXPORT_NOT_AVAILABLE",
+    "seal_verification": "ORIGINAL_OUT_OF_BAND_MANIFEST_SHA256_REQUIRED",
+    "required_directories": [
+      "database",
+      "manifests",
+      "provenance",
+      "artifacts"
+    ],
+    "required_files": [
+      "database/main.sqlite",
+      "manifests/owners.sanitized.json",
+      "manifests/uploads.sanitized.json",
+      "manifests/artifacts.sanitized.json",
+      "manifests/auxiliary-stores.sanitized.json",
+      "manifests/transform-attestation.json",
+      "provenance/provenance.json",
+      "package-manifest.json"
+    ],
+    "upload_record_keys": [
+      "upload_id",
+      "owner",
+      "approved_relative_path_token"
+    ]
+  },
+  "source_contract": {
+    "allowed_top_level": [
+      ".fixture-sentinel.json",
+      "provenance.json",
+      "owners.synthetic.json",
+      "uploads.synthetic.json",
+      "database",
+      "artifacts"
+    ],
+    "database_relative_path": "database/source.sqlite",
+    "fixture_sentinel_keys": [
+      "classification",
+      "fixture_id",
+      "launcher_sentinel"
+    ],
+    "owner_registry_keys": [
+      "active",
+      "retired",
+      "legacy_approved",
+      "internal"
+    ],
+    "provenance_database_keys": [
+      "relative_path",
+      "sha256"
+    ],
+    "provenance_keys": [
+      "classification",
+      "fixture_id",
+      "launcher_sentinel",
+      "database"
+    ],
+    "required_files": [
+      ".fixture-sentinel.json",
+      "provenance.json",
+      "owners.synthetic.json",
+      "uploads.synthetic.json",
+      "database/source.sqlite"
+    ],
+    "upload_categories": [
+      "call-audio",
+      "video-media"
+    ],
+    "upload_record_keys": [
+      "upload_id",
+      "owner",
+      "source_relative_path",
+      "category"
+    ]
+  },
+  "source_snapshots": {
+    "access_time_compared": false,
+    "inspector_commit": "f5da9a4dfef91e3ad6c96c8c218005b72dfa0c46",
+    "marketmatch_checkpoint": "6197984ccec995b630006253cf6eb62c43908d5f",
+    "mutation_relevant_fields": [
+      "database SHA-256",
+      "database device and inode",
+      "database size",
+      "schema version",
+      "schema object inventory",
+      "table row counts",
+      "directory inventory",
+      "artifact metadata",
+      "sidecar absence"
+    ],
+    "upstream": "9844a2f9a1996b8c8135a9e7bbde6a72f41df5ed"
+  },
+  "threat_model": {
+    "accepted_boundary": "UNMODIFIED_CHECKED_IN_LAUNCHER_AND_BUILDER_WITH_NONMALICIOUS_SAME_USER",
+    "cryptographic_synthetic_provenance_claim": false,
+    "failure_output": "OWNED_DESCRIPTOR_ROOT_IS_MARKED_INVALID_WITHOUT_RECURSIVE_PATHNAME_DELETION",
+    "malicious_same_user": "OUT_OF_SCOPE_REQUIRES_EXTERNAL_TRUST_ANCHOR",
+    "source_claim": "FAIL_CLOSED_ACCIDENTAL_REAL_OR_ARBITRARY_DATABASE_SELECTION"
+  },
+  "synthetic_fixture_profile": {
+    "proof_algorithm": "SHA-256('phase3c\\0' || launcher_sentinel || '\\0' || fixture_id)",
+    "proof_column": "sessions.mode",
+    "proof_prefix": "SYNTHETIC_DISPOSABLE_FIXTURE:",
+    "purpose": "ACCIDENTAL_REAL_SOURCE_EXCLUSION_NOT_MALICIOUS_LOCAL_CODE_ATTESTATION",
+    "table_row_counts": {
+      "api_tokens": 1,
+      "caldav_deleted_events": 0,
+      "calendar_events": 0,
+      "calendars": 0,
+      "chat_messages": 1,
+      "comparisons": 1,
+      "crew_members": 0,
+      "document_versions": 0,
+      "documents": 2,
+      "editor_drafts": 0,
+      "email_accounts": 0,
+      "gallery_albums": 0,
+      "gallery_images": 0,
+      "integrations": 0,
+      "marketmatch_calls": 1,
+      "marketmatch_videos": 1,
+      "mcp_servers": 0,
+      "memories": 0,
+      "model_endpoints": 0,
+      "notes": 1,
+      "provider_auth_sessions": 1,
+      "scheduled_tasks": 0,
+      "sessions": 1,
+      "signatures": 0,
+      "task_runs": 0,
+      "user_tool_data": 0,
+      "user_tools": 0,
+      "webhooks": 0
+    }
+  },
+  "usage_policy": {
+    "additive_ddl": "NOT_AUTHORIZED",
+    "existing_database_ddl": "NOT_AUTHORIZED",
+    "orm_registration": "NOT_AUTHORIZED",
+    "package_completeness": "INCOMPLETE",
+    "rag_status": "RAG_EXPORT_NOT_AVAILABLE",
+    "raw_historical_sql_variants": "UNAPPROVED",
+    "real_inspector_execution": "NOT_AUTHORIZED_FOR_REAL_INSPECTION",
+    "real_package_creation": "NOT_AUTHORIZED",
+    "real_sources": "NOT_AUTHORIZED",
+    "runtime_integration": "NOT_AUTHORIZED",
+    "source_acquisition": "NOT_IMPLEMENTED",
+    "source_classification": "SYNTHETIC_DISPOSABLE_FIXTURE",
+    "source_discovery": "NOT_IMPLEMENTED"
+  }
+}

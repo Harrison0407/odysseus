@@ -1,0 +1,488 @@
+{
+  "attestation_contract": {
+    "allowed_decision_binding_status": "BOUND_NOT_APPROVED",
+    "allowed_detached_signature_status": "SYNTHETIC_PLACEHOLDER_ONLY",
+    "exact_keys": [
+      "attestation_version",
+      "fixture_id",
+      "subject_sha256",
+      "actor_alias",
+      "role",
+      "timestamp",
+      "detached_signature_status",
+      "decision_binding_status",
+      "canonical_sha256"
+    ],
+    "operator_alias_grammar": "^synthetic_operator_[0-9a-f]{32}$",
+    "operator_role": "OPERATOR",
+    "reviewer_alias_grammar": "^synthetic_reviewer_[0-9a-f]{32}$",
+    "reviewer_role": "INDEPENDENT_REVIEWER",
+    "timestamp_grammar": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+  },
+  "authoritative_commits": {
+    "current_integration_baseline": "966ffcb30765755e3378a63f60f201f940a87daf",
+    "marketmatch_checkpoint": "6197984ccec995b630006253cf6eb62c43908d5f",
+    "upstream": "9844a2f9a1996b8c8135a9e7bbde6a72f41df5ed"
+  },
+  "canonical_form": {
+    "digest": "SHA-256",
+    "digest_excludes": [
+      "canonical_sha256"
+    ],
+    "encoding": "UTF-8",
+    "json": "RFC8259 object with sorted keys and compact separators",
+    "terminal_newline": true
+  },
+  "canonical_sha256": "84e7ca2e7fffc797b929872a173281514e89e5bbc6cc9ae965550872fec1044b",
+  "client_contract": {
+    "allowed_distributions": [
+      "chromadb",
+      "chromadb-client"
+    ],
+    "allowed_platforms": [
+      "linux_aarch64",
+      "linux_x86_64",
+      "macos_arm64",
+      "macos_x86_64",
+      "synthetic_platform",
+      "windows_amd64"
+    ],
+    "exact_keys": [
+      "distribution_name",
+      "exact_version",
+      "artifact_sha256",
+      "installed_tree_or_record_sha256",
+      "dependency_lock_sha256",
+      "python_abi",
+      "platform"
+    ],
+    "exact_version_grammar": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[a-z]+[0-9]+)?(?:\\+[A-Za-z0-9.-]+)?$",
+    "python_abi_grammar": "^(?:cp[0-9]{3}|py3-none-any)$"
+  },
+  "collection_contract": {
+    "allowed_status_values": {
+      "collection_uuid_status": [
+        "SYNTHETIC_UUID_ATTESTED",
+        "UNAVAILABLE_REVIEWED"
+      ],
+      "distance_metric_status": [
+        "COSINE_METADATA_ATTESTED",
+        "UNKNOWN"
+      ],
+      "embedding_dimension_status": [
+        "SYNTHETIC_DIMENSION_ATTESTED",
+        "UNKNOWN"
+      ],
+      "embedding_fingerprint_status": [
+        "SYNTHETIC_DIGEST_ATTESTED",
+        "UNKNOWN"
+      ],
+      "tenant_database_binding_status": [
+        "EXPLICIT_SYNTHETIC_BINDING",
+        "UNBOUND"
+      ]
+    },
+    "exact_group_keys": [
+      "inventory_before_sha256",
+      "inventory_after_sha256",
+      "before_after_equal",
+      "items"
+    ],
+    "exact_record_keys": [
+      "collection_name",
+      "family",
+      "lane",
+      "collection_uuid_status",
+      "tenant_database_binding_status",
+      "record_count",
+      "sanitized_metadata_digest",
+      "embedding_fingerprint_status",
+      "embedding_dimension_status",
+      "distance_metric_status",
+      "snapshot_identifier"
+    ],
+    "physical_collections": {
+      "odysseus_memories": {
+        "family": "memory",
+        "lane": "legacy"
+      },
+      "odysseus_memories_custom": {
+        "family": "memory",
+        "lane": "custom"
+      },
+      "odysseus_memories_fastembed": {
+        "family": "memory",
+        "lane": "fastembed"
+      },
+      "odysseus_rag": {
+        "family": "rag",
+        "lane": "legacy"
+      },
+      "odysseus_rag_custom": {
+        "family": "rag",
+        "lane": "custom"
+      },
+      "odysseus_rag_fastembed": {
+        "family": "rag",
+        "lane": "fastembed"
+      },
+      "odysseus_tool_index": {
+        "family": "tool_index",
+        "lane": "legacy"
+      },
+      "odysseus_tool_index_custom": {
+        "family": "tool_index",
+        "lane": "custom"
+      },
+      "odysseus_tool_index_fastembed": {
+        "family": "tool_index",
+        "lane": "fastembed"
+      }
+    }
+  },
+  "compatibility_subject_contract": {
+    "exact_keys": [
+      "subject_version",
+      "fixture_id",
+      "contract_sha256",
+      "contract_group_sha256",
+      "source_code_sha256",
+      "client_sha256",
+      "server_sha256",
+      "connection_identity_sha256",
+      "persistence_sha256",
+      "collections_sha256",
+      "quiescence_sha256",
+      "privacy_sha256",
+      "adapter_sha256",
+      "review_sha256",
+      "decision_sha256",
+      "canonical_sha256"
+    ]
+  },
+  "connection_identity_contract": {
+    "allowed_authentication_modes": [
+      "NONE_SYNTHETIC"
+    ],
+    "allowed_host_classifications": [
+      "COMPOSE_INTERNAL_SYNTHETIC",
+      "LOCAL_LOOPBACK_SYNTHETIC",
+      "REMOTE_PRIVATE_SYNTHETIC",
+      "SYNTHETIC_ISOLATED"
+    ],
+    "allowed_tls_modes": [
+      "NOT_APPLICABLE_SYNTHETIC",
+      "SYNTHETIC_TLS_ATTESTED"
+    ],
+    "database_alias_grammar": "^synthetic_database_[0-9a-f]{32}$",
+    "exact_keys": [
+      "deployment_mode",
+      "tenant",
+      "database",
+      "verification_method",
+      "host_classification",
+      "host_alias",
+      "authentication_mode",
+      "tls_mode",
+      "header_names"
+    ],
+    "host_alias_grammar": "^synthetic_host_[0-9a-f]{32}$",
+    "tenant_alias_grammar": "^synthetic_tenant_[0-9a-f]{32}$",
+    "verification_method": "SYNTHETIC_LAUNCHER_ATTESTATION"
+  },
+  "contract_group_keys": [
+    "contract_name",
+    "contract_version",
+    "contract_sha256",
+    "upstream_commit",
+    "marketmatch_checkpoint",
+    "integration_baseline",
+    "supported_combination_count",
+    "compatibility_allowlist_empty",
+    "real_capture_authorized",
+    "remote_capture_supported",
+    "unknown_defaults_permitted"
+  ],
+  "contract_name": "marketmatch-synthetic-chroma-version-deployment-provenance-v1",
+  "contract_version": 1,
+  "decision_contract": {
+    "allowed_claimed_blockers": [
+      "UNKNOWN_OR_UNSUPPORTED"
+    ],
+    "allowed_client_server_compatibility": [
+      "MISMATCH",
+      "UNREVIEWED"
+    ],
+    "exact_keys": [
+      "requested_outcome",
+      "claimed_blockers",
+      "client_server_compatibility",
+      "real_capture_authorized",
+      "remote_capture_supported",
+      "supported_combination_count",
+      "compatibility_allowlist_empty"
+    ],
+    "required_requested_outcome": "BLOCKED"
+  },
+  "decision_precedence": [
+    "PRIVACY_POLICY_VIOLATION",
+    "READ_ERROR",
+    "INVALID_ATTESTATION",
+    "REMOTE_CAPTURE_UNSUPPORTED",
+    "UNSUPPORTED_DEPLOYMENT_MODE",
+    "UNPINNED_CLIENT",
+    "UNPINNED_SERVER",
+    "UNKNOWN_SERVER_BUILD",
+    "UNKNOWN_TENANT_DATABASE",
+    "PERSISTENCE_PROVENANCE_MISSING",
+    "CLIENT_SERVER_MISMATCH",
+    "UNKNOWN_OR_UNSUPPORTED",
+    "SUPPORTED_REVIEWED_VARIANT",
+    "SUPPORTED_EXACT"
+  ],
+  "deployment_modes": {
+    "recognized": [
+      "docker_compose_local",
+      "native_local_server",
+      "packaged_external_server",
+      "preexisting_local_server",
+      "remote_server",
+      "synthetic_fixture"
+    ],
+    "valid_fixture_input": [
+      "synthetic_fixture"
+    ]
+  },
+  "fixture_gate": {
+    "classification": "SYNTHETIC_DISPOSABLE_FIXTURE",
+    "general_override": false,
+    "launcher_sentinel": ".launcher-chroma-provenance-sentinel",
+    "required_environment": [
+      "MARKETMATCH_CHROMA_PROVENANCE_TEST_ROOT",
+      "MARKETMATCH_CHROMA_PROVENANCE_SENTINEL",
+      "MARKETMATCH_CHROMA_PROVENANCE_SENTINEL_FD",
+      "MARKETMATCH_CHROMA_PROVENANCE_LAUNCHER_FD",
+      "MARKETMATCH_CHROMA_PROVENANCE_LAUNCHER_PID",
+      "MARKETMATCH_CHROMA_PROVENANCE_TEMP_BOUNDARY"
+    ],
+    "required_flag": "--fixture-only",
+    "required_launcher_capability": "READ_ONLY_FD_TO_EXACT_CHECKED_IN_LAUNCHER_INODE_AND_DIGEST",
+    "required_launcher_sha256": "28ee566dce4acfc5795abaafe01b816231e69d53d07325fbea1023f6521c64b3",
+    "required_parent_process": "DEDICATED_TEST_LAUNCHER",
+    "required_read_only_capability": "INHERITED_SENTINEL_FILE_DESCRIPTOR",
+    "snapshot_parent": "fixtures",
+    "threat_boundary": "NON_MALICIOUS_SAME_USER_UNMODIFIED_CHECKED_IN_CODE"
+  },
+  "group_contracts": {
+    "adapter": [
+      "adapter_name",
+      "adapter_commit",
+      "adapter_contract_sha256",
+      "standard_library_only",
+      "network_capability",
+      "runtime_discovery_capability",
+      "application_import_capability",
+      "mutation_capability"
+    ],
+    "privacy": [
+      "policy_name",
+      "policy_sha256",
+      "raw_values_retained",
+      "prohibited_values_present",
+      "tenant_database_values_are_aliases",
+      "report_fixed_codes_only"
+    ],
+    "quiescence": [
+      "evidence_status",
+      "evidence_sha256",
+      "application_stopped",
+      "server_stopped",
+      "writers_stopped",
+      "inventory_before_after_equal",
+      "acquisition_window_start",
+      "acquisition_window_end"
+    ],
+    "review": [
+      "attestation_policy",
+      "operator_role",
+      "reviewer_role",
+      "aliases_distinct",
+      "self_approval",
+      "decision_approved",
+      "detached_signatures_real"
+    ],
+    "source_code": [
+      "repository_commit",
+      "application_deployment_commit",
+      "capture_adapter_commit",
+      "source_classification"
+    ]
+  },
+  "invariants": {
+    "application_imports_permitted": false,
+    "compatibility_allowlist_empty": true,
+    "network_access_permitted": false,
+    "real_capture_authorized": false,
+    "remote_capture_supported": false,
+    "runtime_discovery_permitted": false,
+    "supported_combination_count": 0,
+    "unknown_defaults_permitted": false
+  },
+  "limits": {
+    "maximum_collections": 9,
+    "maximum_file_bytes": 1048576,
+    "maximum_files": 4,
+    "maximum_manifest_bytes": 1048576
+  },
+  "manifest_contract": {
+    "allowed_files": [
+      "compatibility-subject.json",
+      "operator-attestation.json",
+      "provenance-manifest.json",
+      "reviewer-attestation.json"
+    ],
+    "exact_keys": [
+      "manifest_version",
+      "contract_name",
+      "contract_sha256",
+      "fixture_provenance",
+      "fixture_id",
+      "sealed",
+      "contract",
+      "source_code",
+      "client",
+      "server",
+      "connection_identity",
+      "persistence",
+      "collections",
+      "quiescence",
+      "privacy",
+      "adapter",
+      "review",
+      "decision",
+      "files",
+      "tree_sha256",
+      "launcher_attestation",
+      "canonical_sha256"
+    ],
+    "file_record_keys": [
+      "path",
+      "size",
+      "sha256"
+    ],
+    "hashed_files": [
+      "compatibility-subject.json",
+      "operator-attestation.json",
+      "reviewer-attestation.json"
+    ],
+    "required_provenance_groups": [
+      "contract",
+      "source_code",
+      "client",
+      "server",
+      "connection_identity",
+      "persistence",
+      "collections",
+      "quiescence",
+      "privacy",
+      "adapter",
+      "review",
+      "decision"
+    ]
+  },
+  "persistence_contract": {
+    "allowed_acquisition_mechanisms": [
+      "SYNTHETIC_FIXTURE_BUILD"
+    ],
+    "allowed_file_family_policies": [
+      "SYNTHETIC_CLOSED_FOUR_FILE_SET"
+    ],
+    "allowed_source_ownership_classes": [
+      "SYNTHETIC_LAUNCHER"
+    ],
+    "exact_keys": [
+      "opaque_store_identifier",
+      "snapshot_identifier",
+      "acquisition_mechanism",
+      "complete_tree_digest",
+      "file_family_policy",
+      "source_ownership_class",
+      "source_read_only",
+      "before_after_equal"
+    ],
+    "snapshot_identifier_grammar": "^synthetic_snapshot_[0-9a-f]{32}$",
+    "store_identifier_grammar": "^synthetic_store_[0-9a-f]{32}$"
+  },
+  "privacy_contract": {
+    "allowed_output_values": "fixed status codes, fixed classifications, booleans, counts, and digests only",
+    "error_values": "fixed codes and opaque field locations only",
+    "prohibited_input_keys": [
+      "absolute_path",
+      "api_key",
+      "cloud_resource_identifier",
+      "collection_metadata",
+      "container_id",
+      "credential",
+      "credentials",
+      "document",
+      "document_text",
+      "documents",
+      "embedding",
+      "embedding_url",
+      "embeddings",
+      "email",
+      "endpoint_url",
+      "hostname",
+      "ip_address",
+      "model_endpoint",
+      "password",
+      "path",
+      "secret",
+      "token",
+      "username",
+      "volume_name"
+    ],
+    "raw_values_in_reports": false
+  },
+  "server_contract": {
+    "allowed_source_types": [
+      "docker_image",
+      "native_binary",
+      "synthetic_server"
+    ],
+    "exact_build_grammar": "^[A-Za-z0-9][A-Za-z0-9._+-]{2,127}$",
+    "exact_keys": [
+      "source_type",
+      "exact_build",
+      "image_tag",
+      "image_digest",
+      "platform_digest",
+      "binary_or_package_sha256"
+    ],
+    "moving_tags": [
+      "edge",
+      "latest",
+      "main",
+      "master",
+      "nightly",
+      "stable"
+    ]
+  },
+  "status_codes": [
+    "CLIENT_SERVER_MISMATCH",
+    "INVALID_ATTESTATION",
+    "PERSISTENCE_PROVENANCE_MISSING",
+    "PRIVACY_POLICY_VIOLATION",
+    "READ_ERROR",
+    "REMOTE_CAPTURE_UNSUPPORTED",
+    "SUPPORTED_EXACT",
+    "SUPPORTED_REVIEWED_VARIANT",
+    "UNKNOWN_OR_UNSUPPORTED",
+    "UNKNOWN_SERVER_BUILD",
+    "UNKNOWN_TENANT_DATABASE",
+    "UNPINNED_CLIENT",
+    "UNPINNED_SERVER",
+    "UNSUPPORTED_DEPLOYMENT_MODE"
+  ],
+  "supported_combinations": []
+}

@@ -306,3 +306,14 @@ working tree.
     6+4 units from two lots, dispatched both in one request, confirmed
     two distinct `DispatchLine` rows against the correct lots via a
     direct database query.
+28. **Department/project-scoped assignment controls.** Added
+    `apps.requests.views._department_for_gate`/`_assignable_users`
+    (ADR-024): the installer-assignment dropdown is now scoped to active
+    users holding a role in the department configured (via the existing
+    `installation_to_inspection` `GateDefinition`, never a hard-coded
+    name) to do installation work, further narrowed to users with
+    project access when the project has any explicit grants. 2 new
+    tests confirm an Obra user with access to the target project
+    appears, while a Compras user, a Dirección user, and an Obra user
+    scoped only to a *different* project are all excluded — 103/103
+    passing (101 pre-existing + 2 new).

@@ -74,11 +74,19 @@ is silently claimed to be done when it isn't.
   punch-list items; this is mitigated only by human review (the
   duplicate would show as a second, identical-looking inspection in the
   installation's history), not a hard technical constraint.
-- **Installer/inspector assignment dropdowns list every user in the
-  organization**, not scoped to the "Obra" department. Authorization is
-  still fully enforced at the service/view layer regardless of who is
-  picked (any actual action still requires the appropriate role/project
-  access) — this is a pure data-entry convenience gap, not a security one.
+- ~~Installer/inspector assignment dropdowns list every user in the
+  organization~~ — **Done.** `assigned_installer` on the installation-
+  creation form is now scoped to active users holding a role in the
+  department actually configured to do installation work
+  (`installation_to_inspection.from_department` — read from the same
+  `GateDefinition` the gate engine uses, never a hard-coded department
+  name), further narrowed to users with `UserProjectAccess` to the
+  target project when the project has any such grants configured. This
+  was always enforced server-side regardless of who was picked (a pure
+  data-entry gap, not a security one) — the fix only tightens what the
+  dropdown offers. Inspector assignment has no dropdown at all
+  (`create_inspection` always records `request.user` as the inspector),
+  so there was nothing to scope there.
 - ~~Evidence/photo upload is modeled but not wired into these screens~~
   — **Done.** `apps.audit.services.attach_evidence`/`list_evidence` wire
   the generic `Attachment` model (content_type/object_id) into the

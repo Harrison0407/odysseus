@@ -2,6 +2,22 @@
 
 Newest first.
 
+## ADR-024 — Assignment dropdowns scoped by the gate's own configured department, not a hard-coded name
+**Decision:** `apps.requests.views._department_for_gate(organization,
+gate_code, attr)` reads `GateDefinition.from_department`/`to_department`
+— the same configuration row `apps.workflow.gates.evaluate_gate` and
+`apps.workflow.services` already use — to decide which department's
+members should populate an assignment dropdown
+(`_assignable_users`), rather than filtering on a literal department
+code string like `"obra"`.
+**Why:** Every other place in the codebase that needs "who does this
+kind of work" (gate `from_department`/`to_department`, `WorkflowStage`)
+already reads it from configured `Department`/`GateDefinition` rows —
+never a hard-coded name (ADR-002, and the explicit constraint repeated
+in every milestone's kickoff instructions). Hard-coding `"obra"` in a
+form's `__init__` would have been the one place in the whole delivery
+that quietly broke that rule.
+
 ## ADR-023 — `DispatchLine.reservation` FK + always re-fetch the line with `select_for_update()` inside `create_dispatch`
 **Decision:** Added a nullable `DispatchLine.reservation` FK
 (`requests.0003_dispatchline_reservation`), and changed

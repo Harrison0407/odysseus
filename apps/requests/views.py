@@ -469,6 +469,38 @@ def installation_list(request):
     return render(request, "requests/installation_list.html", {"installations": installations})
 
 
+def _department_for_gate(organization, gate_code, attr="from_department"):
+    """The department actually configured to do a stage's work — read
+    from the same `GateDefinition` rows the gate-evaluation engine uses,
+    never a hard-coded department name — used to scope who can be picked
+    as an installer/assignee for that stage."""
+    gate = GateDefinition.objects.filter(organization=organization, code=gate_code).first()
+    return getattr(gate, attr, None) if gate else None
+
+
+def _assignable_users(organization, project=None, department=None):
+    """Users eligible to be assigned installation/inspection work:
+    active accounts, scoped to the configured department (never every
+    user in the organization), further narrowed to users with explicit
+    project access when the project has any such grants configured (a
+    project with no `UserProjectAccess` rows at all falls back to plain
+    department scoping, so a pilot that hasn't set up per-project access
+    yet isn't left with an empty dropdown)."""
+    from django.contrib.auth import get_user_model
+
+    from apps.accounts.models import UserProjectAccess
+
+    User = get_user_model()
+    qs = User.objects.filter(is_active=True, profile__organization=organization)
+    if department is not None:
+        qs = qs.filter(user_roles__department=department, user_roles__is_active=True)
+    if project is not None:
+        project_user_ids = set(UserProjectAccess.objects.filter(project=project).values_list("user_id", flat=True))
+        if project_user_ids:
+            qs = qs.filter(pk__in=project_user_ids)
+    return qs.distinct().order_by("first_name", "username")
+
+
 class InstallationCreateForm(forms.ModelForm):
     class Meta:
         model = InstallationRecord
@@ -484,6 +516,10 @@ class InstallationCreateForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if project_receipt is not None:
             self.fields["delivery_line"].queryset = project_receipt.delivery.lines.all()
+            project = wfsvc.resolve_project(project_receipt.delivery)
+            organization = wfsvc.resolve_organization(project_receipt.delivery)
+            department = _department_for_gate(organization, "installation_to_inspection", "from_department")
+            self.fields["assigned_installer"].queryset = _assignable_users(organization, project, department)
         _form_control(self.fields)
 
 

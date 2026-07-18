@@ -609,6 +609,63 @@ def test_20_installation_to_inspection_handoff_can_be_returned_for_correction(
 
 
 # ---------------------------------------------------------------------------
+# Department/project-scoped assignment controls
+# ---------------------------------------------------------------------------
+
+
+def test_installer_dropdown_scoped_to_department_and_project_access(
+    client, dispatched_delivery, miguel, markeris, harrison,
+    gate_installation_to_inspection, project_access_obra_dia,
+):
+    """miguel (Obra, has access to Proyecto DIA) must appear as an
+    assignable installer; markeris (Compras) and harrison (Dirección, no
+    Obra-department role) must not — the dropdown is scoped by the
+    department actually configured to do installation work
+    (installation_to_inspection.from_department), never by listing every
+    user in the organization."""
+    delivery_line = dispatched_delivery.lines.first()
+    rsvc.record_delivery_line(delivery_line, quantity_accepted=Decimal("10"), quantity_rejected=0, quantity_damaged=0, user=miguel)
+    rsvc.complete_delivery(dispatched_delivery, miguel, accepted=True)
+    receipt = rsvc.create_project_receipt(dispatched_delivery, miguel)
+
+    client.force_login(miguel)
+    response = client.get(reverse("requests:installation-create", args=[receipt.pk]))
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert f'value="{miguel.pk}"' in content
+    assert f'value="{markeris.pk}"' not in content
+    assert f'value="{harrison.pk}"' not in content
+
+
+def test_installer_dropdown_excludes_obra_user_without_this_projects_access(
+    client, organization, dispatched_delivery, miguel, department_obra, role_obra,
+    gate_installation_to_inspection, project_access_obra_dia,
+):
+    """An Obra-department user who has UserProjectAccess only to a
+    *different* project must not appear, even though they share the
+    department — project-level scoping, not department-level alone."""
+    from django.contrib.auth import get_user_model
+
+    User = get_user_model()
+    other_project = Project.objects.create(organization=organization, name="Otro Proyecto Instalador", code="otro-instalador")
+    obra_other_project = User.objects.create_user(username="obra_otro_instalador", password="testpass123")
+    UserProfile.objects.create(user=obra_other_project, organization=organization, primary_department=department_obra)
+    UserRole.objects.create(user=obra_other_project, role=role_obra, department=department_obra)
+    UserProjectAccess.objects.create(user=obra_other_project, project=other_project)
+
+    delivery_line = dispatched_delivery.lines.first()
+    rsvc.record_delivery_line(delivery_line, quantity_accepted=Decimal("10"), quantity_rejected=0, quantity_damaged=0, user=miguel)
+    rsvc.complete_delivery(dispatched_delivery, miguel, accepted=True)
+    receipt = rsvc.create_project_receipt(dispatched_delivery, miguel)
+
+    client.force_login(miguel)
+    response = client.get(reverse("requests:installation-create", args=[receipt.pk]))
+    content = response.content.decode()
+    assert f'value="{miguel.pk}"' in content
+    assert f'value="{obra_other_project.pk}"' not in content
+
+
+# ---------------------------------------------------------------------------
 # 21. Duplicate form submission
 # ---------------------------------------------------------------------------
 

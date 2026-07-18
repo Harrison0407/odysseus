@@ -335,6 +335,98 @@ Baseline verified before starting: branch `main`, HEAD =
   structurally but not visually/screenshot verified. See
   `docs/KNOWN_LIMITATIONS.md` for the complete, itemized list.
 
+## 24. One-shot Priority 1 completion (validated in a later session)
+
+Resumed from the verified immutable baseline `e9c24fd6374eda9f59dfd3b006582deb6e30c40b`
+and completed all four remaining Priority 1 features in one continuous
+run, each following the full 15-step commit gate (implement → tests →
+focused run → full suite → `manage.py check` → `makemigrations --check`
+→ migrate-from-empty → live HTTP → docs → diff review → commit):
+
+1. **Storage capacity/suitability warnings** — `apps.inventory.services`
+   (`check_location_suitability`/`enforce_location_suitability`,
+   ADR-029), wired into receiving put-away and a newly-activated
+   `Transfer` model. 20 tests.
+2. **External storage comparison calculator** — `StorageComparisonScenario`/
+   `AlternativeStorageOption` (re-parented + extended, ADR-030), never
+   fabricates a currency conversion (reuses
+   `apps.cost.services.convert_to_base_currency`, made public). 21 tests.
+3. **Supplier claim package generation** — new `apps.claims` app
+   (ADR-031), full DRAFT→APPROVED→SUBMITTED→SUPPLIER_RESPONDED→
+   RESOLVED→CLOSED lifecycle, evidence and package generation both
+   reuse existing generic mechanisms rather than new per-claim models.
+   21 tests.
+4. **QR labels and controlled scanning** — new `apps.labels` app
+   (ADR-032), opaque-token payloads, `login_required` scan landing that
+   forwards into each entity's own existing permission-checked page.
+   22 tests.
+
+**Test suite growth:** 161 (baseline) → 181 → 202 → 223 → 245, plus one
+regression test added when a genuine pre-existing bug was found during
+this phase's own live-HTTP validation (see below) → **246 passing**,
+zero failures, zero skipped, at every single commit point along the way
+— never a regression introduced and left unfixed.
+
+**Migrations:** all new/altered migrations (`receiving.0002`,
+`reports.0002`, `claims.0001`, `labels.0001`) verified to apply cleanly
+from a genuinely empty database twice — once via `pytest --create-db`
+against SQLite, and again via a fresh `docker build` + a throwaway
+PostgreSQL 16 container with `manage.py migrate` run inside the real
+production image (see item 25).
+
+**A real, previously-undetected bug was found and fixed while
+live-validating cross-organization isolation for this phase:**
+`apps.inventory.views.lot_detail` had no organization scoping at all —
+any authenticated user of any organization could view any other
+organization's inventory lot by UUID. Confirmed live with a genuine
+second-organization user (`curl` returned 200, not 404) before the fix,
+and 404 immediately after. Fixed in a dedicated commit with a
+regression test (`tests/test_storage_suitability.py::TestLotDetailIsolation`).
+
+**Live HTTP walkthrough** (real cookies + CSRF tokens against a running
+dev server, no test-client shortcuts), against the actual seeded pilot
+users and the imported `MEDUWY575021` fixture:
+login as Harrison → posted a real receipt line for the fixture's
+manifest line into a newly created warehouse location (creating a
+genuine `InventoryLot`/`InventoryMovement` through the storage-
+suitability-gated put-away path) → viewed the resulting lot and
+location detail pages → generated a QR label for the lot (real
+base64-PNG QR image rendered server-side) → scanned it
+(`/qr/<token>/`) and confirmed the redirect landed on the lot's real
+detail page → created an external-storage-comparison scenario for the
+fixture's receiving plan, added a costed option, and confirmed the
+computed total appeared correctly on the comparison table → created a
+supplier claim against the fixture's shipment and confirmed both the
+sequential claim number (`CLM-2026-0001`) and the missing-evidence
+warning rendered correctly → confirmed a genuine second-organization
+user was denied (404) on the claim, the QR scan, and (after the fix
+above) the lot detail page.
+
+## 25. Production Docker image, this phase
+
+- `docker build` of the current `Dockerfile`/`requirements.txt`
+  (including the new `qrcode==8.2` dependency and the two new
+  `apps.claims`/`apps.labels` apps) completed cleanly.
+- `manage.py check --deploy` inside the built image against a real
+  PostgreSQL 16 container: 0 issues beyond the expected warning for a
+  deliberately short test `SECRET_KEY` used only for this throwaway
+  validation run.
+- `manage.py migrate --noinput` inside the built image against that
+  same empty PostgreSQL database: every migration (49 across 22 apps,
+  including all four new ones from this session) applied with `OK`.
+- `qrcode.make(...)` executed inside the built image, confirmed to
+  produce a real PNG image (727 bytes for a short test URL) — the new
+  dependency is genuinely usable at runtime, not just importable.
+- Test containers/network/image removed after validation; nothing left
+  running.
+- Backup/restore itself (`deploy/backup.sh`/`restore.sh`) was not
+  re-run in this phase — neither script nor the document-storage layout
+  changed since the prior session's genuine round-trip validation (see
+  item 21 above), and none of this phase's four features altered
+  `apps.core.storage` or introduced a new persisted-file location
+  outside the existing `Document`/`DocumentVersion` mechanism, so that
+  validation remains current.
+
 ## Overall recommendation
 
 **CONDITIONAL GO** — see `docs/KNOWN_LIMITATIONS.md` for the exact list of
@@ -342,12 +434,20 @@ what is modeled-but-not-yet-exercised and what has no UI yet at all. The
 Priority 0 vertical slice (documents, procurement, the dual-manifest
 engine, receiving, inventory ledger, material requests, landed-cost data
 model, dashboards, HTML snapshots, and the full production deployment/
-backup/restore cycle), the Gate Controls and Formal Handoffs milestone
-(gate evaluation, blocking, authorized override, and the full handoff
-lifecycle for the 8 required transitions), and the Delivery, Installation,
-Inspection, and Final Acceptance milestone (the last 3 of those 8
-transitions now have production UI, a quantity-invariant-safe domain
-service layer, and cross-project-isolated screens) are genuinely working
-end-to-end against real data, not merely designed. This is not yet the
-complete 38-section system the governing prompt describes, and should not
-be represented as such.
+backup/restore cycle), the Gate Controls and Formal Handoffs milestone,
+the Delivery/Installation/Inspection/Final Acceptance milestone, and now
+**all four Priority 1 features** (storage suitability, external storage
+comparison, supplier claim packages, QR labels/controlled scanning) are
+genuinely working end-to-end against real data — not merely designed —
+each with its own passing automated tests and a live HTTP walkthrough.
+Remaining honest gaps (see `KNOWN_LIMITATIONS.md`/`ASSUMPTIONS.md` for
+the complete, itemized list): local OCR/automated translation/WhatsApp/
+QuickBooks live integration remain explicitly out of scope; rate
+limiting is per-Gunicorn-worker, not global; mobile responsiveness is
+structurally, not visually/screenshot, verified; QR print-link UI
+coverage is 7 of 8 entity types (`Dispatch` has no own detail screen to
+attach a link to, though it is fully supported at the service/URL
+layer). None of these is a correctness, security, or data-integrity
+defect — each is a scoped, documented simplification. This is not the
+complete 38-section system the original governing prompt describes in
+full breadth, and should not be represented as such.

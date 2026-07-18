@@ -18,15 +18,18 @@ capability beyond what's below.
 
 ## What's implemented
 
-- Full canonical data model: 18 Django apps, 176 models, 25 migrations, clean from an empty database.
+- Full canonical data model: 20 Django apps, clean from an empty database (PostgreSQL and SQLite both verified).
 - Multilingual document upload with SHA-256 provenance and duplicate detection.
 - The dual-manifest engine (Official Carrier Summary vs. Internal Operational Manifest) with an official-vs-operational variance matrix, demonstrated against the real supplied live-container fixture (BL MEDUWY575021 / container TCNU8926924).
 - Ledger-based inventory (on-hand quantity always derived from posted movements, never edited directly).
 - Physical receiving with risk exceptions, automatic quarantine of damaged stock, and discrepancy creation.
+- Storage capacity/suitability warnings at put-away and transfer time, and an external-storage comparison calculator with immutable, versioned scenarios (never fabricates a currency conversion).
 - Material requests, purchase orders with open-commitment carryover tracking, replacement/corrective-cargo case tracking.
-- Landed-cost and CONFOTUR data models (schema-complete; allocation-run/reconciliation UI is a near-term follow-up).
+- Supplier claim package generation: full claim lifecycle traceable to supplier/PO/shipment/discrepancy/inspection records, with a printable/downloadable claim package.
+- QR label generation and controlled scanning for inventory lots, locations, receipts, dispatches, deliveries, installation records, tools, and containers — opaque payloads, a scan never itself authorizes anything.
+- Landed-cost allocation/calculation engine and CONFOTUR reconciliation UI, both fully wired end-to-end.
 - Persona-branched Spanish-language dashboards (Compras / China / Finanzas / Almacén / Obra / Dirección).
-- Self-contained HTML shipment snapshots and revocable, logged secure share links.
+- Self-contained HTML shipment/receiving/claim/comparison snapshots and revocable, logged secure share links.
 - Versioned REST API under `/api/v1/` (read-only, organization-scoped).
 - A validated production deployment: Docker Compose (Postgres + Gunicorn + Caddy), with backup/restore/persistence genuinely exercised (see `docs/FINAL_VALIDATION_REPORT.md`).
 
@@ -71,9 +74,14 @@ Visit `http://localhost:8000/`. Pilot user passwords are printed once by
 ```bash
 pytest
 ```
-21 tests, covering the live-container fixture import, document
+246 tests, covering the live-container fixture import, document
 upload/duplicate-detection/authorization, the receiving/inventory ledger,
-and object-level permission scoping.
+object-level permission scoping, gate controls and formal handoffs,
+delivery/installation/inspection/final acceptance, landed-cost
+allocation, CONFOTUR reconciliation, tool custody, cycle counts, storage
+capacity/suitability, external storage comparison, supplier claims, and
+QR labels/controlled scanning. See `docs/REQUIREMENTS_TRACEABILITY.md`
+for exactly what each area's tests prove.
 
 ## Production deployment
 

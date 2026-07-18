@@ -119,6 +119,52 @@
   server — acceptable at this pilot's scale, recorded honestly in
   `KNOWN_LIMITATIONS.md` rather than overstated.
 
+## Storage suitability, external storage comparison, supplier claims, QR labels (added in a later session)
+
+- **Storage suitability overrides are server-side authorized, not
+  merely UI-hidden.** `apps.inventory.services.enforce_location_suitability`
+  requires `apps.workflow.services.can_override_gates(user)` before
+  accepting an `override_reason` for a blocked put-away/transfer;
+  supplying a reason without that permission raises
+  `StoragePermissionError` rather than silently succeeding. Every
+  override and every non-blocking warning is logged to `AuditEvent`.
+  Verified by `tests/test_storage_suitability.py`
+  (`test_unauthorized_override_denied`).
+- **External storage comparison never fabricates a currency
+  conversion.** `apps.receiving.services.compare_scenario_options`
+  reuses `apps.cost.services.convert_to_base_currency`; an option in a
+  currency with no `ExchangeRate` on file is reported as
+  `converted_total=None` with an explanation, never assumed 1:1.
+  Scenarios are org/project-scoped via their `ReceivingPlan`; a
+  `FINALIZED` scenario's options cannot be edited by any path.
+- **Supplier claims require evidence before approval** (a conservative
+  operational rule — see `ASSUMPTIONS.md` A27) and every lifecycle
+  transition is guarded against running out of order or twice —
+  `submit_claim` on an already-`SUBMITTED` claim raises rather than
+  reposting. Verified by `tests/test_supplier_claims.py`
+  (`test_cannot_submit_twice`, `test_duplicate_submission_prevented_via_http`).
+- **QR label payloads are opaque and never expose the underlying
+  record.** `QRLabel.token` is a `secrets.token_urlsafe(24)` random
+  value (same family as `SecureShareLink.token`); the QR image encodes
+  only `/qr/<token>/`. `qr_scan_landing` is `login_required` — an
+  unauthenticated scan is redirected to log in before the label is
+  ever resolved — and re-checks organization membership before
+  forwarding to the entity's own existing, already-permission-checked
+  detail page; a cross-organization scan attempt is logged
+  (`QRScanEvent.was_cross_organization_denied`) rather than silently
+  allowed or silently dropped. A scan never performs a consequential
+  action itself. Verified by `tests/test_qr_labels.py`
+  (`test_cross_organization_scan_denied_and_logged`,
+  `test_invalidated_label_scan_is_denied`,
+  `test_scan_alone_never_performs_a_consequential_action`).
+- **A real pre-existing cross-organization access gap was found and
+  fixed during this session's live validation pass:**
+  `apps.inventory.views.lot_detail` had no organization scoping at
+  all — confirmed live via `curl` with a genuine second-organization
+  user before the fix (200 OK, should have been 404) and after (404).
+  Fixed and covered by a regression test
+  (`tests/test_storage_suitability.py::TestLotDetailIsolation`).
+
 ## Known gaps (see `KNOWN_LIMITATIONS.md` for the full list)
 
 - No automated dependency vulnerability scan is wired into this delivery

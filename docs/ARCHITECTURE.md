@@ -6,7 +6,7 @@ snapshot.
 
 ## Style: modular monolith
 
-One Django project (`config`), 18 Django apps under `apps/`, one
+One Django project (`config`), 20 Django apps under `apps/`, one
 PostgreSQL database, one deployable unit. No microservices, no message
 queue, no Celery/Redis — per the spec's explicit preference and the
 pilot's actual scale (one remote Linux server, a handful of named users).
@@ -30,6 +30,8 @@ apps/
   reports       ReportVersion, SecureShareLink, HTML snapshot generation
   tools         Tool custody
   customs       CustomsDeclaration, ConfoturList/Line
+  claims        SupplierClaim (claim lifecycle, package generation)
+  labels        QRLabel, QRLabelPrintEvent, QRScanEvent (QR label/scan)
   api           DRF read endpoints under /api/v1/
 ```
 

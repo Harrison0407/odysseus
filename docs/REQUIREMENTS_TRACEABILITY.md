@@ -137,6 +137,7 @@ any view, form, template, or JS.
 | CONFOTUR reconciliation UI — Priority 1 (added in a later session) | `apps.customs.services.detect_duplicate_candidates`/`confirm_duplicate`, `/aduanas/confotur/` screens, `tests/test_confotur_reconciliation.py` (10 tests, including cross-organization isolation and HTTP-level confirm-then-resolved behavior) |
 | Tool custody screens — Priority 1 (added in a later session) | `apps.tools.services` (ADR-028), `/herramientas/` screens, `tests/test_tool_custody.py` (11 tests) — also fixed and regression-tested a real pre-existing `FieldError` crash in the Almacén persona dashboard found while building this |
 | Cycle-count screens — Priority 1 (added in a later session) | `apps.inventory.services` (`start_cycle_count`/`record_physical_count`/`approve_adjustment`, A19), `/almacen/conteos/` screens, `tests/test_cycle_count.py` (12 tests) — blind counting, recount tracking, and every approved variance posted as a real `InventoryMovement` |
+| Storage capacity/suitability warnings — Priority 1 (added in a later session) | `apps.inventory.services` (`check_location_suitability`/`enforce_location_suitability`/`location_current_utilization`, ADR-029), `apps.requests.services.transfer_lot` (activates the previously-unused `Transfer` model), `apps.receiving.services.post_receipt_line` (put-away integration), `/almacen/ubicaciones/<id>/` detail+transfer screens, `tests/test_storage_suitability.py` (20 tests, including cross-organization isolation, authorized/unauthorized override, capacity-exceeded blocking, and warning-only sensitive-material placement) |
 
 Demonstrated live against a running dev server with real seeded users
 (Miguel/Obra, Harrison/Dirección, Markeris/Compras) and real HTTP
@@ -159,7 +160,7 @@ Full transcript in `docs/implementation-log.md`.
 
 Local OCR execution, automated translation, CONFOTUR government submission
 (never in scope per spec), WhatsApp/QuickBooks live integration, and the
-full Priority 1 breadth (tool custody UI, cycle-count UI, external storage
-comparison UI) are modeled at the schema level but do not yet have a
-finished UI or dedicated test. This is recorded here rather than silently
-omitted.
+remaining Priority 1 breadth (external storage comparison UI, supplier
+claim package generation, QR label printing) are modeled at the schema
+level but do not yet have a finished UI or dedicated test. This is
+recorded here rather than silently omitted.

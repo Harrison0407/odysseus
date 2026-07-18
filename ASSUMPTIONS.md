@@ -150,3 +150,56 @@ instead, exactly as required, and is **not** listed here as a resolved assumptio
   cleanup pass could extract both into a single shared helper; not done
   here to avoid touching tested Milestone 3 code for a purely cosmetic
   gain.
+- **A20. Per-unit volume/weight for storage-capacity utilization is
+  derived from the most recently linked `ManifestLine`, not a stored
+  `Item` field.** `Item` has no per-unit CBM/kg field (only a free-text
+  `dimensions` string), so `apps.inventory.services
+  ._item_per_unit_footprint` divides the most recently created
+  `ManifestLine.cbm`/`gross_weight_kg` linked to that item by that
+  line's `quantity` to approximate a per-unit footprint for projected
+  capacity checks. This is an approximation (a single historical
+  shipment's packaging may not represent every unit of that item
+  going forward) and is reported as unknown — never a fabricated
+  zero — when no manifest line exists to derive it from, consistent
+  with A6/A9's "never silently assume a missing physical fact is
+  zero." A future improvement would add real per-unit
+  volume/weight fields to `Item` itself; not done here since it would
+  require a data-migration/backfill decision (which historical
+  shipment, if any, should populate existing items) that is better
+  made deliberately than inferred.
+- **A21. A blocking storage restriction is *configured*
+  (`WarehouseLocation.allowed_categories` or a hard capacity ceiling
+  exceeded); a sensitive-material/environmental mismatch is a
+  *warning only*, never a block.** `ProductRiskProfile.risk_level ==
+  HIGH` placed in a location lacking covered/dry/secure conditions, or
+  with flood/leak risk, always produces a warning, never a
+  `StorageSuitabilityError`, even for an unauthorized user — the
+  business requirements describe environmental exposure as a
+  historical *visibility* failure (nobody noticed materials sitting in
+  the rain), not a case needing to become physically impossible to
+  cause. If Harrison wants specific risk/location combinations to be
+  hard-blocking rather than warning-only, that should be configured via
+  `WarehouseLocation.allowed_categories` (already blocking) rather than
+  by changing this default, since a blanket "all high-risk warnings
+  become blocks" rule could stop urgent legitimate put-aways with no
+  override path considered case-by-case.
+- **A22. The absence of a `LocationSuitability`/`LocationCapacity` row
+  is never itself a blocking condition.** Most existing
+  `WarehouseLocation` rows (seeded and test fixtures alike) have no
+  suitability/capacity row configured at all.
+  `check_location_suitability` treats a missing row as "cannot
+  confirm," at most a warning for a high-risk item — never as an
+  automatic block — so this feature does not retroactively make every
+  unconfigured location in the system unusable. Configuring
+  suitability/capacity per location remains an operational data-entry
+  task outside this session's scope.
+- **A23. A lot with positive on-hand balance at more than one location
+  cannot be transferred through `/almacen/ubicaciones/<id>/transferir/`
+  — the screen refuses with an explicit error instead of guessing
+  which location the user meant.** `transfer_lot` needs a single
+  unambiguous origin location; rather than picking "whichever location
+  holds the most" (considered and rejected as presumptuous), the view
+  requires the user to resolve the ambiguity through another means.
+  This is a deliberate scope limit of the new UI, not a limitation of
+  the `Transfer` model or `transfer_lot` service itself, both of which
+  accept an explicit `from_location` from any caller.

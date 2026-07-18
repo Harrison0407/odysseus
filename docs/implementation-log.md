@@ -475,3 +475,58 @@ documented order.
     (`tests/test_cycle_count.py`), including an HTTP-level check that
     the blind-count UI genuinely hides the system quantity until
     counted — 161/161 passing (149 pre-existing + 12 new).
+
+## Priority 1 (one-shot completion run, resumed from verified baseline e9c24fd)
+
+37. **Storage capacity/suitability warnings.** `LocationSuitability`,
+    `LocationCapacity` (both OneToOne to `WarehouseLocation`), and
+    `ProductRiskProfile` (OneToOne to `ProductCategory`) were all
+    already modeled but had zero calling code anywhere before this
+    entry — built `apps.inventory.services
+    .check_location_suitability`/`enforce_location_suitability`
+    (ADR-029) as the single point where a proposed
+    location/item/quantity is checked. A configured, explicit
+    restriction (`WarehouseLocation.allowed_categories` violated, or a
+    hard volume/weight ceiling exceeded) is blocking; a sensitive
+    material (`ProductRiskProfile.risk_level == HIGH`) placed somewhere
+    lacking covered/dry/secure conditions, or with flood/leak risk, is
+    warning-only (A21) — the absence of a suitability/capacity row is
+    never itself blocking (A22). `Item` has no per-unit volume/weight
+    field, so utilization is derived from the most recently linked
+    `ManifestLine.cbm`/`gross_weight_kg` ÷ quantity, reported as
+    "Desconocida" rather than a fabricated zero when not derivable
+    (A20). Wired into the two workflows that actually create/move
+    inventory: `apps.receiving.services.post_receipt_line` (put-away —
+    **found and fixed a real pre-existing bug while doing this:**
+    `apps.receiving.views.receipt_line_update` called
+    `WarehouseLocation.objects.first()` as a placeholder; no receiving
+    location was ever genuinely user-selected before this change) and
+    the newly-activated `apps.requests.services.transfer_lot`, which
+    wires up the `Transfer` model (lot/from_location/to_location/
+    quantity/reason) that had no calling code anywhere in the
+    codebase before this. Authorized overrides reuse
+    `apps.workflow.services.can_override_gates` + written reason +
+    `AuditEvent.Action.WAIVER` verbatim from the Milestone 3
+    installation quantity-guard override — no new authorization
+    concept. New `/almacen/ubicaciones/<id>/` detail screen shows
+    capacity, live utilization, suitability conditions, a live
+    suitability checker (GET form), assigned inventory (ledger-derived
+    on-hand per lot at this location), pending inbound quantities
+    (from `ReceivingPlanLine`, filtered to lines with no positive
+    receipt yet), the site's `custodian` as responsible personnel, and
+    a transfer-in form; `location_list` was also fixed to be
+    organization-scoped (it was previously completely unscoped — found
+    while working in this exact area). A lot with positive balance at
+    more than one origin location is refused with an explicit error by
+    the transfer screen rather than silently guessing a source (A23).
+    20 new tests (`tests/test_storage_suitability.py`), covering
+    capacity within/exceeded limits, category-restriction blocking,
+    warning-only sensitive-material placement, authorized/unauthorized
+    override (with audit-log verification), cross-organization
+    isolation (404, not a leaked 403), transfer quantity-invariant
+    enforcement, and the receiving put-away integration (both the
+    blocked-with-no-inventory-consequence case and the
+    authorized-override-succeeds case) — 181/181 passing (161
+    pre-existing + 20 new). `manage.py check` clean; `makemigrations
+    --check` reports no changes (no model fields were added — every
+    piece of this reuses pre-existing model structure).

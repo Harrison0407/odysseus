@@ -46,6 +46,7 @@ from .models import (
     PickList,
     ProjectReceipt,
     PunchListItem,
+    Transfer,
 )
 
 
@@ -98,6 +99,44 @@ def lot_available_quantity(lot):
 
 def _damage_quarantine_location():
     return WarehouseLocation.objects.filter(zone__code="cuarentena").first()
+
+
+@transaction.atomic
+def transfer_lot(lot, from_location, to_location, quantity, user, *, reason="", override_reason=None) -> "Transfer":
+    """Wires up the previously-unused `Transfer` model (modeled since
+    Priority 0, never posted by any code path before this milestone).
+    Never a silent relocation: posts a real `InventoryMovement`
+    (`MovementType.TRANSFER`) and enforces destination storage
+    suitability/capacity exactly like receiving put-away does — an
+    authorized override requires a written reason and
+    `can_override_gates`, never a silent bypass."""
+    from apps.inventory.services import enforce_location_suitability
+
+    if quantity <= 0:
+        raise QuantityInvariantError("La cantidad a transferir debe ser mayor que cero.")
+    _, location_balances = _lot_movement_totals(lot)
+    available_at_from = location_balances.get(from_location.id, 0)
+    if quantity > available_at_from:
+        raise QuantityInvariantError(
+            f"Cantidad a transferir ({quantity}) excede lo disponible en {from_location} ({available_at_from})."
+        )
+
+    enforce_location_suitability(to_location, lot.item, user, quantity=quantity, override_reason=override_reason)
+
+    InventoryMovement.objects.create(
+        lot=lot, movement_type=MovementType.TRANSFER, quantity=quantity, unit_of_measure=lot.item.base_unit,
+        from_location=from_location, to_location=to_location, posted_by=user,
+        reason=reason or "Transferencia entre ubicaciones.", created_by=user,
+    )
+    transfer = Transfer.objects.create(
+        lot=lot, from_location=from_location, to_location=to_location, quantity=quantity, reason=reason,
+        created_by=user,
+    )
+    audit.log(
+        AuditEvent.Action.INVENTORY_MOVEMENT, instance=transfer, actor=user,
+        summary=f"Transferencia de {quantity} {lot.item} de {from_location} a {to_location}",
+    )
+    return transfer
 
 
 def reservation_dispatched_quantity(reservation):

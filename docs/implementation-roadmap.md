@@ -122,10 +122,15 @@ fixture through real HTTP requests against a running dev server — see
 27. ~~Cycle-count UI~~ — **Done.** `apps.inventory.services`/
     `/almacen/conteos/` — blind counting, recount tracking, approved
     variances posted as real `InventoryMovement`s (A19).
+28. ~~Storage capacity/suitability warnings~~ — **Done.**
+    `apps.inventory.services` (`check_location_suitability`/
+    `enforce_location_suitability`, ADR-029), wired into put-away
+    (`apps.receiving.services.post_receipt_line`) and the
+    newly-activated `apps.requests.services.transfer_lot`;
+    `/almacen/ubicaciones/<id>/` detail+transfer screens.
 
-Remaining, in documented order: storage capacity/suitability UI,
-external storage comparison calculator, supplier claim package
-generation, QR label printing.
+Remaining, in documented order: external storage comparison
+calculator, supplier claim package generation, QR label printing.
 
 ## Explicitly out of scope for any near-term increment
 

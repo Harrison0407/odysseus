@@ -15,7 +15,9 @@
 | `/recepcion/` | `apps.receiving.views.receipt_list` | Containers in receiving |
 | `/recepcion/<id>/` | `receipt_detail` | Per-line receiving form: received/damaged/missing quantities, exception type, notes; link to the detailed receiving manifest download |
 | `/recepcion/<id>/linea/<line_id>/registrar/` | `receipt_line_update` (POST) | Posts the receiving line — the only path that creates `InventoryMovement` |
-| `/almacen/ubicaciones/` | `apps.inventory.views.location_list` | On-hand quantity per location, computed live from the movement ledger |
+| `/almacen/ubicaciones/` | `apps.inventory.views.location_list` | On-hand quantity per location, computed live from the movement ledger; org-scoped |
+| `/almacen/ubicaciones/<id>/` | `location_detail` | Capacity/utilization, suitability conditions, live suitability checker, assigned inventory, pending inbound quantities, responsible custodian, transfer form |
+| `/almacen/ubicaciones/<id>/transferir/` (POST) | `location_transfer` | Transfers a lot into this location via `apps.requests.services.transfer_lot`, enforcing storage suitability |
 | `/almacen/lotes/<id>/` | `lot_detail` | Full movement history for one lot |
 | `/almacen/conteos/` | `apps.inventory.views.cycle_count_list` | Cycle counts, scoped to organization |
 | `/almacen/conteos/nuevo/` | `cycle_count_create` | Start a cycle count for a site and set of lots |

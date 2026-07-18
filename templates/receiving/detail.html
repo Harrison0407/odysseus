@@ -42,6 +42,15 @@
                 <label class="form-label small">Notas</label>
                 {{ form.notes }}
             </div>
+            <div class="col-12 col-md-4">
+                <label class="form-label small">Ubicación de recepción</label>
+                {{ form.receiving_location }}
+                <a class="small" href="{% url 'inventory:locations' %}" target="_blank">Ver capacidad/idoneidad de ubicaciones</a>
+            </div>
+            <div class="col-12 col-md-8">
+                <label class="form-label small">{{ form.storage_override_reason.label }}</label>
+                {{ form.storage_override_reason }}
+            </div>
             <div class="col-12">
                 <button class="btn btn-sm btn-primary mt-1" type="submit">Guardar</button>
             </div>

@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Ubicación {{ location.code }} — {{ location.zone.site }}</h3>
+<p class="text-muted">
+    Zona: {{ location.zone.name }} ·
+    Responsable del sitio: {{ responsible|default:"—" }}
+</p>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">Capacidad y utilización</div>
+            <div class="card-body">
+                {% if capacity %}
+                <table class="table table-sm mb-0">
+                    <tr><th>Volumen disponible</th><td>{{ capacity.available_volume_cbm|default:"—" }} m³</td></tr>
+                    <tr><th>Utilización actual (volumen)</th><td>{{ utilization.volume_cbm|default:"Desconocida (sin datos de referencia)" }}</td></tr>
+                    <tr><th>Área disponible</th><td>{{ capacity.available_area_sqm|default:"—" }} m²</td></tr>
+                    <tr><th>Capacidad de peso</th><td>{{ capacity.weight_capacity_kg|default:"—" }} kg</td></tr>
+                    <tr><th>Utilización actual (peso)</th><td>{{ utilization.weight_kg|default:"Desconocida (sin datos de referencia)" }}</td></tr>
+                </table>
+                {% else %}
+                <p class="text-muted">Sin capacidad registrada para esta ubicación.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">Condiciones de idoneidad</div>
+            <div class="card-body">
+                {% if suitability %}
+                <p class="small mb-1">
+                    {% if suitability.covered %}<span class="badge bg-success">Techada</span>{% else %}<span class="badge bg-secondary">No techada</span>{% endif %}
+                    {% if suitability.dry %}<span class="badge bg-success">Seca</span>{% else %}<span class="badge bg-secondary">No seca</span>{% endif %}
+                    {% if suitability.climate_controlled %}<span class="badge bg-success">Clima controlado</span>{% endif %}
+                    {% if suitability.secure %}<span class="badge bg-success">Segura</span>{% else %}<span class="badge bg-warning text-dark">Sin seguridad marcada</span>{% endif %}
+                    {% if suitability.flood_risk %}<span class="badge bg-danger">Riesgo de inundación</span>{% endif %}
+                    {% if suitability.leak_risk %}<span class="badge bg-danger">Riesgo de filtración</span>{% endif %}
+                </p>
+                <p class="small text-muted mb-0">Capacidad de piso: {{ suitability.floor_load_kg_per_sqm|default:"—" }} kg/m²</p>
+                {% else %}
+                <p class="text-muted">Sin condiciones de idoneidad registradas para esta ubicación.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Verificar idoneidad para un artículo/cantidad proyectada</div>
+    <div class="card-body">
+        <form method="get" class="row g-2 mb-2">
+            {{ check_form.item }}
+            {{ check_form.quantity }}
+            <div class="col-auto"><button class="btn btn-outline-primary btn-sm" type="submit">Verificar</button></div>
+        </form>
+        {% if check_result %}
+            {% if check_result.blocked %}
+            <div class="alert alert-danger">
+                <strong>Bloqueado:</strong>
+                <ul class="mb-0">{% for b in check_result.blockers %}<li>{{ b }}</li>{% endfor %}</ul>
+            </div>
+            {% elif check_result.warnings %}
+            <div class="alert alert-warning">
+                <strong>Advertencia:</strong>
+                <ul class="mb-0">{% for w in check_result.warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+            </div>
+            {% else %}
+            <div class="alert alert-success mb-0">Ubicación apta para esta cantidad.</div>
+            {% endif %}
+        {% endif %}
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Inventario asignado (según la bitácora de movimientos)</div>
+    <div class="table-responsive">
+    <table class="table table-sm bg-white mb-0">
+        <thead><tr><th>Lote</th><th>Artículo</th><th>Cantidad</th></tr></thead>
+        <tbody>
+        {% for row in assigned_lots %}
+            <tr>
+                <td><a href="{% url 'inventory:lot-detail' row.lot.pk %}">{{ row.lot.lot_code|default:row.lot.id }}</a></td>
+                <td>{{ row.lot.item }}</td>
+                <td>{{ row.quantity }}</td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="3" class="text-muted">Sin inventario asignado actualmente.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Cantidades entrantes pendientes (según el plan de recepción)</div>
+    <div class="table-responsive">
+    <table class="table table-sm bg-white mb-0">
+        <thead><tr><th>Línea de manifiesto</th><th>Cantidad</th><th>Directo a proyecto</th></tr></thead>
+        <tbody>
+        {% for rpl in pending_inbound %}
+            <tr>
+                <td>{{ rpl.manifest_line }}</td>
+                <td>{{ rpl.manifest_line.quantity }}</td>
+                <td>{{ rpl.is_direct_to_project|yesno:"Sí,No" }}</td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="3" class="text-muted">Sin cantidades entrantes pendientes para esta ubicación.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Transferir inventario a esta ubicación</div>
+    <div class="card-body">
+        <form method="post" action="{% url 'inventory:location-transfer' location.pk %}">
+            {% csrf_token %}
+            {{ transfer_form.as_p }}
+            <button class="btn btn-primary btn-sm" type="submit">Transferir</button>
+        </form>
+        <p class="small text-muted mt-2">Solo se listan lotes con existencia en una única ubicación de origen.</p>
+    </div>
+</div>
+
+<a class="btn btn-outline-secondary btn-sm" href="{% url 'inventory:locations' %}">Volver a ubicaciones</a>
+{% endblock %}

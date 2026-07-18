@@ -11,16 +11,23 @@ from django.utils import timezone
 
 from apps.audit import services as audit
 from apps.audit.models import AuditEvent
-from apps.inventory.models import InventoryLot, InventoryMovement, MovementType, QuarantineRecord
-from apps.matching.models import Discrepancy, DiscrepancyType
 from apps.core.models import Severity
+from apps.inventory.models import InventoryLot, InventoryMovement, MovementType, QuarantineRecord
+from apps.inventory.services import enforce_location_suitability
+from apps.matching.models import Discrepancy, DiscrepancyType
 
 from .models import DamageRecord, ReceiptLine
 
 
 @transaction.atomic
 def post_receipt_line(receipt_line: ReceiptLine, *, quantity_received, quantity_damaged, quantity_missing,
-                       exception_type, notes, user, receiving_location, quarantine_location=None):
+                       exception_type, notes, user, receiving_location, quarantine_location=None,
+                       storage_override_reason=None):
+    """`storage_override_reason`: only used if `receiving_location` fails
+    a *blocking* storage-suitability/capacity check (spec section 17 —
+    see `apps.inventory.services.check_location_suitability`); requires
+    `can_override_gates(user)`, exactly like every other authorized
+    override in this system — never a silent bypass."""
     receipt_line.quantity_received = quantity_received
     receipt_line.quantity_damaged = quantity_damaged
     receipt_line.quantity_missing = quantity_missing
@@ -34,6 +41,9 @@ def post_receipt_line(receipt_line: ReceiptLine, *, quantity_received, quantity_
     good_quantity = quantity_received - quantity_damaged
     lot = None
     if item is not None and good_quantity > 0:
+        enforce_location_suitability(
+            receiving_location, item, user, quantity=good_quantity, override_reason=storage_override_reason
+        )
         lot = InventoryLot.objects.create(
             item=item,
             source_receipt_line=receipt_line,

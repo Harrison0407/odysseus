@@ -2,6 +2,37 @@
 
 Newest first.
 
+## ADR-029 — Storage suitability is enforced at the put-away/transfer service layer, reusing previously-dormant models; blocking vs. warning is a fixed rule, not per-location config
+**Decision:** `apps.inventory.services.check_location_suitability`/
+`enforce_location_suitability` are the single point where a
+`WarehouseLocation`'s configured `LocationSuitability`/`LocationCapacity`
+row and a product's `ProductRiskProfile` are checked against a proposed
+quantity. Both `apps.receiving.services.post_receipt_line` (put-away)
+and the newly-activated `apps.requests.services.transfer_lot` call
+through this one function — no separate suitability logic was written
+for either workflow. Whether a given mismatch is *blocking* or
+*warning-only* is a fixed rule in code (category/capacity violations
+block; sensitive-material/environmental mismatches warn — see
+ASSUMPTIONS.md A21), not a per-location configurable flag.
+**Why:** `LocationSuitability`, `LocationCapacity`, and
+`ProductRiskProfile` were all already modeled in a prior milestone but
+had zero calling code anywhere in the codebase — building a second,
+parallel capacity-tracking mechanism instead of wiring up the existing
+one would have created two sources of truth for the same fact. Making
+blocking-vs-warning a fixed rule rather than a per-location setting
+keeps the authorization surface small and avoids a foot-gun where a
+location could be misconfigured to hard-block put-aways with no
+override path; the one override path that exists
+(`can_override_gates` + written reason + `AuditEvent.Action.WAIVER`) is
+reused verbatim from the Milestone 3 installation quantity-guard
+override rather than inventing a second authorization concept.
+**Also fixed while building this:** `apps.receiving.views
+.receipt_line_update` previously called
+`WarehouseLocation.objects.first()` as a placeholder — no receiving
+location was ever genuinely selected by a user before this change; the
+form now has a real `receiving_location` field scoped to the user's
+organization.
+
 ## ADR-028 — Tool checkout uniqueness is enforced by query, not a database constraint
 **Decision:** `apps.tools.services.is_checked_out`/`checkout_tool`
 enforce "a tool cannot be checked out twice at once" by querying for an

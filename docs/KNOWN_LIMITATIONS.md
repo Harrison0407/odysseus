@@ -118,12 +118,52 @@ is silently claimed to be done when it isn't.
      variance as a real `InventoryMovement`
      (`MovementType.ADJUSTMENT`) — never a silent stock edit.
      `/almacen/conteos/` list/create/detail screens. 12 new tests.
-   - Storage capacity/suitability warnings, external-storage comparison
-     calculator, supplier claim package generation, QR label printing
-     remain **not yet built**. Data models exist for all of these
+   - ~~Storage capacity/suitability warnings~~ — **Done.**
+     `apps.inventory.services.check_location_suitability`/
+     `enforce_location_suitability` reuse the previously-modeled but
+     completely unused `LocationSuitability`/`LocationCapacity`
+     (`WarehouseLocation` OneToOne) and `ProductRiskProfile`
+     (`ProductCategory` OneToOne) — no new inventory-truth models were
+     added. A locally-configured, explicit restriction
+     (`WarehouseLocation.allowed_categories` violated, or a hard
+     volume/weight ceiling exceeded) is **blocking**; a sensitive
+     material (`ProductRiskProfile.risk_level == HIGH`) placed
+     somewhere lacking covered/dry/secure conditions, or with
+     flood/leak risk, is a **warning only** — matches the real-world
+     failure mode in `BUSINESS_REQUIREMENTS.md` (exposure was
+     historically a visibility problem, not something to make
+     physically impossible). The *absence* of a
+     `LocationSuitability`/`LocationCapacity` row is never itself
+     treated as a blocking condition — only as "cannot confirm," at
+     most a warning for high-risk items. Overrides reuse the exact
+     same `apps.workflow.services.can_override_gates` +
+     `AuditEvent.Action.WAIVER` pattern as the Milestone 3 installation
+     quantity-guard override — no parallel authorization concept.
+     Wired into the two workflows that actually create/move inventory:
+     `apps.receiving.services.post_receipt_line` (put-away — this also
+     fixed a real pre-existing bug: `receipt_line_update` was calling
+     `WarehouseLocation.objects.first()` instead of ever letting the
+     user choose a receiving location) and the newly-activated
+     `apps.requests.services.transfer_lot`, which wires up the
+     `Transfer` model that had no calling code anywhere before this.
+     `Item` has no per-unit volume/weight field (only a free-text
+     `dimensions` string) — current/projected utilization is derived
+     from the most recently linked `ManifestLine.cbm`/
+     `gross_weight_kg` ÷ quantity, and is reported as "Desconocida (sin
+     datos de referencia)" rather than a fabricated zero when no
+     manifest line exists to derive it from (see new ASSUMPTIONS.md
+     entry). `/almacen/ubicaciones/<id>/` shows capacity, utilization,
+     suitability conditions, a live suitability checker, assigned
+     inventory (ledger-derived), pending inbound quantities (from
+     `ReceivingPlanLine`), the site custodian, and a transfer form; a
+     lot split across more than one origin location is refused with an
+     explicit error rather than silently guessing a source. 20 new
+     tests (`tests/test_storage_suitability.py`).
+   - External-storage comparison calculator, supplier claim package
+     generation, QR label printing remain **not yet built**. Data
+     models exist for some of these
      (`apps.receiving.AlternativeStorageOption`); none has a UI yet —
-     see `docs/implementation-roadmap.md` for which, if any, are
-     picked up next.
+     see `docs/implementation-roadmap.md` for build order.
 7. ~~`purchasing_to_finance`/`finance_to_logistics` have no "create
    handoff" button" on the Purchase Order detail page~~ — **Done.** All
    8 required gates now have a "create handoff" entry point on their

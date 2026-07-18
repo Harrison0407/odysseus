@@ -8,7 +8,7 @@
     <tbody>
     {% for row in rows %}
         <tr>
-            <td>{{ row.location.code }}</td>
+            <td><a href="{% url 'inventory:location-detail' row.location.pk %}">{{ row.location.code }}</a></td>
             <td>{{ row.location.zone.site }}</td>
             <td>{{ row.item|default:"—" }}</td>
             <td>{{ row.quantity|default:"0" }}</td>

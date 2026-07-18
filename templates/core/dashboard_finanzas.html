@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Finanzas — panel de Lucía</h3>
+{% include "core/_dashboard_common.html" %}
+<div class="card">
+    <div class="card-header">Hitos de pago pendientes</div>
+    <ul class="list-group list-group-flush">
+        {% for m in payment_milestones_pending %}
+        <li class="list-group-item">{{ m.purchase_order }} — {{ m.name }} ({{ m.get_status_display }})</li>
+        {% empty %}<li class="list-group-item text-muted">Sin pagos pendientes.</li>{% endfor %}
+    </ul>
+</div>
+{% endblock %}

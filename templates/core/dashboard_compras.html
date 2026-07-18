@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Compras — panel de Markeris</h3>
+{% include "core/_dashboard_common.html" %}
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Órdenes de compra en preparación</div>
+            <ul class="list-group list-group-flush">
+                {% for po in purchase_orders_in_preparation %}
+                <li class="list-group-item">
+                    <a href="{% url 'procurement:po-detail' po.pk %}">{{ po.po_number }}</a> — {{ po.supplier }}
+                </li>
+                {% empty %}<li class="list-group-item text-muted">Sin órdenes en borrador.</li>{% endfor %}
+            </ul>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Pagos pendientes de gestión</div>
+            <ul class="list-group list-group-flush">
+                {% for m in payment_milestones_pending %}
+                <li class="list-group-item">{{ m.purchase_order }} — {{ m.name }} ({{ m.get_status_display }})</li>
+                {% empty %}<li class="list-group-item text-muted">Sin pagos pendientes.</li>{% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

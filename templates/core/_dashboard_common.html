@@ -1,0 +1,32 @@
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Entregas de responsabilidad pendientes de mi aceptación</div>
+            <ul class="list-group list-group-flush">
+                {% for h in pending_handoffs_to_me %}
+                <li class="list-group-item d-flex justify-content-between">
+                    <span>{{ h.from_department }} → {{ h.to_department }}</span>
+                    <span class="badge bg-secondary">{{ h.get_status_display }}</span>
+                </li>
+                {% empty %}
+                <li class="list-group-item text-muted">Sin pendientes.</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Discrepancias críticas abiertas</div>
+            <ul class="list-group list-group-flush">
+                {% for d in critical_discrepancies %}
+                <li class="list-group-item d-flex justify-content-between">
+                    <span>{{ d.get_discrepancy_type_display }} — {{ d.shipment }}</span>
+                    <span class="badge badge-critical text-white">Crítico</span>
+                </li>
+                {% empty %}
+                <li class="list-group-item text-muted">Sin discrepancias críticas abiertas.</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>

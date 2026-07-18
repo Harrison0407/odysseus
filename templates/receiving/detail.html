@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Recepción — {{ receipt.container }}</h3>
+<p class="text-muted">{{ receipt.release_packet.shipment }} — <span class="badge bg-secondary">{{ receipt.get_status_display }}</span></p>
+
+<p class="small text-muted">
+    Vea el <a href="{% url 'shipments:detail' receipt.release_packet.shipment.pk %}">Resumen Oficial y el Manifiesto Interno detallado del embarque</a> como referencia mientras recibe.
+</p>
+
+{% for line, form in lines_with_forms %}
+<div class="card mb-2">
+    <div class="card-body">
+        <div class="d-flex justify-content-between">
+            <div>
+                <strong>{{ line.manifest_line }}</strong>
+                <div class="small text-muted">Esperado: {{ line.quantity_expected }} {{ line.manifest_line.unit_of_measure }}</div>
+            </div>
+            <span class="badge bg-light text-dark border">{{ line.get_exception_type_display }}</span>
+        </div>
+        <form method="post" action="{% url 'receiving:line-update' receipt.pk line.pk %}" class="row g-2 mt-2">
+            {% csrf_token %}
+            <div class="col-6 col-md-2">
+                <label class="form-label small">Recibido</label>
+                {{ form.quantity_received }}
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small">Dañado</label>
+                {{ form.quantity_damaged }}
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small">Faltante</label>
+                {{ form.quantity_missing }}
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label small">Excepción</label>
+                {{ form.exception_type }}
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="form-label small">Notas</label>
+                {{ form.notes }}
+            </div>
+            <div class="col-12">
+                <button class="btn btn-sm btn-primary mt-1" type="submit">Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% empty %}
+<p class="text-muted">Sin líneas en este recibo.</p>
+{% endfor %}
+{% endblock %}

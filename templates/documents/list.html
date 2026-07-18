@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>Documentos</h3>
+    <a class="btn btn-primary" href="{% url 'documents:upload' %}">Cargar documento</a>
+</div>
+<table class="table table-striped bg-white">
+    <thead><tr><th>Título</th><th>Tipo</th><th>Idioma</th><th>Versión actual</th><th>SHA-256</th><th></th></tr></thead>
+    <tbody>
+    {% for doc in documents %}
+        <tr>
+            <td>{{ doc.title }}</td>
+            <td>{{ doc.document_type }}</td>
+            <td>{{ doc.confirmed_language|default:doc.detected_language|default:"—" }}</td>
+            <td>v{{ doc.current_version.version_number|default:"—" }}</td>
+            <td><code class="small">{{ doc.current_version.sha256|slice:":12" }}…</code></td>
+            <td><a href="{% url 'documents:detail' doc.pk %}">Ver</a></td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="6" class="text-muted">Sin documentos cargados todavía.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

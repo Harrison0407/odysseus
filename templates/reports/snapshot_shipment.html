@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Instantánea — {{ shipment.reference }}</title>
+<style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 2rem; color: #212529; }
+    h1 { font-size: 1.4rem; }
+    .banner { background: #fff3cd; border: 1px solid #ffe69c; padding: .75rem 1rem; margin-bottom: 1rem; border-radius: .25rem; }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 1.5rem; font-size: .85rem; }
+    th, td { border: 1px solid #dee2e6; padding: .4rem .6rem; text-align: left; }
+    th { background: #f8f9fa; }
+    .critical { color: #842029; font-weight: bold; }
+    .section-title { background: #e9ecef; padding: .4rem .6rem; font-weight: bold; margin-top: 1.5rem; }
+    footer { margin-top: 2rem; font-size: .75rem; color: #6c757d; }
+    a.toc { margin-right: 1rem; }
+</style>
+</head>
+<body>
+
+<div class="banner">
+    <strong>Esta es una instantánea estática (snapshot).</strong> No es la fuente de la verdad en vivo.
+    Generada el {{ generated_at }}. Para el estado actual, consulte el sistema en línea.
+</div>
+
+<h1>Expediente de embarque — {{ shipment.reference }}</h1>
+<p>
+    <a class="toc" href="#oficial">Resumen Oficial</a>
+    <a class="toc" href="#interno">Manifiesto Interno</a>
+    <a class="toc" href="#variaciones">Variaciones</a>
+</p>
+
+<div id="oficial" class="section-title">1. Resumen Oficial (tal como fue emitido)</div>
+{% if bl %}
+<table>
+    <tr><th>BL</th><td>{{ bl.bl_number }}</td></tr>
+    <tr><th>Shipper</th><td>{{ bl.shipper_name }}</td></tr>
+    <tr><th>Consignee</th><td>{{ bl.consignee_name }}</td></tr>
+    <tr><th>Puerto de carga</th><td>{{ bl.port_of_loading }}</td></tr>
+    <tr><th>Puerto de descarga</th><td>{{ bl.port_of_discharge }}</td></tr>
+    <tr><th>Descripción oficial de carga</th><td>{{ bl.official_cargo_description|linebreaksbr }}</td></tr>
+    <tr><th>Paquetes declarados</th><td>{{ bl.declared_packages }}</td></tr>
+    <tr><th>Peso bruto declarado</th><td>{{ bl.declared_gross_weight_kg }} kg</td></tr>
+    <tr><th>CBM declarado</th><td>{{ bl.declared_cbm }}</td></tr>
+</table>
+{% else %}
+<p>Sin BL cargado.</p>
+{% endif %}
+
+<div id="interno" class="section-title">2. Manifiesto Operativo Interno</div>
+<table>
+    <thead><tr><th>Ref.</th><th>Descripción</th><th>Destino</th><th>Cantidad</th><th>Paquetes</th><th>Estado de declaración</th></tr></thead>
+    <tbody>
+    {% for line in internal_lines %}
+        <tr>
+            <td>{{ line.reference_on_document }}</td>
+            <td>{{ line.description }}</td>
+            <td>{{ line.building|default:line.get_destination_scope_display }}</td>
+            <td>{{ line.quantity }}</td>
+            <td>{{ line.packages|default:"—" }}</td>
+            <td>{{ line.get_declaration_status_display }}</td>
+        </tr>
+    {% empty %}<tr><td colspan="6">Sin líneas.</td></tr>{% endfor %}
+    </tbody>
+</table>
+
+<div id="variaciones" class="section-title">3. Variaciones oficial vs. operativo</div>
+<table>
+    <thead><tr><th>Categoría oficial</th><th>Línea interna</th><th>Explicada</th><th>Severidad</th></tr></thead>
+    <tbody>
+    {% for v in variances %}
+        <tr class="{% if v.severity == 'critical' %}critical{% endif %}">
+            <td>{{ v.official_category_text|default:"(sin categoría oficial)" }}</td>
+            <td>{{ v.internal_manifest_line }}</td>
+            <td>{{ v.is_explained|yesno:"Sí,No" }}</td>
+            <td>{{ v.get_severity_display }}</td>
+        </tr>
+    {% empty %}<tr><td colspan="4">Sin variaciones registradas.</td></tr>{% endfor %}
+    </tbody>
+</table>
+
+<footer>
+    Generado por DT Beach Supply Control · {{ generated_at }} · Instantánea de solo lectura, sin dependencias externas.
+</footer>
+</body>
+</html>

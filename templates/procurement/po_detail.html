@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>{{ order.po_number }}</h3>
+<p class="text-muted">{{ order.supplier }} — {{ order.project|default:"proyecto no asignado" }}</p>
+
+{% if order.document_marked_received_in_full %}
+<div class="alert alert-danger">
+    ⚠ El documento fuente de esta orden trae un sello <strong>"RECIBIDO EN FULL"</strong> aplicado antes de
+    cualquier verificación física. El sistema <strong>nunca</strong> trata esto como evidencia de recepción —
+    solo un <a href="{% url 'receiving:list' %}">Recibo</a> confirmado por Almacén cuenta como recepción física.
+</div>
+{% endif %}
+
+<div class="card mb-3">
+    <div class="card-header">Líneas</div>
+    <table class="table mb-0">
+        <thead><tr><th>#</th><th>Descripción</th><th>Cantidad</th><th>Unidad</th><th>Precio</th><th>Total</th></tr></thead>
+        <tbody>
+        {% for line in order.lines.all %}
+            <tr><td>{{ line.line_no }}</td><td>{{ line.description }}</td><td>{{ line.quantity_ordered }}</td>
+                <td>{{ line.unit_of_measure }}</td><td>{{ line.unit_price }}</td><td>{{ line.line_total }}</td></tr>
+        {% empty %}<tr><td colspan="6" class="text-muted">Sin líneas registradas.</td></tr>{% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Hitos de pago</div>
+    <ul class="list-group list-group-flush">
+        {% for m in order.payment_milestones.all %}
+        <li class="list-group-item d-flex justify-content-between">
+            <span>{{ m.name }}</span><span class="badge bg-secondary">{{ m.get_status_display }}</span>
+        </li>
+        {% empty %}<li class="list-group-item text-muted">Sin hitos de pago.</li>{% endfor %}
+    </ul>
+</div>
+
+<div class="card">
+    <div class="card-header">Compromisos abiertos (saldo pendiente entre embarques)</div>
+    <ul class="list-group list-group-flush">
+        {% for oc in order.open_commitments.all %}
+            {% for l in oc.lines.all %}
+            <li class="list-group-item">
+                {{ l.purchase_order_line }} — original {{ l.quantity_original }},
+                asignado a este embarque {{ l.quantity_allocated_current_shipment }},
+                <strong>saldo abierto {{ l.quantity_open }}</strong>
+            </li>
+            {% endfor %}
+        {% empty %}<li class="list-group-item text-muted">Sin compromisos abiertos registrados.</li>{% endfor %}
+    </ul>
+</div>
+{% endblock %}

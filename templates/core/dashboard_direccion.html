@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Dirección — panel ejecutivo</h3>
+{% include "core/_dashboard_common.html" %}
+<div class="card">
+    <div class="card-header">Variaciones oficial vs. operativo sin explicar</div>
+    <ul class="list-group list-group-flush">
+        {% for v in unexplained_variances %}
+        <li class="list-group-item">
+            <a href="{% url 'shipments:detail' v.shipment.pk %}">{{ v.shipment }}</a> —
+            {{ v.official_category_text|default:"(sin categoría oficial)" }} vs {{ v.internal_manifest_line }}
+        </li>
+        {% empty %}<li class="list-group-item text-muted">Sin variaciones pendientes de explicar.</li>{% endfor %}
+    </ul>
+</div>
+{% endblock %}

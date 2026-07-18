@@ -1,0 +1,85 @@
+# Production stack for a single standard remote Linux server running
+# Docker Engine + Docker Compose (spec section 33). Run from the deploy/
+# directory: `docker compose -f docker-compose.prod.yml --env-file .env.production up -d`
+#
+# PostgreSQL and the Django app are NEVER exposed on a public port. Only
+# Caddy (80/443) is reachable from outside the host.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - internal
+
+  web:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 60"
+    env_file:
+      - .env.production
+    environment:
+      DJANGO_DEBUG: "0"
+      POSTGRES_HOST: db
+      DOCUMENT_STORAGE_ROOT: /app/protected_documents
+    volumes:
+      - static_files:/app/staticfiles
+      - media_files:/app/media
+      - protected_documents:/app/protected_documents
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/accounts/login/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - internal
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - static_files:/srv/static:ro
+      - media_files:/srv/media:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+    networks:
+      - internal
+      - external
+
+networks:
+  internal:
+    internal: true
+  external:
+
+volumes:
+  postgres_data:
+  static_files:
+  media_files:
+  protected_documents:
+  caddy_data:
+  caddy_config:

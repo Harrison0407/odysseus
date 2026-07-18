@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>China — panel de Harrison / Edison</h3>
+{% include "core/_dashboard_common.html" %}
+<div class="card">
+    <div class="card-header">Embarques esperando liberación de origen</div>
+    <ul class="list-group list-group-flush">
+        {% for s in shipments_awaiting_origin_release %}
+        <li class="list-group-item"><a href="{% url 'shipments:detail' s.pk %}">{{ s.reference }}</a></li>
+        {% empty %}<li class="list-group-item text-muted">Sin embarques pendientes.</li>{% endfor %}
+    </ul>
+</div>
+{% endblock %}

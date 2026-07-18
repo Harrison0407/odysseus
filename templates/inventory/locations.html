@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Ubicaciones de almacén</h3>
+<p class="text-muted small">Las existencias se calculan siempre a partir del historial de movimientos, nunca de un número editado directamente.</p>
+<table class="table table-striped bg-white">
+    <thead><tr><th>Ubicación</th><th>Sitio</th><th>Artículo</th><th>Cantidad disponible</th></tr></thead>
+    <tbody>
+    {% for row in rows %}
+        <tr>
+            <td>{{ row.location.code }}</td>
+            <td>{{ row.location.zone.site }}</td>
+            <td>{{ row.item|default:"—" }}</td>
+            <td>{{ row.quantity|default:"0" }}</td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="4" class="text-muted">Sin ubicaciones registradas.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

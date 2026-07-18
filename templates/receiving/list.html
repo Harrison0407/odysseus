@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Recepción</h3>
+<table class="table table-striped bg-white">
+    <thead><tr><th>Contenedor</th><th>Embarque</th><th>Estado</th></tr></thead>
+    <tbody>
+    {% for r in receipts %}
+        <tr>
+            <td><a href="{% url 'receiving:detail' r.pk %}">{{ r.container }}</a></td>
+            <td>{{ r.release_packet.shipment }}</td>
+            <td><span class="badge bg-secondary">{{ r.get_status_display }}</span></td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="3" class="text-muted">Sin recepciones.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

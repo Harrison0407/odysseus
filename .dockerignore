@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+.venv
+__pycache__
+*.pyc
+db.sqlite3
+db.sqlite3-*
+.git
+.pytest_cache
+.ruff_cache
+staticfiles
+media
+protected_documents
+deploy/backups
+deploy/.env.production
+node_modules

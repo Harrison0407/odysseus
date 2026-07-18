@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Solicitud — {{ request_obj.project }}</h3>
+<p><span class="badge bg-secondary">{{ request_obj.get_status_display }}</span> {{ request_obj.get_priority_display }}</p>
+<table class="table bg-white">
+    <thead><tr><th>Artículo</th><th>Solicitado</th><th>Aprobado</th><th>Reservado</th><th>Despachado</th><th>Entregado</th></tr></thead>
+    <tbody>
+    {% for line in request_obj.lines.all %}
+        <tr>
+            <td>{{ line.item }}</td>
+            <td>{{ line.quantity_requested }}</td>
+            <td>{{ line.quantity_approved|default:"—" }}</td>
+            <td>{{ line.quantity_reserved }}</td>
+            <td>{{ line.quantity_dispatched }}</td>
+            <td>{{ line.quantity_delivered }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

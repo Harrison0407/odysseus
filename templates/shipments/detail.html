@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-start">
+    <div>
+        <h3>{{ shipment.reference }}</h3>
+        <p class="text-muted">{{ shipment.get_status_display }}
+            {% if bl %} — BL {{ bl.bl_number }}, contenedor
+            {% for c in shipment.containers.all %}{{ c.container_number }}{% endfor %}{% endif %}
+        </p>
+    </div>
+    {% if unresolved_critical_count %}
+    <div class="alert alert-danger py-2 px-3 mb-0">
+        ⚠ {{ unresolved_critical_count }} discrepancia(s) crítica(s) sin explicar — bloquea la liberación operativa
+    </div>
+    {% endif %}
+</div>
+
+<div class="row mt-3">
+    <div class="col-md-6">
+        <div class="card official-panel h-100">
+            <div class="card-header bg-white"><strong>Resumen Oficial</strong> — tal como aparece en el BL / documentos de aduana</div>
+            <div class="card-body">
+                {% if bl %}
+                <dl class="row small">
+                    <dt class="col-5">Shipper</dt><dd class="col-7">{{ bl.shipper_name }}</dd>
+                    <dt class="col-5">Consignee</dt><dd class="col-7">{{ bl.consignee_name }}</dd>
+                    <dt class="col-5">Puerto de carga</dt><dd class="col-7">{{ bl.port_of_loading }}</dd>
+                    <dt class="col-5">Puerto de descarga</dt><dd class="col-7">{{ bl.port_of_discharge }}</dd>
+                    <dt class="col-5">Descripción oficial de carga</dt>
+                    <dd class="col-7"><span class="source-value">{{ bl.official_cargo_description|linebreaksbr }}</span></dd>
+                    <dt class="col-5">Paquetes declarados</dt><dd class="col-7">{{ bl.declared_packages }}</dd>
+                    <dt class="col-5">Peso bruto declarado</dt><dd class="col-7">{{ bl.declared_gross_weight_kg }} kg</dd>
+                    <dt class="col-5">CBM declarado</dt><dd class="col-7">{{ bl.declared_cbm }}</dd>
+                </dl>
+                <p class="small text-muted mb-0">Este documento se conserva exactamente como fue emitido. Nunca se edita para reflejar el detalle interno.</p>
+                {% else %}
+                <p class="text-muted">Sin BL cargado todavía.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card internal-panel h-100">
+            <div class="card-header bg-white"><strong>Manifiesto Operativo Interno</strong> — todo lo físicamente esperado/cargado</div>
+            <div class="card-body p-0" style="max-height: 420px; overflow-y: auto;">
+                <table class="table table-sm mb-0 manifest-table">
+                    <thead><tr><th>Ref.</th><th>Descripción</th><th>Destino</th><th>Cant.</th><th>Pkg</th><th>Estado</th></tr></thead>
+                    <tbody>
+                    {% for line in internal_lines %}
+                        <tr>
+                            <td class="small">{{ line.reference_on_document|default:"—" }}</td>
+                            <td class="small">{{ line.description|truncatechars:40 }}</td>
+                            <td class="small">{{ line.building|default:line.get_destination_scope_display }}</td>
+                            <td>{{ line.quantity }}</td>
+                            <td>{{ line.packages|default:"—" }}</td>
+                            <td>
+                                {% if line.declaration_status == "not_represented_review_required" %}
+                                    <span class="badge badge-critical text-white">Revisión aduanal</span>
+                                {% elif line.declaration_status == "replacement_or_warranty" %}
+                                    <span class="badge bg-info text-dark">Reemplazo</span>
+                                {% elif line.declaration_status == "carryover_from_open_commitment" %}
+                                    <span class="badge bg-primary">Saldo abierto</span>
+                                {% elif line.declaration_status == "project_wide_stock" %}
+                                    <span class="badge bg-secondary">Stock de proyecto</span>
+                                {% else %}
+                                    <span class="badge bg-light text-dark border">{{ line.get_declaration_status_display }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="6" class="text-muted">Sin manifiesto interno generado todavía.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header">Reconciliación de totales</div>
+    <div class="card-body">
+        <table class="table table-sm mb-0">
+            <thead><tr><th></th><th>Oficial (BL)</th><th>Interno (calculado)</th><th>Diferencia</th></tr></thead>
+            <tbody>
+                <tr><td>Paquetes</td><td>{{ totals.official_packages|default:"—" }}</td><td>{{ totals.internal_packages }}</td>
+                    <td>{{ totals.packages_diff|default:"—" }}</td></tr>
+                <tr><td>Peso bruto (kg)</td><td>{{ totals.official_weight|default:"—" }}</td><td>{{ totals.internal_weight }}</td><td>{{ totals.weight_diff|default:"—" }}</td></tr>
+                <tr><td>CBM</td><td>{{ totals.official_cbm|default:"—" }}</td><td>{{ totals.internal_cbm }}</td><td>{{ totals.cbm_diff|default:"—" }}</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header">Matriz de variación oficial vs. operativo</div>
+    <table class="table mb-0">
+        <thead><tr><th>Categoría oficial</th><th>Línea interna</th><th>Explicada</th><th>Severidad</th><th>Revisión aduanal</th></tr></thead>
+        <tbody>
+        {% for v in variances %}
+            <tr>
+                <td class="small">{{ v.official_category_text|default:"(sin categoría oficial)" }}</td>
+                <td class="small">{{ v.internal_manifest_line }}</td>
+                <td>{% if v.is_explained %}<span class="text-success">Sí</span>{% else %}<span class="text-danger">No</span>{% endif %}</td>
+                <td>
+                    {% if v.severity == "critical" %}<span class="badge badge-critical text-white">Crítico</span>
+                    {% elif v.severity == "warning" %}<span class="badge badge-warning text-white">Advertencia</span>
+                    {% else %}<span class="badge badge-info text-white">Info</span>{% endif %}
+                </td>
+                <td>
+                    {% if v.customs_review %}{{ v.customs_review.get_decision_display }}
+                    {% elif v.customs_review_required %}<span class="text-danger">Pendiente</span>
+                    {% else %}—{% endif %}
+                </td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="5" class="text-muted">Sin variaciones registradas.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

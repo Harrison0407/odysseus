@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Órdenes de compra</h3>
+<table class="table table-striped bg-white">
+    <thead><tr><th>O.C. No.</th><th>Proveedor</th><th>PI vinculado</th><th>Proyecto</th><th>Uso (según documento)</th><th>Total</th><th>Estado</th></tr></thead>
+    <tbody>
+    {% for po in orders %}
+        <tr>
+            <td><a href="{% url 'procurement:po-detail' po.pk %}">{{ po.po_number }}</a></td>
+            <td>{{ po.supplier }}</td>
+            <td>{{ po.quotation|default:"—" }}</td>
+            <td>{{ po.project|default:"—" }}</td>
+            <td class="small">{{ po.usage_note_on_document|default:"—" }}</td>
+            <td>{{ po.currency }} {{ po.total_amount|default:"—" }}</td>
+            <td><span class="badge bg-secondary">{{ po.get_approval_status_display }}</span>
+                {% if po.document_marked_received_in_full %}
+                <span class="badge bg-danger" title="El documento fuente trae un sello 'RECIBIDO EN FULL' — esto NO es evidencia de recepción física.">⚠ sello no verificado</span>
+                {% endif %}
+            </td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="7" class="text-muted">Sin órdenes de compra.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

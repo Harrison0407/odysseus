@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Costo de importación (landed cost)</h3>
+<table class="table table-striped bg-white">
+    <thead><tr><th>Embarque</th><th>Versión</th><th>Estado</th></tr></thead>
+    <tbody>
+    {% for v in versions %}
+        <tr>
+            <td>{{ v.shipment }}</td>
+            <td><a href="{% url 'cost:detail' v.pk %}">v{{ v.version_number }}</a></td>
+            <td>{% if v.is_final %}<span class="badge bg-success">Final</span>{% else %}<span class="badge bg-warning text-dark">Provisional</span>{% endif %}</td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="3" class="text-muted">Sin cálculos de costo.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

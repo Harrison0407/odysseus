@@ -1,0 +1,196 @@
+# Final Validation Report
+
+All items below were actually executed in this session; none are
+descriptions of intended behavior. Commands and outputs are summarized;
+full detail is in `docs/implementation-log.md`.
+
+## 1. Migrations from an empty database
+
+```
+python manage.py makemigrations   # 25 migration files across 18 apps, 176 models total
+python manage.py migrate          # Applied all migrations: OK, from an empty database
+```
+Result: **pass**, first attempt after one fix (unserializable `lambda`
+default, corrected before migrations were generated).
+
+## 2. Automated tests
+
+```
+python -m pytest -q
+21 passed in ~25s
+```
+Coverage: live-container fixture (9 tests), document upload/duplicate/
+authorization (4 tests), receiving/inventory ledger (4 tests),
+permissions/object-level authorization (3 tests), plus supporting
+fixtures. See `docs/REQUIREMENTS_TRACEABILITY.md` for what each test
+actually proves.
+
+## 3. Static checks
+
+`python manage.py check` → "System check identified no issues (0 silenced)"
+— run repeatedly throughout development, always clean before proceeding.
+
+## 4. Document inspection
+
+All 21 files in `Seed_docs/Live_container/` and both files in
+`Business_context/` were opened and read (not inferred from filenames).
+See `docs/SOURCE_PACKAGE_INDEX.md` for the full inventory and
+`docs/SOURCE_DOCUMENT_ANALYSIS.md` for the extracted facts.
+
+## 5. Matching fixtures
+
+`import_live_container_fixture` produces 11 internal manifest lines and
+11 `ManifestVariance` rows against the single official BL line, with 3
+correctly flagged for Customs & Logistics review. Verified against both
+the automated test suite and a live `curl`-driven walkthrough of the
+actual shipment-detail page (see step 7).
+
+## 6. Core workflows exercised through the actual UI
+
+Using a running dev server and authenticated `curl` sessions (cookies
+preserved across requests, real login POST with CSRF token):
+- Login as a seeded pilot user (Markeris) → 200, correctly routed to the
+  "Compras" persona dashboard.
+- Every main nav route (`/`, `/documentos/`, `/compras/`, `/embarques/`,
+  `/recepcion/`, `/almacen/ubicaciones/`, `/solicitudes/`, `/costos/`,
+  plus the upload/create forms) → 200 for an authenticated user.
+- Shipment detail page for the imported fixture → 200, verified to
+  contain the exact official cargo description text, 3 "Revisión
+  aduanal" badges, the critical-discrepancy banner, Sole-26 building
+  references, and the 520-package official total.
+- Purchase-order list/detail → all 5 fixture POs render, all 5 show the
+  "sello no verificado" (unverified stamp) warning, and DT-BEACH804
+  correctly shows an open balance of 30 (40 original − 10 allocated).
+
+## 7. Desktop and mobile widths
+
+Bootstrap-based responsive layout (`container-fluid`, responsive
+columns, `min-height: 44px` touch targets on buttons under 576px) — not
+independently screenshot-tested at multiple viewport widths in this
+session; this is a **partial** validation (structural responsiveness
+only, not a visual regression pass). Recorded honestly rather than
+claimed as fully verified.
+
+## 8. Every role
+
+Verified structurally (persona-branching logic in
+`apps.core.views.dashboard_home`, one dashboard template per role) and
+functionally for the `compras` role via the live curl walkthrough above.
+The other 5 persona dashboards were verified by direct template/view
+code review and the Django `check`/test suite, not by an individual
+per-role live login walkthrough in this session — recorded as a **partial**
+validation for the same honesty reason as item 7.
+
+## 9. Object-level permissions
+
+`test_purchase_order_list_is_scoped_to_users_organization`,
+`test_purchase_order_detail_denies_cross_organization_access`,
+`test_unauthorized_user_cannot_download_another_orgs_document` — all
+pass. Also verified live: unauthenticated request to a protected page
+returns a redirect to login, not the page content.
+
+## 10. Document immutability and authorized downloads
+
+`test_upload_creates_document_with_sha256`,
+`test_duplicate_upload_is_detected_by_sha256`,
+`test_rejects_disallowed_file_extension` — all pass. Authorized/
+unauthorized download distinction verified both by test and live in the
+production Docker stack (step 15 below).
+
+## 11. Handoff blocking
+
+Modeled (`Handoff` requires submit + accept as separate events); no
+dedicated UI screen exists yet to demonstrate rejection interactively —
+see `docs/KNOWN_LIMITATIONS.md` item 2. **Not independently UI-tested**
+in this session.
+
+## 12. Release packet versioning
+
+Modeled (`ReleasePacketVersion`, unique per `(release_packet,
+version_number)`); exercised implicitly by the fixture's
+`ShipmentManifestVersion`, not independently exercised with a second
+version in this session. **Modeled, not fully exercised.**
+
+## 13. Receiving and quarantine
+
+`test_posting_receipt_line_creates_inventory_movement`,
+`test_damaged_quantity_is_quarantined_not_added_to_available_stock`,
+`test_damage_exception_creates_critical_discrepancy` — all pass.
+
+## 14. Inventory transaction integrity
+
+`test_onhand_quantity_is_derived_from_ledger_never_edited_directly` —
+passes; also structurally guaranteed by the absence of any
+directly-editable quantity field on `InventoryLot`.
+
+## 15. Duplicate submission protection
+
+`InventoryMovement.idempotency_key` (unique) is modeled; not
+independently tested with a simulated double-submit in this session —
+**modeled, not fully exercised**.
+
+## 16. Landed-cost reconciliation and rounding
+
+Modeled (`LandedCostVersion`/`LandedCostLine`); no allocation-run test
+was written in this session since the allocation-run UI itself is not
+yet built (`docs/KNOWN_LIMITATIONS.md` item 5) — **not yet exercised**.
+
+## 17. CONFOTUR duplicate prevention
+
+`ConfoturLine.is_duplicate_of` is modeled; not exercised by a test in
+this session (`apps.customs` has no fixture data) — **modeled, not yet
+exercised**.
+
+## 18. HTML export
+
+Exercised live in the production Docker stack: authenticated request to
+`/reportes/embarque/<id>/instantanea/` returned 200 with a self-contained
+HTML document (verified the "Esta es una instantánea" banner text is
+present, confirming no external asset dependency and correct
+snapshot-vs-live-source labeling).
+
+## 19. Production Docker Compose
+
+Built and ran the **actual** stack (Postgres 16 + Gunicorn 23 + Caddy 2)
+via Docker Desktop, started for this purpose. Three real bugs were found
+and fixed live during this process (see `docs/implementation-log.md`
+step 7 for full detail):
+- Whitenoise `collectstatic` failure on a dangling vendored-asset source map.
+- `docker-compose.prod.yml` silently dropping unlisted environment variables.
+- **A local dev `.env` baked into the image, silently running the
+  "production" container against SQLite instead of Postgres** — caught by
+  directly querying Postgres via `psql` and finding zero tables despite
+  Django reporting real data through the (actually SQLite) connection.
+After each fix, the full sequence was re-validated from a clean rebuild.
+
+## 20. Persistence after restart
+
+Verified genuinely against Postgres (after the SQLite bug above was
+fixed): seeded 9 users + imported the 1-shipment fixture, then ran a full
+`docker compose down` (containers + network removed, **not** just a
+process restart) followed by `docker compose up -d` (fresh containers,
+same named volumes) — user count and shipment count were identical
+before and after, and the app remained reachable through Caddy (200 on
+`/accounts/login/`).
+
+## 21. Backup and restore
+
+Verified genuinely against Postgres: `backup.sh` produced a 74 KB dump
+containing 183 `CREATE TABLE` / 183 `COPY` statements (confirmed by
+direct inspection of the decompressed file, not just a successful exit
+code). Created a throwaway shipment after the backup (count 1→2), ran
+`restore.sh` with typed confirmation, and confirmed the throwaway record
+was gone and the original fixture data intact (count back to 1, correct
+reference name), with the app healthy immediately after.
+
+## Overall recommendation
+
+**CONDITIONAL GO** — see `docs/KNOWN_LIMITATIONS.md` for the exact list of
+what is modeled-but-not-yet-exercised (items 11, 12, 15, 16, 17 above) and
+what has no UI yet at all. The Priority 0 vertical slice that *is*
+complete (documents, procurement, the dual-manifest engine, receiving,
+inventory ledger, material requests, landed-cost data model, dashboards,
+HTML snapshots, and the full production deployment/backup/restore cycle)
+is genuinely working end-to-end against the real live-container fixture,
+not merely designed. It is not yet the complete 38-section system the
+governing prompt describes, and should not be represented as such.

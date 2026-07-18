@@ -1,0 +1,42 @@
+# Production reverse proxy for DT Beach Supply Control.
+#
+# --- Option A: real domain with automatic HTTPS (recommended) ---
+# Replace the placeholder below with your real domain and Caddy will
+# automatically obtain and renew a Let's Encrypt certificate.
+#
+# suministro.dtbeach.example.com {
+#     encode gzip
+#     handle_path /static/* {
+#         root * /srv/static
+#         file_server
+#     }
+#     handle_path /media/* {
+#         root * /srv/media
+#         file_server
+#     }
+#     reverse_proxy web:8000
+#     header {
+#         Strict-Transport-Security "max-age=31536000; includeSubDomains"
+#         X-Content-Type-Options "nosniff"
+#         X-Frame-Options "DENY"
+#     }
+# }
+
+# --- Option B: temporary IP-only access (no TLS certificate possible) ---
+# Use this only while DNS/domain is being set up. Replace SERVER_IP.
+:80 {
+    encode gzip
+    handle_path /static/* {
+        root * /srv/static
+        file_server
+    }
+    handle_path /media/* {
+        root * /srv/media
+        file_server
+    }
+    reverse_proxy web:8000
+    header {
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+    }
+}

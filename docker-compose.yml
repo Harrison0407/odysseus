@@ -1,0 +1,40 @@
+# Development Docker Compose. For production see deploy/docker-compose.prod.yml.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-dtbeach}
+      POSTGRES_USER: ${POSTGRES_USER:-dtbeach}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dtbeach}
+    volumes:
+      - dev_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"  # dev-only convenience; never expose publicly in prod
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dtbeach}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build: .
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    environment:
+      DJANGO_DEBUG: "1"
+      POSTGRES_HOST: db
+      POSTGRES_DB: ${POSTGRES_DB:-dtbeach}
+      POSTGRES_USER: ${POSTGRES_USER:-dtbeach}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dtbeach}
+      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  dev_postgres_data:

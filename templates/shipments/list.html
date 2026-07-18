@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Embarques</h3>
+<table class="table table-striped bg-white">
+    <thead><tr><th>Referencia</th><th>Contenedor(es)</th><th>BL</th><th>Estado</th></tr></thead>
+    <tbody>
+    {% for s in shipments %}
+        <tr>
+            <td><a href="{% url 'shipments:detail' s.pk %}">{{ s.reference }}</a></td>
+            <td>{% for c in s.containers.all %}{{ c.container_number }} {% endfor %}</td>
+            <td>{% for bl in s.bills_of_lading.all %}{{ bl.bl_number }}{% endfor %}</td>
+            <td><span class="badge bg-secondary">{{ s.get_status_display }}</span></td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="4" class="text-muted">Sin embarques.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Obra — panel de Miguel</h3>
+{% include "core/_dashboard_common.html" %}
+<div class="card">
+    <div class="card-header">Mis solicitudes de material</div>
+    <ul class="list-group list-group-flush">
+        {% for r in my_requests %}
+        <li class="list-group-item"><a href="{% url 'requests:detail' r.pk %}">{{ r.project }} — {{ r.get_status_display }}</a></li>
+        {% empty %}<li class="list-group-item text-muted">Sin solicitudes.</li>{% endfor %}
+    </ul>
+</div>
+<a class="btn btn-primary mt-3" href="{% url 'requests:create' %}">Nueva solicitud de material</a>
+{% endblock %}

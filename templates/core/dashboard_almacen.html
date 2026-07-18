@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Recepción y Almacén — panel de Manuel / Óscar</h3>
+{% include "core/_dashboard_common.html" %}
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Recepciones en progreso</div>
+            <ul class="list-group list-group-flush">
+                {% for r in receipts_in_progress %}
+                <li class="list-group-item"><a href="{% url 'receiving:detail' r.pk %}">{{ r.container }}</a> — {{ r.get_status_display }}</li>
+                {% empty %}<li class="list-group-item text-muted">Sin recepciones en progreso.</li>{% endfor %}
+            </ul>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Herramientas no devueltas</div>
+            <ul class="list-group list-group-flush">
+                {% for t in tools_overdue %}
+                <li class="list-group-item">{{ t.assignment.tool }} — {{ t.assignment.assigned_to }}</li>
+                {% empty %}<li class="list-group-item text-muted">Sin herramientas vencidas.</li>{% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

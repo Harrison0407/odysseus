@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Cargar documento</h3>
+<div class="card" style="max-width: 600px;">
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            {% for field in form %}
+            <div class="mb-3">
+                <label class="form-label">{{ field.label }}</label>
+                {{ field }}
+                {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
+            </div>
+            {% endfor %}
+            <button class="btn btn-primary" type="submit">Cargar</button>
+        </form>
+        <p class="text-muted small mt-3">
+            El archivo original nunca se sobrescribe. Se calcula su huella SHA-256 y se detectan
+            duplicados automáticamente. El tipo de documento sugerido nunca reemplaza la confirmación humana.
+        </p>
+    </div>
+</div>
+{% endblock %}

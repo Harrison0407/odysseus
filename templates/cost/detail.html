@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>{{ version.shipment }} — costo v{{ version.version_number }}</h3>
+<p>{% if version.is_final %}<span class="badge bg-success">Financieramente finalizado</span>{% else %}<span class="badge bg-warning text-dark">Provisional</span>{% endif %}</p>
+<table class="table bg-white">
+    <thead><tr><th>Línea</th><th>Precio unit. original</th><th>Flete/u</th><th>Local/u</th><th>Otros/u</th><th>Costo final/u</th><th>Total</th></tr></thead>
+    <tbody>
+    {% for line in version.lines.all %}
+        <tr>
+            <td>{{ line.manifest_line }}</td>
+            <td>{{ line.original_unit_price|default:"—" }}</td>
+            <td>{{ line.freight_per_unit }}</td>
+            <td>{{ line.local_cost_per_unit }}</td>
+            <td>{{ line.other_cost_per_unit }}</td>
+            <td>{{ line.final_landed_cost_per_unit|default:"—" }}</td>
+            <td>{{ line.total_landed_value|default:"—" }}</td>
+        </tr>
+    {% empty %}<tr><td colspan="7" class="text-muted">Sin líneas calculadas.</td></tr>{% endfor %}
+    </tbody>
+</table>
+{% endblock %}

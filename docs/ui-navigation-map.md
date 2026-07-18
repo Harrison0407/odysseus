@@ -9,7 +9,7 @@
 | `/documentos/<id>/` | `document_detail` | Version history, SHA-256, duplicate warning |
 | `/documentos/<id>/descargar/<version_id>/` | `document_download` | Authenticated, org-scoped file download |
 | `/compras/` | `apps.procurement.views.po_list` | Purchase orders, with "RECIBIDO EN FULL sin verificar" badge when the source document carries that stamp |
-| `/compras/<id>/` | `po_detail` | Lines, payment milestones, open-commitment carryover balance |
+| `/compras/<id>/` | `po_detail` | Lines, payment milestones, open-commitment carryover balance, "create handoff" for `purchasing_to_finance`/`finance_to_logistics` |
 | `/embarques/` | `apps.shipments.views.shipment_list` | All shipments |
 | `/embarques/<id>/` | `shipment_detail` | **Flagship screen**: Official Summary panel, Internal Operational Manifest panel, totals reconciliation, variance matrix |
 | `/recepcion/` | `apps.receiving.views.receipt_list` | Containers in receiving |

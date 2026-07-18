@@ -41,13 +41,17 @@ is silently claimed to be done when it isn't.
    package generation, QR label printing. Data models exist for all of
    these (`apps.customs`, `apps.tools`, `apps.inventory.CycleCount`,
    `apps.receiving.AlternativeStorageOption`); none has a UI yet.
-7. **`purchasing_to_finance`/`finance_to_logistics` have no "create
-   handoff" button** on the Purchase Order detail page yet (unlike the
-   two Shipment-anchored gates, which do). The evaluators and full
-   accept/reject/return/override flow are implemented and tested
-   (`tests/test_workflow_gates.py::TestPurchasingToFinance`,
-   `TestFinanceToLogistics`); only the "create" entry point on that
-   specific page is missing.
+7. ~~`purchasing_to_finance`/`finance_to_logistics` have no "create
+   handoff" button" on the Purchase Order detail page~~ — **Done.** All
+   8 required gates now have a "create handoff" entry point on their
+   target's detail page — the last two were wired into
+   `procurement/po_detail.html`, reusing the exact same
+   `{% url 'workflow:create' ... %}` button pattern already used on the
+   Shipment/Material Request/Delivery/Installation detail pages, never a
+   new create-handoff mechanism. Verified by 3 new tests
+   (`tests/test_workflow_handoffs.py`) and live: a real HTTP click
+   through the button created a genuinely `ready_for_submission` handoff
+   for an approved PO.
 
 ## Delivery/Installation/Inspection/Final Acceptance milestone — honest gaps
 

@@ -414,3 +414,97 @@ def test_complete_audit_history_recorded_for_full_lifecycle(ready_shipment, gate
     # AuditEvent rows are never updated by application code — assert none carry a later timestamp than occurred_at.
     for event in events:
         assert event.occurred_at is not None
+
+
+# ---------------------------------------------------------------------------
+# 16. Purchasing -> Finance / Finance -> Logistics create-handoff button on
+# the Purchase Order detail page (Priority 0 completion item — added in a
+# later session; previously only the generic accept/reject/return flow
+# worked for these two gates, with no "create handoff" entry point).
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def stage_purchasing(organization, department_compras):
+    return WorkflowStage.objects.create(organization=organization, code="purchasing", name="Compras", department=department_compras, sequence=1)
+
+
+@pytest.fixture
+def stage_finance(organization, department_finanzas):
+    return WorkflowStage.objects.create(organization=organization, code="finance", name="Finanzas", department=department_finanzas, sequence=2)
+
+
+@pytest.fixture
+def gate_purchasing_to_finance(organization, department_compras, department_finanzas, stage_purchasing, stage_finance):
+    return GateDefinition.objects.create(
+        organization=organization, code="purchasing_to_finance", name="Compras → Finanzas",
+        from_stage=stage_purchasing, to_stage=stage_finance,
+        from_department=department_compras, to_department=department_finanzas,
+        target_content_type=ContentType.objects.get_for_model(PurchaseOrder),
+    )
+
+
+@pytest.fixture
+def approved_purchase_order(organization):
+    supplier = Supplier.objects.create(organization=organization, name="Proveedor Test PO Handoff")
+    return PurchaseOrder.objects.create(
+        organization=organization, supplier=supplier, po_number="PO-HANDOFF-TEST-1",
+        approval_status=PurchaseOrder.ApprovalStatus.APPROVED,
+    )
+
+
+def test_po_detail_page_shows_create_handoff_button_for_purchasing_to_finance(
+    client, markeris, approved_purchase_order, gate_purchasing_to_finance
+):
+    client.force_login(markeris)
+    response = client.get(reverse("procurement:po-detail", args=[approved_purchase_order.pk]))
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert "Crear entrega: Compras → Finanzas" in content
+
+
+def test_purchasing_to_finance_full_lifecycle_via_real_http_from_po_detail_button(
+    client, markeris, lucia, approved_purchase_order, gate_purchasing_to_finance
+):
+    """Drives the exact button added to the PO detail page, then the
+    generic, already-tested handoff create/submit/accept endpoints — the
+    button must never duplicate that transition logic, only link to it."""
+    content_type = ContentType.objects.get_for_model(PurchaseOrder)
+    client.force_login(markeris)
+
+    create_url = reverse("workflow:create", args=[content_type.id, approved_purchase_order.pk, "purchasing_to_finance"])
+    response = client.get(create_url)
+    assert response.status_code == 302
+    handoff = Handoff.objects.get(content_type=content_type, object_id=approved_purchase_order.pk)
+    assert handoff.status == HandoffStatus.READY_FOR_SUBMISSION  # approved PO — genuinely ready
+
+    detail_page = client.get(reverse("workflow:detail", args=[handoff.pk]))
+    assert detail_page.status_code == 200
+    submit_response = client.post(reverse("workflow:submit", args=[handoff.pk]))
+    assert submit_response.status_code == 302
+    handoff.refresh_from_db()
+    assert handoff.status == HandoffStatus.SUBMITTED
+
+    client.force_login(lucia)
+    accept_response = client.post(reverse("workflow:accept", args=[handoff.pk]))
+    assert accept_response.status_code == 302
+    handoff.refresh_from_db()
+    assert handoff.status == HandoffStatus.ACCEPTED
+    assert HandoffDecision.objects.filter(handoff=handoff, decision="accepted").count() == 1
+
+
+def test_po_detail_page_shows_create_handoff_button_for_finance_to_logistics(
+    client, markeris, approved_purchase_order, organization, department_finanzas, department_logistica
+):
+    stage_finance = WorkflowStage.objects.create(organization=organization, code="finance2", name="Finanzas", department=department_finanzas, sequence=2)
+    stage_logistics = WorkflowStage.objects.create(organization=organization, code="logistics2", name="Logística", department=department_logistica, sequence=3)
+    GateDefinition.objects.create(
+        organization=organization, code="finance_to_logistics", name="Finanzas → Logística",
+        from_stage=stage_finance, to_stage=stage_logistics,
+        from_department=department_finanzas, to_department=department_logistica,
+        target_content_type=ContentType.objects.get_for_model(PurchaseOrder),
+    )
+    client.force_login(markeris)
+    response = client.get(reverse("procurement:po-detail", args=[approved_purchase_order.pk]))
+    content = response.content.decode()
+    assert "Crear entrega: Finanzas → Logística" in content

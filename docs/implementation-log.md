@@ -339,3 +339,17 @@ working tree.
     including `procurement:po-list`/`po-detail` and `workflow:inbox`,
     are directly exercised via the Django test client elsewhere in the
     suite, confirming they still render without error).
+30. **`purchasing_to_finance`/`finance_to_logistics` create-handoff
+    button**, closing the last Priority 0 completion item. Wired the
+    identical `{% url 'workflow:create' ... %}` button pattern already
+    used on the Shipment/Material Request/Delivery/Installation detail
+    pages into `procurement/po_detail.html`; `apps.procurement.views.po_detail`
+    now also passes `available_gates`/`existing_handoffs`, mirroring the
+    other detail views exactly — no new create-handoff mechanism.
+    3 new tests confirm the button appears for both gates and that the
+    full create → submit → accept lifecycle works end-to-end through the
+    generic, already-tested handoff endpoints — 106/106 passing (103
+    pre-existing + 3 new). Verified live: an authenticated Markeris
+    clicked the real button on a running dev server and it created a
+    handoff correctly evaluated as `ready_for_submission` for an
+    approved PO.

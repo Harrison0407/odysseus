@@ -51,4 +51,29 @@
         {% empty %}<li class="list-group-item text-muted">Sin compromisos abiertos registrados.</li>{% endfor %}
     </ul>
 </div>
+
+<div class="card mt-3">
+    <div class="card-header">Entregas de responsabilidad (Compras → Finanzas → Logística)</div>
+    <div class="card-body">
+        <ul class="list-group list-group-flush mb-3">
+            {% for h in existing_handoffs %}
+            <li class="list-group-item d-flex justify-content-between flex-wrap">
+                <span>{{ h.gate_definition|default:"(sin gate)" }} → {{ h.to_department|default:"—" }}</span>
+                <span>
+                    <span class="badge bg-secondary">{{ h.get_status_display }}</span>
+                    <a href="{% url 'workflow:detail' h.pk %}" class="ms-2">Ver</a>
+                </span>
+            </li>
+            {% empty %}
+            <li class="list-group-item text-muted">Sin entregas creadas todavía para esta orden de compra.</li>
+            {% endfor %}
+        </ul>
+        {% for gate in available_gates %}
+        <a class="btn btn-outline-primary btn-sm me-2"
+           href="{% url 'workflow:create' po_content_type_id order.pk gate.code %}">
+            Crear entrega: {{ gate.name }}
+        </a>
+        {% endfor %}
+    </div>
+</div>
 {% endblock %}

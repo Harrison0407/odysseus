@@ -18,7 +18,8 @@ from src.constants import (
     TTS_CACHE_DIR, GENERATED_IMAGES_DIR, DEEP_RESEARCH_DIR, CHROMA_DIR,
     RAG_DIR, MEMORY_VECTORS_DIR, PASSWORD_MIN_LENGTH,
 )
-from core.auth import RESERVED_USERNAMES
+from core.atomic_io import atomic_write_json
+from core.auth import RESERVED_USERNAMES, initial_stored_privileges
 
 DIRS = [
     DATA_DIR,
@@ -95,7 +96,6 @@ def create_default_admin():
 
     try:
         import bcrypt
-        import json
 
         # Priority: env vars > interactive prompt > random password
         username = os.getenv("ODYSSEUS_ADMIN_USER", "").strip().lower()
@@ -124,11 +124,11 @@ def create_default_admin():
                 username: {
                     "password_hash": hashed,
                     "is_admin": True,
+                    "privileges": initial_stored_privileges(is_admin=True),
                 }
             }
         }
-        with open(auth_path, "w", encoding="utf-8") as f:
-            json.dump(auth_data, f, indent=2)
+        atomic_write_json(auth_path, auth_data, indent=2)
 
         if sys.stdin.isatty() and not os.getenv("ODYSSEUS_ADMIN_PASSWORD"):
             print(f"  [ok] Admin account created ({username})")

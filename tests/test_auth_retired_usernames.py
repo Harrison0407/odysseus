@@ -273,7 +273,7 @@ def test_finalized_rename_cannot_be_rolled_back(monkeypatch, tmp_path):
     assert _retired_on_disk(tmp_path) == {"alice"}
 
 
-def test_existing_users_receive_merged_marketmatch_default(monkeypatch, tmp_path):
+def test_existing_users_receive_safe_marketmatch_default(monkeypatch, tmp_path):
     auth_path = tmp_path / "auth.json"
     auth_path.write_text(
         json.dumps(
@@ -293,4 +293,6 @@ def test_existing_users_receive_merged_marketmatch_default(monkeypatch, tmp_path
 
     manager = _manager(monkeypatch, auth_path)
 
-    assert manager.get_privileges("alice")["can_use_marketmatch"] is True
+    assert manager.get_privileges("alice")["can_use_marketmatch"] is False
+    stored = json.loads(auth_path.read_text(encoding="utf-8"))
+    assert stored["users"]["alice"]["privileges"]["can_use_marketmatch"] is False

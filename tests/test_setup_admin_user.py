@@ -24,6 +24,7 @@ def test_create_default_admin_normalizes_env_username(tmp_path, monkeypatch):
     data = json.loads(auth_path.read_text(encoding="utf-8"))
     assert "adminuser" in data["users"]
     assert "AdminUser" not in data["users"]
+    assert data["users"]["adminuser"]["privileges"]["can_use_marketmatch"] is False
 
 
 def test_main_loads_admin_password_from_env_file(tmp_path, monkeypatch):

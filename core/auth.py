@@ -22,13 +22,16 @@ logger = logging.getLogger(__name__)
 from core.atomic_io import atomic_write_json as _atomic_write_json  # noqa: E402
 from core.middleware import INTERNAL_TOOL_USER  # noqa: E402
 
+MARKETMATCH_PRIVILEGE = "can_use_marketmatch"
+
+
 DEFAULT_PRIVILEGES = {
     "can_use_agent": True,
     "can_use_browser": True,
     "can_use_bash": False,
     "can_use_documents": True,
     "can_use_research": True,
-    "can_use_marketmatch": True,
+    MARKETMATCH_PRIVILEGE: False,
     "can_generate_images": True,
     "can_manage_memory": True,
     "max_messages_per_day": 0,
@@ -41,13 +44,22 @@ DEFAULT_PRIVILEGES = {
     "block_all_models": False,
 }
 
-# Admins get everything
+# Administrator template. The explicit Calls opt-in is resolved separately
+# from the stored user record rather than inherited from administrator status.
 ADMIN_PRIVILEGES = {k: (True if isinstance(v, bool) else (0 if isinstance(v, int) else [])) for k, v in DEFAULT_PRIVILEGES.items()}
 ADMIN_PRIVILEGES["allowed_models_restricted"] = False
 # Admins must never be blocked from using models — the generic dict
 # comprehension above flips every boolean default to True, which would be
 # backwards for this sentinel.
 ADMIN_PRIVILEGES["block_all_models"] = False
+
+
+def initial_stored_privileges(*, is_admin: bool) -> Dict[str, Any]:
+    """Return a new user's stored privileges with Calls safely opted out."""
+    privileges = dict(ADMIN_PRIVILEGES if is_admin else DEFAULT_PRIVILEGES)
+    privileges[MARKETMATCH_PRIVILEGE] = False
+    return privileges
+
 
 from src.constants import AUTH_FILE, PASSWORD_MIN_LENGTH
 DEFAULT_AUTH_PATH = AUTH_FILE
@@ -123,6 +135,7 @@ class AuthManager:
         self._migrate_single_user()
         self._drop_reserved_loaded_users()
         self._migrate_legacy_admin_role()
+        self._migrate_marketmatch_privilege()
 
     def _load(self):
         try:
@@ -233,6 +246,45 @@ class AuthManager:
         if changed:
             self._save()
 
+    def _migrate_marketmatch_privilege(self):
+        """Backfill the explicit Calls opt-in for legacy user rows.
+
+        Missing privilege maps from the legacy setup path and valid maps that
+        predate the feature are initialized to False. Malformed maps remain
+        untouched so authorization continues to fail closed.
+        """
+        users = self.users
+        if not isinstance(users, dict):
+            return
+        changes: list[tuple[Dict[str, Any], bool]] = []
+        with self._config_lock:
+            for user in users.values():
+                if not isinstance(user, dict):
+                    continue
+                had_privileges = "privileges" in user
+                stored = user.get("privileges")
+                if not had_privileges:
+                    user["privileges"] = {MARKETMATCH_PRIVILEGE: False}
+                    changes.append((user, False))
+                elif isinstance(stored, dict) and MARKETMATCH_PRIVILEGE not in stored:
+                    stored[MARKETMATCH_PRIVILEGE] = False
+                    changes.append((user, True))
+            if not changes:
+                return
+            try:
+                self._save()
+            except Exception:
+                for user, had_privileges in changes:
+                    if had_privileges:
+                        user["privileges"].pop(MARKETMATCH_PRIVILEGE, None)
+                    else:
+                        user.pop("privileges", None)
+                raise
+        logger.info(
+            "Initialized stored MarketMatch opt-in to False for %d user(s)",
+            len(changes),
+        )
+
     def _save(self):
         _atomic_write_json(self.auth_path, self._config, indent=2)
 
@@ -315,7 +367,7 @@ class AuthManager:
                 "password_hash": _hash_password(password),
                 "created": time.time(),
                 "is_admin": is_admin,
-                "privileges": dict(ADMIN_PRIVILEGES if is_admin else DEFAULT_PRIVILEGES),
+                "privileges": initial_stored_privileges(is_admin=is_admin),
             }
             self._save()
         logger.info(f"Created user '{username}' (admin={is_admin})")
@@ -558,30 +610,73 @@ class AuthManager:
         ]
 
     def get_privileges(self, username: str) -> Dict[str, Any]:
-        """Get privileges for a user. Admins get all privileges."""
+        """Get effective privileges, preserving the explicit admin Calls opt-in."""
         user = self.users.get(username, {})
         if user.get("is_admin"):
-            return dict(ADMIN_PRIVILEGES)
+            effective = dict(ADMIN_PRIVILEGES)
+            stored = user.get("privileges")
+            effective[MARKETMATCH_PRIVILEGE] = (
+                isinstance(stored, dict)
+                and stored.get(MARKETMATCH_PRIVILEGE) is True
+            )
+            return effective
         # Merge stored privileges with defaults (in case new privileges were added)
         stored = user.get("privileges", {})
         return {**DEFAULT_PRIVILEGES, **stored}
 
     def set_privileges(self, username: str, privileges: Dict[str, Any]) -> bool:
-        """Update privileges for a user. Can't modify admin privileges."""
+        """Update privileges, with a single explicit admin Calls opt-in."""
         username = username.strip().lower()
+        if not isinstance(privileges, dict):
+            return False
+        if (
+            MARKETMATCH_PRIVILEGE in privileges
+            and type(privileges[MARKETMATCH_PRIVILEGE]) is not bool
+        ):
+            return False
         with self._config_lock:
             if username not in self.users:
                 return False
-            if self.users[username].get("is_admin"):
-                return False  # admins always have full access
-            # Only allow known privilege keys
-            current = self.get_privileges(username)
-            for k, v in privileges.items():
-                if k in DEFAULT_PRIVILEGES:
-                    current[k] = v
-            self._config["users"][username]["privileges"] = current
-            self._save()
-        logger.info(f"Updated privileges for '{username}': {current}")
+            user = self._config["users"][username]
+            is_admin = bool(user.get("is_admin"))
+            if is_admin and MARKETMATCH_PRIVILEGE not in privileges:
+                return False
+
+            previous_privileges = user.get("privileges")
+            previous_stash = user.get("privileges_before_admin")
+            if is_admin:
+                current = (
+                    dict(previous_privileges)
+                    if isinstance(previous_privileges, dict)
+                    else initial_stored_privileges(is_admin=True)
+                )
+                current[MARKETMATCH_PRIVILEGE] = privileges[MARKETMATCH_PRIVILEGE]
+                updated_keys = (MARKETMATCH_PRIVILEGE,)
+                stash = user.get("privileges_before_admin")
+                if isinstance(stash, dict):
+                    updated_stash = dict(stash)
+                    updated_stash[MARKETMATCH_PRIVILEGE] = privileges[MARKETMATCH_PRIVILEGE]
+                    user["privileges_before_admin"] = updated_stash
+            else:
+                current = self.get_privileges(username)
+                updated_keys = tuple(k for k in privileges if k in DEFAULT_PRIVILEGES)
+                for key in updated_keys:
+                    current[key] = privileges[key]
+            user["privileges"] = current
+            try:
+                self._save()
+            except Exception:
+                user["privileges"] = previous_privileges
+                if previous_stash is None:
+                    user.pop("privileges_before_admin", None)
+                else:
+                    user["privileges_before_admin"] = previous_stash
+                raise
+        logger.info(
+            "Updated privilege keys for '%s': %s",
+            username,
+            ", ".join(sorted(updated_keys)),
+        )
         return True
 
     def set_admin(self, username: str, is_admin: bool,
@@ -624,24 +719,30 @@ class AuthManager:
             # before writing admin privileges on promote, after restoring
             # the pre-admin map on demote.
             if is_admin:
+                previous = dict(target.get("privileges") or DEFAULT_PRIVILEGES)
                 target["is_admin"] = True
                 # Stash the pre-admin map so a later demotion can restore it.
-                # While is_admin is set the stored map is inert: get_privileges
-                # short-circuits to ADMIN_PRIVILEGES and set_privileges refuses
-                # admins, so only set_admin ever touches the stash.
-                target["privileges_before_admin"] = dict(
-                    target.get("privileges") or DEFAULT_PRIVILEGES
+                # Administrator updates may change only the explicit Calls flag
+                # and keep this stash synchronized for a later demotion.
+                target["privileges_before_admin"] = previous
+                target["privileges"] = initial_stored_privileges(is_admin=True)
+                target["privileges"][MARKETMATCH_PRIVILEGE] = (
+                    previous.get(MARKETMATCH_PRIVILEGE) is True
                 )
-                target["privileges"] = dict(ADMIN_PRIVILEGES)
             else:
                 # Restore the stashed pre-admin map. Fall back to defaults for
                 # users created as admins (their stored map is ADMIN_PRIVILEGES,
                 # which must not leak past demotion — e.g. can_use_bash) and
                 # for admins promoted before the stash existed.
+                current_marketmatch = (
+                    isinstance(target.get("privileges"), dict)
+                    and target["privileges"].get(MARKETMATCH_PRIVILEGE) is True
+                )
                 target["privileges"] = dict(
                     target.pop("privileges_before_admin", None)
                     or DEFAULT_PRIVILEGES
                 )
+                target["privileges"][MARKETMATCH_PRIVILEGE] = current_marketmatch
                 target["is_admin"] = False
             self._save()
         logger.info("Set is_admin=%s for '%s' (by '%s')", is_admin, username, requesting_user)

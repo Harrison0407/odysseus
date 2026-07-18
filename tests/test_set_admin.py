@@ -55,7 +55,9 @@ def test_promote_sets_admin_flag_and_admin_privileges(tmp_path):
 
     assert result is auth_mod.SetAdminResult.OK
     assert mgr.is_admin("bob") is True
-    assert mgr.users["bob"]["privileges"] == auth_mod.ADMIN_PRIVILEGES
+    expected = dict(auth_mod.ADMIN_PRIVILEGES)
+    expected[auth_mod.MARKETMATCH_PRIVILEGE] = False
+    assert mgr.users["bob"]["privileges"] == expected
 
 
 def test_demote_with_two_admins_resets_to_default_privileges(tmp_path):

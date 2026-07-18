@@ -5,6 +5,7 @@
     <span class="badge bg-secondary">{{ document.document_type }}</span>
     {% if not document.human_confirmed_type %}<span class="badge bg-warning text-dark">Tipo no confirmado por humano</span>{% endif %}
 </p>
+<div class="table-responsive">
 <table class="table bg-white">
     <thead><tr><th>Versión</th><th>Archivo</th><th>SHA-256</th><th>Tamaño</th><th>Cargado por</th><th>Fecha</th><th></th></tr></thead>
     <tbody>
@@ -26,4 +27,5 @@
     {% endfor %}
     </tbody>
 </table>
+</div>
 {% endblock %}

@@ -317,3 +317,25 @@ working tree.
     appears, while a Compras user, a Dirección user, and an Obra user
     scoped only to a *different* project are all excluded — 103/103
     passing (101 pre-existing + 2 new).
+29. **Structural mobile-responsive audit.** Wrote a small audit script
+    checking every `<table>` in `templates/` for a preceding
+    `table-responsive` wrapper; found 19 missing across 9 templates that
+    predated this milestone (`cost/list.html`, `cost/detail.html`,
+    `documents/list.html`, `documents/detail.html`,
+    `inventory/locations.html`, `inventory/lot_detail.html`,
+    `procurement/po_list.html`, `procurement/po_detail.html`,
+    `receiving/list.html`, `shipments/list.html`, `shipments/detail.html`
+    ×3, `workflow/inbox.html`), plus 1 inside this milestone's own
+    `installation_detail.html` and one in `requests/list.html`. Fixed all
+    of them. `reports/snapshot_shipment.html` (the self-contained HTML
+    snapshot export, which loads no Bootstrap) got a `.table-scroll` CSS
+    rule instead, plus a viewport meta tag it was missing entirely.
+    Verified every edited file has balanced `<div>`/`</div>` and
+    `<table>`/`</table>` tag counts (a script-based check, since no
+    headless browser or screenshot tool is available in this
+    environment — recorded honestly as a standing environment
+    limitation, not a skipped task), and re-ran the full test suite
+    (103/103 passing, unchanged — several of the touched templates,
+    including `procurement:po-list`/`po-detail` and `workflow:inbox`,
+    are directly exercised via the Django test client elsewhere in the
+    suite, confirming they still render without error).

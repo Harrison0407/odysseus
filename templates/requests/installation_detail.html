@@ -70,6 +70,7 @@
 <div class="card mb-3">
     <div class="card-header">Inspecciones</div>
     <div class="card-body">
+        <div class="table-responsive">
         <table class="table table-sm bg-white">
             <thead><tr><th>Fecha</th><th>Resultado</th><th>Inspector</th><th>Defectos abiertos</th><th></th></tr></thead>
             <tbody>
@@ -90,6 +91,7 @@
             {% endfor %}
             </tbody>
         </table>
+        </div>
         <form method="post" action="{% url 'requests:installation-create-inspection' installation.pk %}">
             {% csrf_token %}
             <p class="text-muted mb-1">Registrar nueva inspección (o reinspección tras corrección):</p>

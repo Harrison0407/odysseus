@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Instantánea — {{ shipment.reference }}</title>
 <style>
     body { font-family: Arial, Helvetica, sans-serif; margin: 2rem; color: #212529; }
@@ -14,6 +15,11 @@
     .section-title { background: #e9ecef; padding: .4rem .6rem; font-weight: bold; margin-top: 1.5rem; }
     footer { margin-top: 2rem; font-size: .75rem; color: #6c757d; }
     a.toc { margin-right: 1rem; }
+    .table-scroll { overflow-x: auto; margin-bottom: 1.5rem; }
+    .table-scroll table { margin-bottom: 0; }
+    @media (max-width: 576px) {
+        body { margin: 0.75rem; }
+    }
 </style>
 </head>
 <body>
@@ -32,6 +38,7 @@
 
 <div id="oficial" class="section-title">1. Resumen Oficial (tal como fue emitido)</div>
 {% if bl %}
+<div class="table-scroll">
 <table>
     <tr><th>BL</th><td>{{ bl.bl_number }}</td></tr>
     <tr><th>Shipper</th><td>{{ bl.shipper_name }}</td></tr>
@@ -43,11 +50,13 @@
     <tr><th>Peso bruto declarado</th><td>{{ bl.declared_gross_weight_kg }} kg</td></tr>
     <tr><th>CBM declarado</th><td>{{ bl.declared_cbm }}</td></tr>
 </table>
+</div>
 {% else %}
 <p>Sin BL cargado.</p>
 {% endif %}
 
 <div id="interno" class="section-title">2. Manifiesto Operativo Interno</div>
+<div class="table-scroll">
 <table>
     <thead><tr><th>Ref.</th><th>Descripción</th><th>Destino</th><th>Cantidad</th><th>Paquetes</th><th>Estado de declaración</th></tr></thead>
     <tbody>
@@ -63,8 +72,10 @@
     {% empty %}<tr><td colspan="6">Sin líneas.</td></tr>{% endfor %}
     </tbody>
 </table>
+</div>
 
 <div id="variaciones" class="section-title">3. Variaciones oficial vs. operativo</div>
+<div class="table-scroll">
 <table>
     <thead><tr><th>Categoría oficial</th><th>Línea interna</th><th>Explicada</th><th>Severidad</th></tr></thead>
     <tbody>
@@ -78,6 +89,7 @@
     {% empty %}<tr><td colspan="4">Sin variaciones registradas.</td></tr>{% endfor %}
     </tbody>
 </table>
+</div>
 
 <footer>
     Generado por DT Beach Supply Control · {{ generated_at }} · Instantánea de solo lectura, sin dependencias externas.

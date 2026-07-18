@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <h3>Órdenes de compra</h3>
+<div class="table-responsive">
 <table class="table table-striped bg-white">
     <thead><tr><th>O.C. No.</th><th>Proveedor</th><th>PI vinculado</th><th>Proyecto</th><th>Uso (según documento)</th><th>Total</th><th>Estado</th></tr></thead>
     <tbody>
@@ -23,4 +24,5 @@
     {% endfor %}
     </tbody>
 </table>
+</div>
 {% endblock %}

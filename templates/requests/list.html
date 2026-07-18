@@ -4,6 +4,7 @@
     <h3>Solicitudes de material</h3>
     <a class="btn btn-primary" href="{% url 'requests:create' %}">Nueva solicitud</a>
 </div>
+<div class="table-responsive">
 <table class="table table-striped bg-white">
     <thead><tr><th>Proyecto</th><th>Edificio</th><th>Prioridad</th><th>Necesario para</th><th>Estado</th></tr></thead>
     <tbody>
@@ -20,4 +21,5 @@
     {% endfor %}
     </tbody>
 </table>
+</div>
 {% endblock %}

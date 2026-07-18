@@ -43,6 +43,7 @@
         <div class="card internal-panel h-100">
             <div class="card-header bg-white"><strong>Manifiesto Operativo Interno</strong> — todo lo físicamente esperado/cargado</div>
             <div class="card-body p-0" style="max-height: 420px; overflow-y: auto;">
+                <div class="table-responsive">
                 <table class="table table-sm mb-0 manifest-table">
                     <thead><tr><th>Ref.</th><th>Descripción</th><th>Destino</th><th>Cant.</th><th>Pkg</th><th>Estado</th></tr></thead>
                     <tbody>
@@ -72,6 +73,7 @@
                     {% endfor %}
                     </tbody>
                 </table>
+                </div>
             </div>
         </div>
     </div>
@@ -80,6 +82,7 @@
 <div class="card mt-3">
     <div class="card-header">Reconciliación de totales</div>
     <div class="card-body">
+        <div class="table-responsive">
         <table class="table table-sm mb-0">
             <thead><tr><th></th><th>Oficial (BL)</th><th>Interno (calculado)</th><th>Diferencia</th></tr></thead>
             <tbody>
@@ -89,11 +92,13 @@
                 <tr><td>CBM</td><td>{{ totals.official_cbm|default:"—" }}</td><td>{{ totals.internal_cbm }}</td><td>{{ totals.cbm_diff|default:"—" }}</td></tr>
             </tbody>
         </table>
+        </div>
     </div>
 </div>
 
 <div class="card mt-3">
     <div class="card-header">Matriz de variación oficial vs. operativo</div>
+    <div class="table-responsive">
     <table class="table mb-0">
         <thead><tr><th>Categoría oficial</th><th>Línea interna</th><th>Explicada</th><th>Severidad</th><th>Revisión aduanal</th></tr></thead>
         <tbody>
@@ -118,6 +123,7 @@
         {% endfor %}
         </tbody>
     </table>
+    </div>
 </div>
 
 <div class="card mt-3">

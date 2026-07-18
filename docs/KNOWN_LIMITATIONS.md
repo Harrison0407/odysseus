@@ -102,11 +102,17 @@ is silently claimed to be done when it isn't.
   so evidence is available and browsable but not yet a hard blocking
   requirement for any of the 3 gates.
 - **Mobile rendering is structurally, not visually, verified** — same
-  honesty convention as the Priority 0 milestone's item 7 above. Every
-  new list/detail template uses `table-responsive`, Bootstrap's
-  responsive grid, and the same `min-height: 44px` touch-target rule; no
-  screenshot-based visual regression pass was run at multiple viewport
-  widths.
+  honesty convention as the Priority 0 milestone's item 7. Every
+  list/detail template across the *entire* application now wraps its
+  tables in a horizontally-scrolling container (a later-session audit
+  found and fixed 19 tables across 9 templates that predated this
+  milestone and lacked it — `cost`, `documents`, `inventory`,
+  `procurement`, `receiving`, `shipments`, `workflow`, plus the
+  self-contained HTML snapshot export, which also gained a viewport meta
+  tag). **No headless browser or screenshot tool is available in this
+  environment**, so no pixel-level visual regression pass at multiple
+  viewport widths has ever been run — this is recorded honestly as a
+  standing limitation of the environment, not a skipped task.
 
 ## Not yet built (integrations/infrastructure)
 

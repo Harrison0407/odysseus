@@ -4,6 +4,7 @@
     <h3>Documentos</h3>
     <a class="btn btn-primary" href="{% url 'documents:upload' %}">Cargar documento</a>
 </div>
+<div class="table-responsive">
 <table class="table table-striped bg-white">
     <thead><tr><th>Título</th><th>Tipo</th><th>Idioma</th><th>Versión actual</th><th>SHA-256</th><th></th></tr></thead>
     <tbody>
@@ -21,4 +22,5 @@
     {% endfor %}
     </tbody>
 </table>
+</div>
 {% endblock %}

@@ -2,6 +2,7 @@
 {% block content %}
 <h3>Ubicaciones de almacén</h3>
 <p class="text-muted small">Las existencias se calculan siempre a partir del historial de movimientos, nunca de un número editado directamente.</p>
+<div class="table-responsive">
 <table class="table table-striped bg-white">
     <thead><tr><th>Ubicación</th><th>Sitio</th><th>Artículo</th><th>Cantidad disponible</th></tr></thead>
     <tbody>
@@ -17,4 +18,5 @@
     {% endfor %}
     </tbody>
 </table>
+</div>
 {% endblock %}

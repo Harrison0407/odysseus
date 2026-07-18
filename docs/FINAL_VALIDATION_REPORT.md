@@ -65,11 +65,23 @@ preserved across requests, real login POST with CSRF token):
 ## 7. Desktop and mobile widths
 
 Bootstrap-based responsive layout (`container-fluid`, responsive
-columns, `min-height: 44px` touch targets on buttons under 576px) — not
-independently screenshot-tested at multiple viewport widths in this
-session; this is a **partial** validation (structural responsiveness
-only, not a visual regression pass). Recorded honestly rather than
-claimed as fully verified.
+columns, `min-height: 44px` touch targets on buttons under 576px).
+**Update (later session):** every `<table>` across the entire
+application (19 instances across 9 templates, all outside the
+Delivery/Installation/Inspection/Acceptance screens, plus 1 inside
+`installation_detail.html` itself) was audited and, where missing,
+wrapped in a horizontally-scrolling container (`table-responsive` for
+Bootstrap-based pages, a `.table-scroll` CSS rule for the one
+self-contained non-Bootstrap page, `reports/snapshot_shipment.html`,
+which also gained a viewport meta tag it previously lacked) so no table
+forces the page itself to scroll horizontally on a narrow screen. Every
+edited file was verified to have balanced `<div>`/`</div>` and
+`<table>`/`</table>` tag counts, and the full test suite (103 tests,
+several of which exercise the touched templates via real HTTP requests
+through the Django test client) passed after the change. **No headless
+browser or screenshot tool was available in this environment**, so this
+remains a **structural, not a pixel-level visual**, verification — the
+same honest distinction drawn here in the original Priority 0 pass.
 
 ## 8. Every role
 

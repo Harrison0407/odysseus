@@ -260,3 +260,21 @@ Baseline verified before starting: branch `main`, HEAD =
     `architecture-decisions.md` ADR-017 through ADR-021,
     `implementation-roadmap.md`, `ASSUMPTIONS.md`, `KNOWN_LIMITATIONS.md`,
     `SECURITY.md`, `FINAL_VALIDATION_REPORT.md`).
+
+## Continuing autonomous session (Priority 0 completion + beyond)
+
+Baseline verified before starting: branch `main`, HEAD = `c531ff7`, clean
+working tree.
+
+26. **Evidence/photo upload**, closing Priority 0 gap "Dispatch/Delivery
+    UI... evidence upload not wired." Added
+    `apps.audit.services.attach_evidence`/`list_evidence` (ADR-022),
+    reusing `apps.documents.views.DocumentUploadForm` as-is; wired an
+    "Adjuntar evidencia" form + list (`templates/requests/_evidence.html`)
+    into the Delivery/InstallationRecord/InspectionRecord detail pages,
+    gated by the existing `_deny_cross_project` check. Added 4 tests
+    (`TestEvidenceUpload`): attachment creation, SHA-256 duplicate
+    detection, cross-project denial, and detail-page rendering — 97/97
+    passing (93 pre-existing + 4 new). Verified live: a real multipart
+    HTTP upload of a `.jpg` through a running dev server, followed by a
+    download of the exact same bytes (`diff` confirmed byte-identical).

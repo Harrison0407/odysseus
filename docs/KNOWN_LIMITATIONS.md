@@ -72,16 +72,20 @@ is silently claimed to be done when it isn't.
   still fully enforced at the service/view layer regardless of who is
   picked (any actual action still requires the appropriate role/project
   access) — this is a pure data-entry convenience gap, not a security one.
-- **Evidence/photo upload is modeled but not wired into these screens
-  yet.** `InstallationRecord.photo_document` (a single legacy FK) and the
-  generic `apps.audit.Attachment` (content_type/object_id, reusable
-  across Delivery/InstallationRecord/InspectionRecord) both exist; no
-  form on the new delivery/installation/inspection screens currently
-  offers a file upload widget. Evidence requirements are enforced today
-  the same way the Gate Controls milestone enforces them for other
-  gates — an evaluator can require evidence and a submission is blocked
-  without it — but none of this milestone's 3 gates currently declares an
-  `evidence_requirements` list, so this gap is not yet exercised.
+- ~~Evidence/photo upload is modeled but not wired into these screens~~
+  — **Done.** `apps.audit.services.attach_evidence`/`list_evidence` wire
+  the generic `Attachment` model (content_type/object_id) into the
+  Delivery/InstallationRecord/InspectionRecord detail pages, reusing
+  `apps.documents.views.DocumentUploadForm` as-is (extension/size
+  validation, SHA-256 dedup, never duplicated). Access to the upload
+  action is gated by the same `_deny_cross_project` check as every other
+  action on these screens; the download itself goes through the
+  pre-existing, unchanged `documents:download` view (organization-scoped,
+  not additionally project-scoped — same as every other document in the
+  system, a deliberate non-change). None of this milestone's 3 gates
+  currently declares an `evidence_requirements` list on its `GateResult`,
+  so evidence is available and browsable but not yet a hard blocking
+  requirement for any of the 3 gates.
 - **Mobile rendering is structurally, not visually, verified** — same
   honesty convention as the Priority 0 milestone's item 7 above. Every
   new list/detail template uses `table-responsive`, Bootstrap's

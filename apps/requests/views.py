@@ -4,6 +4,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.contenttypes.models import ContentType
 from django.shortcuts import get_object_or_404, redirect, render
 
+from apps.audit import services as audit_services
+from apps.documents.views import DocumentUploadForm
 from apps.inventory.models import InventoryLot, InventoryReservation
 from apps.items.models import Item
 from apps.projects.models import Project
@@ -47,6 +49,32 @@ def _scope_to_accessible_projects(request, queryset, project_lookup):
     if _is_management(request.user):
         return queryset
     return queryset.filter(**{f"{project_lookup}__in": _accessible_project_ids(request.user)})
+
+
+def _add_evidence(request, target):
+    """Shared POST handler for the "adjuntar evidencia" form on the
+    delivery/installation/inspection detail pages — reuses
+    apps.documents.views.DocumentUploadForm (extension/size validation,
+    SHA-256 dedup) and apps.audit.services.attach_evidence (the one place
+    a file becomes evidence linked to an arbitrary target) rather than
+    reimplementing upload handling here."""
+    organization = getattr(request.user.profile, "organization", None)
+    form = DocumentUploadForm(request.POST, request.FILES, organization=organization)
+    if not form.is_valid():
+        messages.error(request, "Revise el archivo de evidencia — " + "; ".join(
+            f"{field}: {', '.join(errs)}" for field, errs in form.errors.items()
+        ))
+        return
+    _, is_duplicate = audit_services.attach_evidence(
+        target, request.user,
+        document_type=form.cleaned_data["document_type"],
+        title=form.cleaned_data["title"],
+        uploaded_file=form.cleaned_data["file"],
+    )
+    if is_duplicate:
+        messages.warning(request, "Evidencia adjuntada — mismo contenido (SHA-256) que un archivo ya cargado.")
+    else:
+        messages.success(request, "Evidencia adjuntada.")
 
 
 def _deny_cross_project(request, target) -> bool:
@@ -326,7 +354,19 @@ def delivery_detail(request, pk):
         "available_gates": available_gates,
         "existing_handoffs": existing_handoffs,
         "project_receipts": delivery.project_receipts.all(),
+        "evidence": audit_services.list_evidence(delivery),
+        "evidence_form": DocumentUploadForm(organization=getattr(request.user.profile, "organization", None)),
     })
+
+
+@login_required
+def delivery_add_evidence(request, pk):
+    delivery = get_object_or_404(Delivery, pk=pk)
+    if _deny_cross_project(request, delivery):
+        return redirect("requests:delivery-list")
+    if request.method == "POST":
+        _add_evidence(request, delivery)
+    return redirect("requests:delivery-detail", pk=pk)
 
 
 @login_required
@@ -511,7 +551,19 @@ def installation_detail(request, pk):
         "can_finalize": can_finalize,
         "acceptance": acceptance,
         "inspections": installation.inspections.order_by("-created_at"),
+        "evidence": audit_services.list_evidence(installation),
+        "evidence_form": DocumentUploadForm(organization=org),
     })
+
+
+@login_required
+def installation_add_evidence(request, pk):
+    installation = get_object_or_404(InstallationRecord, pk=pk)
+    if _deny_cross_project(request, installation):
+        return redirect("requests:installation-list")
+    if request.method == "POST":
+        _add_evidence(request, installation)
+    return redirect("requests:installation-detail", pk=pk)
 
 
 @login_required
@@ -651,7 +703,21 @@ def inspection_detail(request, pk):
     )
     if _deny_cross_project(request, inspection):
         return redirect("requests:inspection-list")
-    return render(request, "requests/inspection_detail.html", {"inspection": inspection})
+    return render(request, "requests/inspection_detail.html", {
+        "inspection": inspection,
+        "evidence": audit_services.list_evidence(inspection),
+        "evidence_form": DocumentUploadForm(organization=getattr(request.user.profile, "organization", None)),
+    })
+
+
+@login_required
+def inspection_add_evidence(request, pk):
+    inspection = get_object_or_404(InspectionRecord, pk=pk)
+    if _deny_cross_project(request, inspection):
+        return redirect("requests:inspection-list")
+    if request.method == "POST":
+        _add_evidence(request, inspection)
+    return redirect("requests:inspection-detail", pk=pk)
 
 
 @login_required

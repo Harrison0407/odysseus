@@ -74,6 +74,16 @@
   `close_punch_list_item` raise a clear, caught error on a second
   identical call rather than creating a second row or silently
   reprocessing.
+- **Evidence upload reuses the existing, tested upload validation** —
+  `apps.audit.services.attach_evidence` calls the same
+  `DocumentUploadForm.clean_file` (extension allowlist, size limit) and
+  SHA-256/duplicate-detection path as `/documentos/subir/`; the upload
+  action itself is gated by `_deny_cross_project` on the parent
+  Delivery/InstallationRecord/InspectionRecord. Verified live: a real
+  multipart upload followed by a byte-identical download, and by test
+  (`TestEvidenceUpload::test_cross_project_isolation_denies_evidence_upload`)
+  that a user without project access cannot create an attachment via a
+  direct POST.
 
 ## Verified by direct testing in this session
 

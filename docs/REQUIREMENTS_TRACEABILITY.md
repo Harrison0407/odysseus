@@ -126,6 +126,7 @@ any view, form, template, or JS.
 | Complete, immutable audit trail | `test_25_complete_audit_trail_for_full_chain` |
 | Mobile-rendering smoke tests | `test_26`, `test_26b` |
 | No regression in existing tests | Full suite: 93/93 passing (53 pre-existing + 40 new) |
+| Evidence/photo upload with provenance and project-access enforcement (added in a later session) | `apps.audit.services.attach_evidence`/`list_evidence`, `TestEvidenceUpload` (4 tests) — reuses `apps.documents` upload/SHA-256/duplicate-detection, verified live via a real multipart HTTP upload + byte-identical download round-trip |
 
 Demonstrated live against a running dev server with real seeded users
 (Miguel/Obra, Harrison/Dirección, Markeris/Compras) and real HTTP

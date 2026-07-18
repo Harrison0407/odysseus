@@ -24,22 +24,25 @@
 | `/solicitudes/<id>/linea/<line_id>/reservar/` (POST) | `request_reserve_line` | Reserve inventory against a lot for one request line |
 | `/solicitudes/<id>/despachar/` (POST) | `request_dispatch` | Dispatch reserved quantities; creates the `Dispatch` + initializes the `Delivery` |
 | `/solicitudes/entregas/` | `delivery_list` | Deliveries, filterable by project / pending-acceptance |
-| `/solicitudes/entregas/<id>/` | `delivery_detail` | Per-line accepted/rejected/damaged recording, delivery completion, project-receipt creation, "create handoff" for `project_delivery_to_installation` |
+| `/solicitudes/entregas/<id>/` | `delivery_detail` | Per-line accepted/rejected/damaged recording, delivery completion, project-receipt creation, "create handoff" for `project_delivery_to_installation`, evidence upload |
 | `/solicitudes/entregas/<id>/linea/<line_id>/registrar/` (POST) | `delivery_record_line` | Records accepted/rejected/damaged quantities for one delivery line (recomputes, never increments) |
 | `/solicitudes/entregas/<id>/completar/` (POST) | `delivery_complete` | Marks the delivery accepted or rejected/failed |
 | `/solicitudes/entregas/<id>/recepcion/` (POST) | `delivery_create_receipt` | Records the project's confirmed destination/damage/missing-items receipt |
+| `/solicitudes/entregas/<id>/evidencia/` (POST) | `delivery_add_evidence` | Uploads a file as evidence (reuses `apps.documents`/`apps.audit.Attachment`) |
 | `/solicitudes/instalaciones/` | `installation_list` | Installations, filterable by incomplete/rework, scoped to accessible projects |
 | `/solicitudes/recepciones/<receipt_id>/instalacion/nueva/` | `installation_create` | Create an installation record for a delivered line (idempotent) |
-| `/solicitudes/instalaciones/<id>/` | `installation_detail` | Current stage/quantities/blockers/open defects, progress form, ack/supervisor-confirm, inspections, handoff actions for `installation_to_inspection` and `inspection_to_acceptance`, final-acceptance detail |
+| `/solicitudes/instalaciones/<id>/` | `installation_detail` | Current stage/quantities/blockers/open defects, progress form, ack/supervisor-confirm, inspections, handoff actions for `installation_to_inspection` and `inspection_to_acceptance`, final-acceptance detail, evidence upload |
 | `/solicitudes/instalaciones/<id>/progreso/` (POST) | `installation_progress` | Records installed/not-used/damaged quantities; enforces the delivered-quantity guard (with an authorized-override path) |
 | `/solicitudes/instalaciones/<id>/reconocer/` (POST) | `installation_acknowledge` | Installer acknowledgement |
 | `/solicitudes/instalaciones/<id>/confirmar-supervisor/` (POST) | `installation_supervisor_confirm` | Supervisor confirmation |
 | `/solicitudes/instalaciones/<id>/inspeccionar/` (POST) | `installation_create_inspection` | Records a new inspection (or reinspection) — pass/conditional/fail, punch-list defects one per line |
 | `/solicitudes/instalaciones/<id>/aceptar-final/` (POST) | `installation_final_accept` | Records the accepted-vs-conditional decision detail — only once the `inspection_to_acceptance` handoff is already `ACCEPTED` (see ADR-021) |
+| `/solicitudes/instalaciones/<id>/evidencia/` (POST) | `installation_add_evidence` | Uploads a file as evidence |
 | `/solicitudes/inspecciones/` | `inspection_list` | Inspections, filterable by result |
-| `/solicitudes/inspecciones/<id>/` | `inspection_detail` | Punch-list, technical sign-off, reinspection chain link |
+| `/solicitudes/inspecciones/<id>/` | `inspection_detail` | Punch-list, technical sign-off, reinspection chain link, evidence upload |
 | `/solicitudes/inspecciones/<id>/items/<item_id>/cerrar/` (POST) | `inspection_close_item` | Closes one punch-list defect |
 | `/solicitudes/inspecciones/<id>/firma-tecnica/` (POST) | `inspection_sign_off` | Records technical sign-off |
+| `/solicitudes/inspecciones/<id>/evidencia/` (POST) | `inspection_add_evidence` | Uploads a file as evidence |
 | `/solicitudes/aceptaciones/` | `acceptance_list` | Final acceptance history, scoped to accessible projects |
 | `/costos/` | `apps.cost.views.landed_cost_list` | Landed cost versions (provisional vs. final) |
 | `/costos/<id>/` | `landed_cost_detail` | Per-line cost breakdown |

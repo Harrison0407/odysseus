@@ -2,6 +2,25 @@
 
 Newest first.
 
+## ADR-022 — Evidence upload reuses `apps.documents` + `apps.audit.Attachment`, no new upload path
+**Decision:** `apps.audit.services.attach_evidence(target, user, *,
+document_type, title, uploaded_file)` is the one function that turns an
+uploaded file into evidence linked to *any* target
+(Delivery/InstallationRecord/InspectionRecord today, trivially any future
+model tomorrow). It calls `apps.documents.views.DocumentUploadForm`'s
+validation and `Document`/`DocumentVersion` creation exactly as the
+existing `/documentos/subir/` screen does, then creates one `Attachment`
+row.
+**Why:** A bespoke per-model "photo" field (the pattern
+`InstallationRecord.photo_document` used, kept only for backward
+compatibility) would have to reinvent extension/size validation and
+SHA-256 duplicate detection for every new evidence-bearing screen.
+`Attachment` was modeled from day one exactly for this
+(`content_type`/`object_id`, ADR-004) but sat unused until this
+milestone — the same "wire up an existing unused model instead of
+inventing a parallel one" move already made for `UserProjectAccess`
+(ADR-015) and `ResponsibilityAssignment` (ADR-016).
+
 ## ADR-021 — Final acceptance detail is captured *after* the generic `accept_handoff`, never instead of it
 **Decision:** `installation_final_accept` (the domain-specific "aceptado /
 aceptado condicionado + notas" screen) requires the `inspection_to_acceptance`

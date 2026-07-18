@@ -740,3 +740,101 @@ class TestInstallationToInspectionGate:
     def test_ready_once_completed(self, complete_installation):
         from apps.workflow.gates import evaluate_installation_to_inspection
         assert evaluate_installation_to_inspection(complete_installation).ready
+
+
+# ---------------------------------------------------------------------------
+# Evidence/photo upload (apps.audit.Attachment reuse)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def evidence_doc_type(organization):
+    from apps.documents.models import DocumentType
+    return DocumentType.objects.create(organization=organization, code="receipt_evidence", name="Evidencia de Recepción")
+
+
+class TestEvidenceUpload:
+    def test_upload_evidence_on_delivery_creates_attachment(
+        self, client, dispatched_delivery, miguel, project_access_obra_dia, evidence_doc_type
+    ):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.urls import reverse
+        from apps.audit.models import Attachment
+
+        client.force_login(miguel)
+        f = SimpleUploadedFile("foto.jpg", b"fake-jpeg-bytes", content_type="image/jpeg")
+        response = client.post(
+            reverse("requests:delivery-add-evidence", args=[dispatched_delivery.pk]),
+            {"document_type": evidence_doc_type.pk, "title": "Foto de entrega", "file": f},
+        )
+        assert response.status_code == 302
+        from django.contrib.contenttypes.models import ContentType
+        assert Attachment.objects.filter(
+            content_type=ContentType.objects.get_for_model(Delivery), object_id=dispatched_delivery.pk
+        ).count() == 1
+
+    def test_upload_evidence_on_installation_detects_duplicate(
+        self, client, complete_installation, miguel, project_access_obra_dia, evidence_doc_type
+    ):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.urls import reverse
+        from apps.audit.models import Attachment
+
+        client.force_login(miguel)
+        content = b"same-photo-bytes"
+        client.post(
+            reverse("requests:installation-add-evidence", args=[complete_installation.pk]),
+            {"document_type": evidence_doc_type.pk, "title": "Foto 1", "file": SimpleUploadedFile("a.jpg", content)},
+        )
+        client.post(
+            reverse("requests:installation-add-evidence", args=[complete_installation.pk]),
+            {"document_type": evidence_doc_type.pk, "title": "Foto 2 (duplicada)", "file": SimpleUploadedFile("b.jpg", content)},
+        )
+        from django.contrib.contenttypes.models import ContentType
+        attachments = Attachment.objects.filter(
+            content_type=ContentType.objects.get_for_model(InstallationRecord), object_id=complete_installation.pk
+        ).select_related("document")
+        assert attachments.count() == 2
+        docs = [a.document for a in attachments]
+        assert docs[0].current_version.sha256 == docs[1].current_version.sha256
+
+    def test_cross_project_isolation_denies_evidence_upload(
+        self, client, organization, dispatched_delivery, department_obra, role_obra, evidence_doc_type
+    ):
+        from django.contrib.auth import get_user_model
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.urls import reverse
+        from apps.audit.models import Attachment
+        from django.contrib.contenttypes.models import ContentType
+
+        User = get_user_model()
+        other_project = Project.objects.create(organization=organization, name="Otro Proyecto Evidencia", code="otro-evid")
+        outsider = User.objects.create_user(username="obra_otro_evid", password="testpass123")
+        UserProfile.objects.create(user=outsider, organization=organization, primary_department=department_obra)
+        UserRole.objects.create(user=outsider, role=role_obra, department=department_obra)
+        UserProjectAccess.objects.create(user=outsider, project=other_project)
+
+        client.force_login(outsider)
+        response = client.post(
+            reverse("requests:delivery-add-evidence", args=[dispatched_delivery.pk]),
+            {"document_type": evidence_doc_type.pk, "title": "Intento no autorizado", "file": SimpleUploadedFile("x.jpg", b"x")},
+        )
+        assert response.status_code == 302
+        assert not Attachment.objects.filter(
+            content_type=ContentType.objects.get_for_model(Delivery), object_id=dispatched_delivery.pk
+        ).exists()
+
+    def test_evidence_listed_on_installation_detail_page(
+        self, client, complete_installation, miguel, project_access_obra_dia, evidence_doc_type
+    ):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.urls import reverse
+
+        client.force_login(miguel)
+        client.post(
+            reverse("requests:installation-add-evidence", args=[complete_installation.pk]),
+            {"document_type": evidence_doc_type.pk, "title": "Foto de instalación", "file": SimpleUploadedFile("i.jpg", b"abc")},
+        )
+        response = client.get(reverse("requests:installation-detail", args=[complete_installation.pk]))
+        assert response.status_code == 200
+        assert "Foto de instalación" in response.content.decode()

@@ -75,6 +75,9 @@
     </div>
 </div>
 
+{% url 'requests:delivery-add-evidence' delivery.pk as evidence_upload_url %}
+{% include "requests/_evidence.html" %}
+
 <div class="card mt-3">
     <div class="card-header">Entrega de responsabilidad (Proyecto → Instalación)</div>
     <div class="card-body">

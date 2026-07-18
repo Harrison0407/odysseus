@@ -143,4 +143,7 @@
 <div class="alert alert-info">La entrega de inspección → aceptación fue enviada y está a la espera de un usuario autorizado para aceptarla. Una vez aceptada, podrá registrar aquí el detalle de la decisión final (aceptado / aceptado condicionado).
     <a href="{% url 'workflow:detail' submitted_acceptance_handoff.pk %}">Ver entrega</a></div>
 {% endif %}
+
+{% url 'requests:installation-add-evidence' installation.pk as evidence_upload_url %}
+{% include "requests/_evidence.html" %}
 {% endblock %}

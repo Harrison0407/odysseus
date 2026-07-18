@@ -59,5 +59,8 @@
     </div>
 </div>
 
+{% url 'requests:inspection-add-evidence' inspection.pk as evidence_upload_url %}
+{% include "requests/_evidence.html" %}
+
 <a class="btn btn-outline-primary btn-sm" href="{% url 'requests:installation-detail' inspection.installation_id %}">Volver a la instalación</a>
 {% endblock %}

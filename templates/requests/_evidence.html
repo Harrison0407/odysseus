@@ -1,0 +1,25 @@
+<div class="card mb-3">
+    <div class="card-header">Evidencia y documentos adjuntos</div>
+    <div class="card-body">
+        <ul class="list-group list-group-flush mb-3">
+            {% for att in evidence %}
+            <li class="list-group-item d-flex justify-content-between flex-wrap">
+                <span>{{ att.document.document_type.name }} — {{ att.document.title }}</span>
+                <span>
+                    {% if att.document.current_version %}
+                    <a href="{% url 'documents:download' att.document.pk att.document.current_version.pk %}">Descargar</a>
+                    {% endif %}
+                    <span class="text-muted ms-2">{{ att.created_at|date:"d/m/Y H:i" }} — {{ att.created_by }}</span>
+                </span>
+            </li>
+            {% empty %}
+            <li class="list-group-item text-muted">Sin evidencia adjunta todavía.</li>
+            {% endfor %}
+        </ul>
+        <form method="post" action="{{ evidence_upload_url }}" enctype="multipart/form-data">
+            {% csrf_token %}
+            {{ evidence_form.as_p }}
+            <button class="btn btn-outline-primary btn-sm" type="submit">Adjuntar evidencia</button>
+        </form>
+    </div>
+</div>

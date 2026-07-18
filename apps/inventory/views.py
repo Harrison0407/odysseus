@@ -57,7 +57,10 @@ def location_list(request):
 
 @login_required
 def lot_detail(request, pk):
-    lot = get_object_or_404(InventoryLot.objects.select_related("item"), pk=pk)
+    lot = get_object_or_404(
+        InventoryLot.objects.select_related("item"),
+        pk=pk, item__organization=request.user.profile.organization,
+    )
     movements = lot.movements.select_related("from_location", "to_location", "posted_by").order_by("posted_at")
     return render(request, "inventory/lot_detail.html", {"lot": lot, "movements": movements})
 

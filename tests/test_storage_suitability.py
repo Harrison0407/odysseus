@@ -308,3 +308,30 @@ class TestLocationDetailHTTP:
         client.force_login(outsider)
         response = client.get(reverse("inventory:location-detail", args=[small_capacity_location.pk]))
         assert response.status_code == 404
+
+
+class TestLotDetailIsolation:
+    """Regression test for a real pre-existing gap found during final
+    live-HTTP validation: apps.inventory.views.lot_detail had zero
+    organization scoping — any authenticated user of any organization
+    could view any other organization's lot detail page by UUID."""
+
+    def test_lot_detail_denies_cross_organization_access(self, client, plain_location, normal_item, manuel):
+        lot = InventoryLot.objects.create(item=normal_item, lot_code="ISOLATION-TEST-LOT")
+
+        from django.contrib.auth import get_user_model
+
+        from apps.accounts.models import Organization, UserProfile
+
+        User = get_user_model()
+        other_org = Organization.objects.create(name="Other Org Lot Detail Test")
+        outsider = User.objects.create_user(username="outsider_lot_detail", password="testpass123")
+        UserProfile.objects.create(user=outsider, organization=other_org)
+
+        client.force_login(outsider)
+        response = client.get(reverse("inventory:lot-detail", args=[lot.pk]))
+        assert response.status_code == 404
+
+        client.force_login(manuel)
+        response = client.get(reverse("inventory:lot-detail", args=[lot.pk]))
+        assert response.status_code == 200

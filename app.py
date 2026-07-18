@@ -170,6 +170,11 @@ from starlette.middleware.base import BaseHTTPMiddleware as _BaseHTTPMiddleware
 from starlette.responses import JSONResponse as _JSONResponse
 
 REQUEST_HARD_TIMEOUT = float(os.getenv("REQUEST_HARD_TIMEOUT", "45"))
+_TIMEOUT_EXEMPT_EXACT = {
+    # This route owns one end-to-end deadline covering body read, isolated
+    # inference, result transfer, and child cleanup.
+    "/api/marketmatch/stt/transcribe",
+}
 _TIMEOUT_EXEMPT_PREFIXES = (
     "/api/chat",            # streaming
     "/api/shell/stream",    # SSE
@@ -187,7 +192,7 @@ _TIMEOUT_EXEMPT_PREFIXES = (
 class _RequestTimeoutMiddleware(_BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         path = request.url.path or ""
-        if any(path.startswith(p) for p in _TIMEOUT_EXEMPT_PREFIXES):
+        if path in _TIMEOUT_EXEMPT_EXACT or any(path.startswith(p) for p in _TIMEOUT_EXEMPT_PREFIXES):
             return await call_next(request)
         try:
             return await _asyncio.wait_for(call_next(request), timeout=REQUEST_HARD_TIMEOUT)
@@ -733,6 +738,11 @@ from routes.stt_routes import setup_stt_routes
 app.include_router(setup_stt_routes(stt_service))
 logger.info("STT service initialized (provider managed via settings)")
 
+# Controlled MarketMatch Calls pilot (raw canonical WAV; isolated local worker)
+from routes.marketmatch_stt_routes import setup_marketmatch_stt_routes
+from src.marketmatch_stt_process import shutdown_active_workers
+app.include_router(setup_marketmatch_stt_routes())
+
 # Documents (artifacts/canvas)
 from routes.document_routes import setup_document_routes
 document_router = setup_document_routes(session_manager, upload_handler)
@@ -1243,6 +1253,13 @@ async def _startup_event():
 
 async def _shutdown_event():
     logger.info("Application shutting down...")
+    # Reap any isolated MarketMatch transcription child before other services
+    # are dismantled. The worker has no shared application state, but shutdown
+    # must not leave it running past the app process lifecycle.
+    try:
+        await asyncio.to_thread(shutdown_active_workers)
+    except Exception as e:
+        logger.warning(f"MarketMatch transcription shutdown error: {e}")
     if upload_cleanup_task:
         upload_cleanup_task.cancel()
         try:

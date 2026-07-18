@@ -135,9 +135,13 @@ fixture through real HTTP requests against a running dev server — see
     `compare_scenario_options`/`finalize_comparison_scenario`);
     `/recepcion/planes/<id>/` + `/recepcion/comparaciones/<id>/`
     screens, printable HTML export.
+30. ~~Supplier claim package generation~~ — **Done.** New
+    `apps.claims` app: `SupplierClaim` (ADR-031), full lifecycle in
+    `apps.claims.services`, evidence via the existing
+    `attach_evidence` mechanism, printable claim package via the
+    existing `_save_html_snapshot` mechanism; `/reclamos/` screens.
 
-Remaining, in documented order: supplier claim package generation, QR
-label printing.
+Remaining, in documented order: QR label printing.
 
 ## Explicitly out of scope for any near-term increment
 

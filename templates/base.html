@@ -54,6 +54,7 @@
                 <li class="nav-item"><a class="nav-link" href="{% url 'cost:list' %}">{% trans "Costos" %}</a></li>
                 <li class="nav-item"><a class="nav-link" href="{% url 'customs:confotur-list' %}">{% trans "CONFOTUR" %}</a></li>
                 <li class="nav-item"><a class="nav-link" href="{% url 'tools:list' %}">{% trans "Herramientas" %}</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'claims:list' %}">{% trans "Reclamos" %}</a></li>
                 <li class="nav-item"><a class="nav-link" href="{% url 'workflow:inbox' %}">{% trans "Flujo y Entregas" %}</a></li>
             </ul>
             <span class="navbar-text text-white me-3">{{ user.get_full_name|default:user.username }}</span>

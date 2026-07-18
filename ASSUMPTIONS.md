@@ -235,3 +235,27 @@ instead, exactly as required, and is **not** listed here as a resolved assumptio
   arbitrary one-off migration default with no real row to apply it to.
   `add_storage_option`/`StorageOptionForm` both require a currency in
   practice.
+- **A27. A `SupplierClaim` cannot be approved for submission without
+  at least one evidence attachment.** `apps.claims.services
+  .approve_claim` raises `ClaimError` if
+  `apps.audit.services.list_evidence(claim)` is empty. This is a
+  conservative *operational* rule chosen by this session, not a legal
+  requirement handed down by the spec — a claim with zero evidence
+  should not leave draft state. It's a "add the evidence, then
+  approve" gate, not a business emergency requiring an override path,
+  so no override mechanism was added (unlike the storage-suitability
+  gates, which do have one). If Harrison wants an override path here
+  too (e.g. for a claim where evidence genuinely doesn't exist), that
+  is a five-minute addition reusing the same `can_override_gates`
+  pattern — flagged here rather than silently assumed unnecessary.
+- **A28. `SupplierClaim.claim_number` is generated
+  organization-and-year-scoped (`CLM-{year}-{sequence:04d}`) using a
+  `Max()` aggregate inside `transaction.atomic`, not a
+  `select_for_update`-guarded counter.** This matches the exact
+  pattern already used for `StorageComparisonScenario.version_number`
+  in this same delivery (A-adjacent, ADR-030) — at this pilot's actual
+  concurrency (a handful of named users, not simultaneous claim
+  creation at the same instant), the small theoretical race window is
+  an acceptable, consistent trade-off rather than a bespoke
+  distributed-lock mechanism for one sequence generator when none of
+  the system's other sequence generators have one either.

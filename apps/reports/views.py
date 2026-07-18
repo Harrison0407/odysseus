@@ -1,6 +1,7 @@
 import io
 
 from django.contrib.auth.decorators import login_required
+from django.contrib.contenttypes.models import ContentType
 from django.http import HttpResponse, HttpResponseGone, HttpResponseNotFound
 from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
@@ -21,14 +22,22 @@ SHARE_VIEW_MAX_REQUESTS = 30
 SHARE_VIEW_WINDOW_SECONDS = 60
 
 
-def _save_html_snapshot(html, *, report_type, user, organization, title, filename):
+def _save_html_snapshot(html, *, report_type, user, organization, title, filename, content_object=None):
     """Shared persistence for every self-contained HTML snapshot (spec
     section 29): stores the rendered HTML as a real `Document`/
     `DocumentVersion` (SHA-256 hashed, same as any other upload — never
     a bespoke storage path) and records a `ReportVersion` pointing at it.
-    Both `shipment_snapshot` and `receiving_manifest_snapshot` call this
-    rather than duplicating the create-document-and-version dance."""
+    `shipment_snapshot`, `receiving_manifest_snapshot`, and the claim
+    package generator all call this rather than duplicating the
+    create-document-and-version dance. `content_object`, when given,
+    links the `ReportVersion` back to the specific record it documents
+    (e.g. a `SupplierClaim`) via the existing generic content-type
+    pointer, so every package generated for that record can be found
+    and counted — no separate per-domain versioning model needed."""
     report_version = ReportVersion.objects.create(report_type=report_type, generated_by=user, created_by=user)
+    if content_object is not None:
+        report_version.content_type = ContentType.objects.get_for_model(content_object)
+        report_version.object_id = content_object.pk
 
     stored = document_storage.save(io.BytesIO(html.encode("utf-8")), filename)
     doc_type, _ = DocumentType.objects.get_or_create(

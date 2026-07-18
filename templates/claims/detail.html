@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-start">
+    <div>
+        <h3>{{ claim.claim_number }} — {{ claim.supplier }}</h3>
+        <p class="text-muted">
+            {{ claim.get_claim_type_display }} ·
+            <span class="badge bg-secondary">{{ claim.get_status_display }}</span>
+        </p>
+    </div>
+    <a class="btn btn-outline-secondary btn-sm" href="{% url 'claims:package' claim.pk %}">Descargar paquete de reclamo (HTML)</a>
+</div>
+
+{% if warnings %}
+<div class="alert alert-warning">
+    <strong>Advertencias de documentación faltante:</strong>
+    <ul class="mb-0">{% for w in warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<div class="row g-3 mb-3">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">Trazabilidad</div>
+            <div class="card-body">
+                <table class="table table-sm mb-0">
+                    <tr><th>Embarque</th><td>{{ claim.shipment }}</td></tr>
+                    <tr><th>Contenedor</th><td>{{ claim.container|default:"—" }}</td></tr>
+                    <tr><th>Orden de compra</th><td>{{ claim.purchase_order|default:"—" }}</td></tr>
+                    <tr><th>Línea de OC</th><td>{{ claim.purchase_order_line|default:"—" }}</td></tr>
+                    <tr><th>Artículo</th><td>{{ claim.item|default:"—" }}</td></tr>
+                    <tr><th>Variación oficial/operativa</th><td>{{ claim.manifest_variance|default:"—" }}</td></tr>
+                    <tr><th>Recibo</th><td>{{ claim.receipt|default:"—" }}</td></tr>
+                    <tr><th>Línea de recibo</th><td>{{ claim.receipt_line|default:"—" }}</td></tr>
+                    <tr><th>Discrepancia</th><td>{{ claim.discrepancy|default:"—" }}</td></tr>
+                    <tr><th>Registro de cuarentena</th><td>{{ claim.quarantine_record|default:"—" }}</td></tr>
+                    <tr><th>Inspección</th><td>{{ claim.inspection|default:"—" }}</td></tr>
+                    <tr><th>Caso de reemplazo</th><td>{{ claim.replacement_case|default:"—" }}</td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">Cantidad, valor y responsables</div>
+            <div class="card-body">
+                <table class="table table-sm mb-0">
+                    <tr><th>Cantidad reclamada</th><td>{{ claim.quantity_claimed|default:"—" }}</td></tr>
+                    <tr><th>Cantidad dañada</th><td>{{ claim.quantity_damaged|default:"—" }}</td></tr>
+                    <tr><th>Cantidad faltante</th><td>{{ claim.quantity_missing|default:"—" }}</td></tr>
+                    <tr><th>Monto reclamado</th><td>{{ claim.amount_claimed|default:"—" }} {{ claim.currency|default:"" }}</td></tr>
+                    <tr><th>Responsable interno</th><td>{{ claim.responsible_internal_owner|default:"—" }}</td></tr>
+                    <tr><th>Contacto del proveedor</th><td>{{ claim.responsible_supplier_contact|default:"—" }}</td></tr>
+                </table>
+                <p class="mb-0"><strong>Razón:</strong> {{ claim.reason }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include "requests/_evidence.html" with evidence=evidence evidence_upload_url=evidence_upload_url evidence_form=upload_form %}
+
+<div class="card mb-3">
+    <div class="card-header">Acciones del ciclo de vida</div>
+    <div class="card-body d-flex flex-wrap gap-3">
+        {% if claim.status == "draft" %}
+        <form method="post" action="{% url 'claims:approve' claim.pk %}">
+            {% csrf_token %}<button class="btn btn-success btn-sm" type="submit">Aprobar para envío</button>
+        </form>
+        {% endif %}
+        {% if claim.status == "approved" %}
+        <form method="post" action="{% url 'claims:submit' claim.pk %}">
+            {% csrf_token %}<button class="btn btn-primary btn-sm" type="submit">Marcar como enviado al proveedor</button>
+        </form>
+        {% endif %}
+        {% if claim.status == "submitted" or claim.status == "supplier_responded" %}
+        <form method="post" action="{% url 'claims:record-response' claim.pk %}" class="row g-2">
+            {% csrf_token %}
+            <div class="col-auto">{{ response_form.response }}</div>
+            <div class="col-auto">{{ response_form.notes }}</div>
+            <div class="col-auto"><button class="btn btn-info btn-sm" type="submit">Registrar respuesta</button></div>
+        </form>
+        {% endif %}
+        {% if claim.status == "supplier_responded" %}
+        <form method="post" action="{% url 'claims:resolve' claim.pk %}" class="row g-2">
+            {% csrf_token %}
+            <div class="col-auto">{{ resolve_form.resolution_type }}</div>
+            <div class="col-auto">{{ resolve_form.resolution_reference }}</div>
+            <div class="col-auto">{{ resolve_form.resolution_amount }}</div>
+            <div class="col-auto"><button class="btn btn-warning btn-sm" type="submit">Resolver</button></div>
+        </form>
+        {% endif %}
+        {% if claim.status == "resolved" %}
+        <form method="post" action="{% url 'claims:close' claim.pk %}" class="row g-2">
+            {% csrf_token %}
+            <div class="col-auto">{{ close_form.closure_notes }}</div>
+            <div class="col-auto"><button class="btn btn-secondary btn-sm" type="submit">Cerrar reclamo</button></div>
+        </form>
+        {% endif %}
+        {% if claim.status == "closed" %}
+        <span class="text-muted">Reclamo cerrado — {{ claim.closure_notes }}</span>
+        {% endif %}
+    </div>
+</div>
+
+<a class="btn btn-outline-secondary btn-sm" href="{% url 'claims:list' %}">Volver a reclamos</a>
+{% endblock %}

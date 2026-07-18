@@ -191,9 +191,39 @@ is silently claimed to be done when it isn't.
      `_save_html_snapshot`/`ReportVersion` mechanism as the receiving
      manifest snapshot, not a new export path. 21 new tests
      (`tests/test_storage_comparison.py`).
-   - Supplier claim package generation, QR label printing remain **not
-     yet built**. See `docs/implementation-roadmap.md` for build
-     order.
+   - ~~Supplier claim package generation~~ — **Done.** Unlike
+     storage capacity/external-storage (which activated dormant
+     models), `SupplierClaim` did not exist at all before this entry —
+     confirmed via a repo-wide search for any `Claim` model. New
+     `apps.claims` app, full lifecycle
+     (`DRAFT -> APPROVED -> SUBMITTED -> SUPPLIER_RESPONDED -> RESOLVED -> CLOSED`,
+     ADR-031), traceable via optional FKs to `Supplier`/
+     `PurchaseOrder`/`PurchaseOrderLine`/`Item`/`Shipment`/`Container`/
+     `ManifestVariance`/`Receipt`/`ReceiptLine`/`Discrepancy`/
+     `QuarantineRecord`/`Inspection`/`ReplacementCase` — every field a
+     genuine link to an existing record, never a re-entered copy. A
+     claim referencing the Official-vs-Operational `ManifestVariance`
+     only ever points at that already-immutable record; nothing here
+     can overwrite either the Official Carrier Summary or the Internal
+     Operational Manifest. Evidence reuses
+     `apps.audit.services.attach_evidence`/`Attachment` (ADR-022, no
+     new `ClaimEvidence` model); the printable/downloadable claim
+     package reuses `apps.reports._save_html_snapshot`/`ReportVersion`
+     (extended with an optional `content_object` link so a
+     `ReportVersion` can point back at the specific claim it
+     documents, rather than adding a dedicated per-claim
+     package-version model) — the `CLAIM_PACKAGE` report type already
+     existed in `ReportVersion.ReportType`, unused, anticipating
+     exactly this feature. Approval requires at least one evidence
+     attachment (a conservative operational rule, not a legal one —
+     A27); each lifecycle transition is guarded so it can never run out
+     of order or repeat (submitting twice is refused, not silently
+     re-posted). `/reclamos/` list/create/detail screens, linked from
+     the main nav. No email is ever sent automatically — "submitted"
+     only records that a human sent the package by some other channel.
+     21 new tests (`tests/test_supplier_claims.py`).
+   - QR label printing remains **not yet built**. See
+     `docs/implementation-roadmap.md` for build order.
 7. ~~`purchasing_to_finance`/`finance_to_logistics` have no "create
    handoff" button" on the Purchase Order detail page~~ — **Done.** All
    8 required gates now have a "create handoff" entry point on their

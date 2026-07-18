@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paquete de reclamo — {{ claim.claim_number }}</title>
+<style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 2rem; color: #212529; }
+    h1 { font-size: 1.4rem; }
+    .banner { background: #fff3cd; border: 1px solid #ffe69c; padding: .75rem 1rem; margin-bottom: 1rem; border-radius: .25rem; }
+    .warn-banner { background: #f8d7da; border: 1px solid #f1aeb5; padding: .75rem 1rem; margin-bottom: 1rem; border-radius: .25rem; }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 1.5rem; font-size: .85rem; }
+    th, td { border: 1px solid #dee2e6; padding: .4rem .6rem; text-align: left; vertical-align: top; }
+    th { background: #f8f9fa; width: 30%; }
+    .section-title { background: #e9ecef; padding: .4rem .6rem; font-weight: bold; margin-top: 1.5rem; }
+    footer { margin-top: 2rem; font-size: .75rem; color: #6c757d; }
+    .table-scroll { overflow-x: auto; margin-bottom: 1.5rem; }
+    .table-scroll table { margin-bottom: 0; }
+    @media (max-width: 576px) {
+        body { margin: 0.75rem; }
+    }
+</style>
+</head>
+<body>
+
+<div class="banner">
+    <strong>Esta es una instantánea estática (snapshot) del reclamo.</strong> No es la fuente de la verdad en vivo.
+    Generada el {{ generated_at }} por el sistema DT Beach — Control de Suministro.
+</div>
+
+{% if warnings %}
+<div class="warn-banner">
+    <strong>Advertencias de documentación faltante:</strong>
+    <ul>{% for w in warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<h1>Paquete de reclamo {{ claim.claim_number }}</h1>
+<p>Estado: {{ claim.get_status_display }} · Tipo: {{ claim.get_claim_type_display }}</p>
+
+<div class="section-title">1. Resumen</div>
+<table>
+    <tr><th>Proveedor</th><td>{{ claim.supplier }}</td></tr>
+    <tr><th>Orden de compra</th><td>{{ claim.purchase_order|default:"—" }}</td></tr>
+    <tr><th>Línea de orden de compra</th><td>{{ claim.purchase_order_line|default:"—" }}</td></tr>
+    <tr><th>Artículo</th><td>{{ claim.item|default:"—" }}</td></tr>
+    <tr><th>Embarque</th><td>{{ claim.shipment }}</td></tr>
+    <tr><th>Contenedor</th><td>{{ claim.container|default:"—" }}</td></tr>
+    <tr><th>Razón</th><td>{{ claim.reason }}</td></tr>
+</table>
+
+<div class="section-title">2. Discrepancia y registros de respaldo</div>
+<table>
+    <tr><th>Discrepancia</th><td>{{ claim.discrepancy|default:"—" }}</td></tr>
+    <tr><th>Variación oficial vs. operativa</th>
+        <td>
+        {% if claim.manifest_variance %}
+            {{ claim.manifest_variance.official_category_text|default:"(sin categoría oficial)" }} vs.
+            {{ claim.manifest_variance.internal_manifest_line }}
+            — esperado: {{ claim.manifest_variance.quantity_expected_at_receipt|default:"—" }},
+            recibido: {{ claim.manifest_variance.quantity_received|default:"—" }}
+            ({{ claim.manifest_variance.get_severity_display }}, {% if claim.manifest_variance.is_explained %}explicado{% else %}sin explicar{% endif %})
+        {% else %}—{% endif %}
+        </td>
+    </tr>
+    <tr><th>Recibo</th><td>{{ claim.receipt|default:"—" }}</td></tr>
+    <tr><th>Línea de recibo</th><td>{{ claim.receipt_line|default:"—" }}</td></tr>
+    <tr><th>Registro de cuarentena</th><td>{{ claim.quarantine_record|default:"—" }}</td></tr>
+    <tr><th>Inspección</th>
+        <td>{% if claim.inspection %}{{ claim.inspection }} — {{ claim.inspection.findings|default:"(sin hallazgos registrados)" }}{% else %}—{% endif %}</td>
+    </tr>
+    <tr><th>Caso de reemplazo</th><td>{{ claim.replacement_case|default:"—" }}</td></tr>
+</table>
+
+<div class="section-title">3. Cantidad y valor reclamado</div>
+<table>
+    <tr><th>Cantidad reclamada</th><td>{{ claim.quantity_claimed|default:"—" }}</td></tr>
+    <tr><th>Cantidad dañada</th><td>{{ claim.quantity_damaged|default:"—" }}</td></tr>
+    <tr><th>Cantidad faltante</th><td>{{ claim.quantity_missing|default:"—" }}</td></tr>
+    <tr><th>Monto reclamado</th><td>{{ claim.amount_claimed|default:"—" }} {{ claim.currency|default:"" }}</td></tr>
+</table>
+
+<div class="section-title">4. Remedio solicitado y contactos</div>
+<table>
+    <tr><th>Responsable interno</th><td>{{ claim.responsible_internal_owner|default:"—" }}</td></tr>
+    <tr><th>Contacto del proveedor</th><td>{{ claim.responsible_supplier_contact|default:"—" }}</td></tr>
+    <tr><th>Respuesta del proveedor</th><td>{{ claim.get_supplier_response_display }} — {{ claim.supplier_response_notes|default:"" }}</td></tr>
+    <tr><th>Resolución</th>
+        <td>{{ claim.get_resolution_type_display }}
+            {% if claim.resolution_reference %} — Ref: {{ claim.resolution_reference }}{% endif %}
+            {% if claim.resolution_amount %} — Monto: {{ claim.resolution_amount }}{% endif %}
+        </td>
+    </tr>
+</table>
+
+<div class="section-title">5. Índice de evidencia</div>
+<div class="table-scroll">
+<table>
+    <thead><tr><th>Documento</th><th>Tipo</th><th>Adjuntado</th><th>Por</th></tr></thead>
+    <tbody>
+    {% for a in evidence %}
+        <tr>
+            <td>{{ a.document.title }}</td>
+            <td>{{ a.document.document_type.name }}</td>
+            <td>{{ a.created_at|date:"d/m/Y H:i" }}</td>
+            <td>{{ a.created_by }}</td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="4">Sin evidencia adjunta.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+
+<div class="section-title">6. Cronología completa</div>
+<div class="table-scroll">
+<table>
+    <thead><tr><th>Fecha</th><th>Acción</th><th>Por</th><th>Detalle</th></tr></thead>
+    <tbody>
+    {% for event in chronology %}
+        <tr>
+            <td>{{ event.created_at|date:"d/m/Y H:i" }}</td>
+            <td>{{ event.get_action_display }}</td>
+            <td>{{ event.actor|default:"—" }}</td>
+            <td>{{ event.summary }}</td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="4">Sin eventos registrados.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+
+<footer>
+    Reclamo {{ claim.claim_number }} — generado el {{ generated_at }}. Documento de referencia; no sustituye el registro vivo del sistema.
+</footer>
+</body>
+</html>

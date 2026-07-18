@@ -85,6 +85,16 @@
 | `/herramientas/<id>/entregar/` (POST) | `tool_checkout` | Checks out a tool — blocked if already checked out |
 | `/herramientas/<id>/entrega/<checkout_id>/devolver/` (POST) | `tool_return` | Records a return, optionally with damage noted |
 | `/herramientas/<id>/reparacion/` (POST) | `tool_repair` | Records a repair, optionally resulting in write-off |
+| `/reclamos/` | `apps.claims.views.claim_list` | Supplier claims, scoped to organization, filterable by status |
+| `/reclamos/nuevo/` | `claim_create` | Create a claim linked to a shipment/supplier and, optionally, any of its supporting records |
+| `/reclamos/<id>/` | `claim_detail` | Full traceability, quantities/amount, evidence upload, missing-document warnings, lifecycle action buttons |
+| `/reclamos/<id>/evidencia/` (POST) | `claim_evidence_upload` | Attaches evidence via the shared `attach_evidence` mechanism |
+| `/reclamos/<id>/aprobar/` (POST) | `claim_approve` | DRAFT → APPROVED (requires at least one evidence attachment) |
+| `/reclamos/<id>/enviar/` (POST) | `claim_submit` | APPROVED → SUBMITTED (refuses to run twice — no duplicate submission) |
+| `/reclamos/<id>/respuesta/` (POST) | `claim_record_response` | Records the supplier's accepted/partially-accepted/rejected response |
+| `/reclamos/<id>/resolver/` (POST) | `claim_resolve` | Records replacement/credit-note/settlement resolution |
+| `/reclamos/<id>/cerrar/` (POST) | `claim_close` | RESOLVED → CLOSED |
+| `/reclamos/<id>/paquete/` | `claim_generate_package` | Downloads the self-contained HTML claim package |
 | `/api/v1/...` | DRF router | `shipments`, `purchase-orders`, `manifest-lines`, `manifest-variances`, `discrepancies` (read-only, org-scoped) |
 | `/admin/` | Django admin | Back-office/debug only — every model auto-registered; never the intended business-user interface (spec requirement) |
 

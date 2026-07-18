@@ -2,6 +2,34 @@
 
 Newest first.
 
+## ADR-031 — Supplier claims are a new `apps.claims` app; evidence and package generation reuse existing generic mechanisms rather than new per-claim models
+**Decision:** `SupplierClaim` (new model, new `apps.claims` app) links
+via optional FKs to every real record that can justify a claim
+(`Supplier`, `PurchaseOrder`/`PurchaseOrderLine`, `Item`, `Shipment`,
+`Container`, `ManifestVariance`, `Receipt`/`ReceiptLine`,
+`Discrepancy`, `QuarantineRecord`, `Inspection`, `ReplacementCase`) —
+never a re-entered copy of their data. Evidence reuses
+`apps.audit.services.attach_evidence`/`Attachment` (ADR-022) instead of
+a new `ClaimEvidence` model. Package generation reuses
+`apps.reports._save_html_snapshot`/`ReportVersion` (which already had
+an unused `CLAIM_PACKAGE` report-type choice, anticipating this exact
+feature) instead of a new per-claim package-version model —
+`_save_html_snapshot` gained one new optional parameter,
+`content_object`, so the resulting `ReportVersion` can be traced back
+to the specific claim it documents via the same generic
+`content_type`/`object_id` pointer every other cross-cutting concern in
+this system already uses (ADR-004).
+**Why:** Unlike storage-suitability/external-storage (Priority 1 items
+that activated already-modeled-but-dormant models), no `Claim` model
+existed anywhere before this — confirmed by a repo-wide search. Given a
+green field, the natural trap is inventing a self-contained
+"claims module" that quietly re-implements evidence upload and report
+snapshotting a third and fourth time. Reusing both existing generic
+mechanisms keeps exactly one evidence-upload path and exactly one
+HTML-snapshot/document-provenance path for the whole system, which is
+also what the cross-cutting instruction for this delivery explicitly
+asked for.
+
 ## ADR-030 — External-storage comparison scenarios are versioned like `LandedCostVersion`/`ReleasePacketVersion`, not edited in place; never fabricate a currency conversion
 **Decision:** `StorageComparisonScenario` (new) wraps a set of
 `AlternativeStorageOption` rows for one `ReceivingPlan`, using the same

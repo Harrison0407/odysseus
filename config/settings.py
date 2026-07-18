@@ -73,6 +73,7 @@ INSTALLED_APPS = [
     "apps.reports",
     "apps.tools",
     "apps.customs",
+    "apps.claims",
     "apps.api",
 ]
 

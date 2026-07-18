@@ -571,3 +571,51 @@ documented order.
     202/202 passing (181 pre-existing + 21 new). Verified migrations
     apply cleanly from an empty test database (`pytest --create-db`);
     `manage.py check` and `makemigrations --check` both clean.
+39. **Supplier claim package generation.** Unlike the two prior
+    Priority 1 features, `SupplierClaim` did not exist in any form
+    before this entry — confirmed by a repo-wide search for any
+    `Claim` model — so this is the one greenfield data model among the
+    four Priority 1 features. New `apps.claims` app: `SupplierClaim`
+    (ADR-031) links via optional FKs to every real record that can
+    justify a claim (`Supplier`, `PurchaseOrder`/`PurchaseOrderLine`,
+    `Item`, `Shipment`, `Container`, `ManifestVariance`, `Receipt`/
+    `ReceiptLine`, `Discrepancy`, `QuarantineRecord`, `Inspection`,
+    `ReplacementCase`) — every field a genuine link, never a
+    re-entered copy; a claim referencing the Official-vs-Operational
+    `ManifestVariance` only ever points at that already-immutable
+    record, confirmed by a dedicated test that the variance's own
+    quantities are untouched after linking a claim to it. Lifecycle:
+    `DRAFT -> APPROVED -> SUBMITTED -> SUPPLIER_RESPONDED -> RESOLVED -> CLOSED`,
+    each transition guarded in `apps.claims.services` so it can never
+    run out of order or repeat (a second `submit_claim` call on an
+    already-`SUBMITTED` claim is refused, not silently reposted — the
+    duplicate-submission-prevention requirement). `claim_number` is
+    generated organization-and-year-scoped
+    (`CLM-{year}-{sequence:04d}`, A28). Approval requires at least one
+    evidence attachment — a conservative operational rule, not a legal
+    one (A27). Evidence reuses `apps.audit.services.attach_evidence`/
+    `Attachment` (ADR-022) rather than a new `ClaimEvidence` model. The
+    printable/downloadable claim package (cover summary, supplier/PO
+    info, shipment/container refs, discrepancy detail, quantity/value
+    calculation, full chronology from `AuditEvent`, evidence index,
+    receiving/inspection findings, requested remedy, contacts,
+    provenance/timestamp, and any missing-document warnings rendered
+    directly into the document) reuses
+    `apps.reports._save_html_snapshot`/`ReportVersion` — extended with
+    one new optional `content_object` parameter so the resulting
+    `ReportVersion` links back to the specific claim, rather than
+    adding a dedicated per-claim package-version model;
+    `ReportVersion.ReportType.CLAIM_PACKAGE` already existed, unused,
+    anticipating exactly this feature. No email is ever sent
+    automatically. `/reclamos/` list/create/detail screens, linked
+    from the main nav. 21 new tests
+    (`tests/test_supplier_claims.py`), covering sequential claim
+    numbering, a required non-blank reason, the official/operational
+    variance-preservation guarantee, missing-evidence warnings,
+    approval blocked without evidence, the full lifecycle to closure,
+    every out-of-order transition rejected, complete audit chronology,
+    package generation content, cross-organization isolation, and a
+    full HTTP lifecycle including a duplicate-submission attempt —
+    223/223 passing (202 pre-existing + 21 new). Verified migrations
+    apply cleanly from an empty test database; `manage.py check` and
+    `makemigrations --check` both clean.

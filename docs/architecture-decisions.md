@@ -2,6 +2,33 @@
 
 Newest first.
 
+## ADR-023 — `DispatchLine.reservation` FK + always re-fetch the line with `select_for_update()` inside `create_dispatch`
+**Decision:** Added a nullable `DispatchLine.reservation` FK
+(`requests.0003_dispatchline_reservation`), and changed
+`create_dispatch` to re-fetch each `MaterialRequestLine` by primary key
+with `select_for_update()` at the top of every loop iteration, rather
+than trusting whatever `MaterialRequestLine` instance the caller passed
+in for that entry.
+**Why:** Enabling a real multi-lot split-dispatch UI means a single call
+to `create_dispatch` can legitimately carry several entries for the
+*same* line (one per reservation/lot). A live HTTP test of exactly that
+case (reserve 6 from lot A + 4 from lot B, dispatch both in one
+submission) surfaced a real bug: the two entries' `MaterialRequestLine`
+objects were distinct Python instances of the same DB row (produced by
+`select_related` inside two separate `InventoryReservation` rows), so
+saving `quantity_dispatched` from the first entry was silently
+overwritten by the second entry's stale in-memory copy — only 4 of the
+intended 10 units ended up marked dispatched. Re-fetching with
+`select_for_update()` per iteration fixes the correctness bug and also
+makes two concurrent dispatch calls for the same line serialize safely,
+which the milestone's concurrency requirement calls for anyway. Caught
+by `tests/test_delivery_installation_acceptance.py::TestMultiLotSplitDispatch`
+before this reached a real user.
+**Reservation-level guard:** the line-wide "reserved minus dispatched"
+check alone cannot prevent dispatching more than one specific lot's
+reservation holds when a line's reservations span multiple lots — added
+`reservation_remaining_quantity()` as a second, independent guard.
+
 ## ADR-022 — Evidence upload reuses `apps.documents` + `apps.audit.Attachment`, no new upload path
 **Decision:** `apps.audit.services.attach_evidence(target, user, *,
 document_type, title, uploaded_file)` is the one function that turns an

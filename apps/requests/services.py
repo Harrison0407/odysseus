@@ -100,6 +100,19 @@ def _damage_quarantine_location():
     return WarehouseLocation.objects.filter(zone__code="cuarentena").first()
 
 
+def reservation_dispatched_quantity(reservation):
+    return DispatchLine.objects.filter(reservation=reservation).aggregate(total=Sum("quantity"))["total"] or 0
+
+
+def reservation_remaining_quantity(reservation):
+    """How much of this specific reservation (one lot) has not yet been
+    dispatched — distinct from `MaterialRequestLine.quantity_reserved -
+    quantity_dispatched`, which is a line-wide aggregate across every
+    reservation and cannot by itself prevent over-dispatching one
+    particular lot when a line's reservations span several lots."""
+    return reservation.quantity - reservation_dispatched_quantity(reservation)
+
+
 # ---------------------------------------------------------------------------
 # Reservation and dispatch
 # ---------------------------------------------------------------------------
@@ -137,25 +150,47 @@ def reserve_line(line: MaterialRequestLine, lot: InventoryLot, quantity, user) -
 @transaction.atomic
 def create_dispatch(request: MaterialRequest, lines, user) -> Dispatch:
     """`lines`: iterable of (MaterialRequestLine, InventoryReservation, quantity).
-    Never dispatches more than was reserved-and-not-yet-dispatched for a
-    line; posts one DISPATCH InventoryMovement per line, decrementing
+    A single request line may be split across several reservations/lots
+    in one call (or across repeated calls) — never dispatches more than
+    was reserved-and-not-yet-dispatched for the *line* as a whole, and
+    never more than remains undispatched on that *specific* reservation
+    (a line-wide check alone cannot catch over-dispatching one lot when
+    a line's reservations span several). Each `request_line` is
+    re-fetched with `select_for_update()` by primary key on every
+    iteration — never trusting whatever in-memory copy the caller passed
+    in — because a split dispatch legitimately passes several entries for
+    the *same* line (one per reservation/lot), and those may arrive as
+    distinct Python objects for the same DB row (e.g. from separate
+    `select_related` joins); mutating a stale copy's `quantity_dispatched`
+    and saving it would silently clobber an update just made by an
+    earlier entry for the same line in this same call. The row lock also
+    makes two concurrent dispatch calls for the same line serialize
+    safely. Posts one DISPATCH InventoryMovement per line, decrementing
     on-hand at the lot's current location (core principle 4.5 — no
     inventory consequence without a real, posted movement)."""
     pick_list = PickList.objects.create(request=request, prepared_by=user, created_by=user)
     dispatch = Dispatch.objects.create(pick_list=pick_list, prepared_by=user, created_by=user)
 
-    for request_line, reservation, quantity in lines:
+    for request_line_hint, reservation, quantity in lines:
         if quantity <= 0:
             raise QuantityInvariantError("La cantidad a despachar debe ser mayor que cero.")
+        request_line = MaterialRequestLine.objects.select_for_update().get(pk=request_line_hint.pk)
         remaining_reserved = request_line.quantity_reserved - request_line.quantity_dispatched
         if quantity > remaining_reserved:
             raise QuantityInvariantError(
                 f"Cantidad a despachar ({quantity}) excede lo reservado y no despachado ({remaining_reserved}) "
                 f"para {request_line.item}."
             )
+        remaining_on_reservation = reservation_remaining_quantity(reservation)
+        if quantity > remaining_on_reservation:
+            raise QuantityInvariantError(
+                f"Cantidad a despachar ({quantity}) excede lo disponible en esta reserva específica "
+                f"({remaining_on_reservation}) — {reservation.lot}."
+            )
         lot = reservation.lot
         DispatchLine.objects.create(
-            dispatch=dispatch, request_line=request_line, lot=lot, quantity=quantity, created_by=user
+            dispatch=dispatch, request_line=request_line, lot=lot, reservation=reservation,
+            quantity=quantity, created_by=user,
         )
         location = lot_current_location(lot)
         InventoryMovement.objects.create(

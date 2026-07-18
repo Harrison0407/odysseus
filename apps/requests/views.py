@@ -1,3 +1,5 @@
+from decimal import Decimal, InvalidOperation
+
 from django import forms
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -171,7 +173,17 @@ def request_detail(request, pk):
         content_type=content_type, object_id=mr.pk
     ).select_related("gate_definition", "to_department").order_by("-created_at")
 
-    lines_with_forms = [(line, ReserveForm(item=line.item, prefix=str(line.pk))) for line in mr.lines.all()]
+    lines_with_forms = []
+    for line in mr.lines.all():
+        reservations = [
+            (reservation, rsvc.reservation_remaining_quantity(reservation))
+            for reservation in InventoryReservation.objects.filter(material_request_line=line, is_active=True)
+        ]
+        lines_with_forms.append({
+            "line": line,
+            "reserve_form": ReserveForm(item=line.item, prefix=str(line.pk)),
+            "reservations": [(r, remaining) for r, remaining in reservations if remaining > 0],
+        })
     deliveries = Delivery.objects.filter(dispatch__pick_list__request=mr).select_related("dispatch")
 
     return render(
@@ -225,26 +237,35 @@ def request_reserve_line(request, pk, line_pk):
 
 @login_required
 def request_dispatch(request, pk):
-    """Dispatches, per line, the full reserved-not-yet-dispatched quantity
-    using that line's first active reservation. (A line with reservations
-    split across several lots can still be dispatched via
-    apps.requests.services.create_dispatch directly with explicit tuples —
-    this UI action covers the common single-lot-per-line pilot case.)"""
+    """Dispatches explicit per-reservation quantities submitted by the
+    form on the request detail page — a single request line can be split
+    across several reservations/lots in one submission (each reservation
+    field defaults to that reservation's full undispatched remainder, but
+    can be edited down for a partial dispatch of a specific lot).
+    apps.requests.services.create_dispatch owns the actual quantity
+    guards; this view only parses the submitted quantities."""
     mr = get_object_or_404(MaterialRequest, pk=pk)
     if _deny_cross_project(request, mr):
         return redirect("requests:list")
     if request.method == "POST":
         entries = []
-        for line in mr.lines.all():
-            remaining = line.quantity_reserved - line.quantity_dispatched
-            if remaining <= 0:
+        reservations = InventoryReservation.objects.filter(
+            material_request_line__request=mr, is_active=True
+        ).select_related("material_request_line")
+        for reservation in reservations:
+            raw = request.POST.get(f"resv-{reservation.pk}-quantity")
+            if not raw:
                 continue
-            reservation = InventoryReservation.objects.filter(material_request_line=line, is_active=True).first()
-            if reservation is None:
+            try:
+                quantity = Decimal(raw)
+            except (InvalidOperation, TypeError):
+                messages.error(request, "Cantidad inválida en una de las reservas.")
+                return redirect("requests:detail", pk=pk)
+            if quantity <= 0:
                 continue
-            entries.append((line, reservation, remaining))
+            entries.append((reservation.material_request_line, reservation, quantity))
         if not entries:
-            messages.error(request, "No hay cantidades reservadas pendientes de despachar.")
+            messages.error(request, "No hay cantidades pendientes de despachar.")
         else:
             try:
                 dispatch = rsvc.create_dispatch(mr, entries, request.user)

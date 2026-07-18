@@ -51,13 +51,20 @@ is silently claimed to be done when it isn't.
 
 ## Delivery/Installation/Inspection/Final Acceptance milestone — honest gaps
 
-- **Multi-lot split dispatch has no dedicated UI action.** `request_dispatch`
-  dispatches, per material-request line, the full reserved-and-not-yet-
-  dispatched quantity using that line's first active reservation. The
-  service layer (`apps.requests.services.create_dispatch`) fully supports
-  an explicit list of `(line, reservation, quantity)` tuples spanning
-  several lots per line; the UI simply doesn't expose building that list
-  by hand yet, since the pilot's real usage is one lot per line.
+- ~~Multi-lot split dispatch has no dedicated UI action~~ — **Done.** The
+  material request detail page now shows every active reservation per
+  line (lot, remaining, an editable quantity) and dispatches whatever
+  quantities are submitted in one request, calling
+  `apps.requests.services.create_dispatch` with explicit per-reservation
+  tuples. `DispatchLine.reservation` (new FK, migration
+  `requests.0003_dispatchline_reservation`) records which specific
+  reservation each dispatched quantity was drawn from, so a line's
+  dispatch can never exceed what a *specific* lot's reservation actually
+  holds even when the line-wide aggregate would allow it (see
+  ADR-023). Verified live: reserved 6 units from one lot and 4 from a
+  second lot against the same line, dispatched both in a single
+  submission, confirmed two distinct `DispatchLine` rows against the
+  correct lots.
 - **Duplicate-click protection is deliberately asymmetric.**
   `create_installation_record` and `create_project_receipt` are
   idempotent (a repeated submit returns the existing row — see ADR-018);

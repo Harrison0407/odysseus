@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load l10n %}
 {% block content %}
 <h3>Solicitud — {{ request_obj.project }}</h3>
 <p><span class="badge bg-secondary">{{ request_obj.get_status_display }}</span> {{ request_obj.get_priority_display }}</p>
@@ -10,23 +11,24 @@
 </form>
 {% endif %}
 
+<div class="table-responsive">
 <table class="table bg-white">
     <thead><tr><th>Artículo</th><th>Solicitado</th><th>Aprobado</th><th>Reservado</th><th>Despachado</th><th>Entregado</th><th>Reservar cantidad</th></tr></thead>
     <tbody>
-    {% for line, reserve_form in lines_with_forms %}
+    {% for entry in lines_with_forms %}
         <tr>
-            <td>{{ line.item }}</td>
-            <td>{{ line.quantity_requested }}</td>
-            <td>{{ line.quantity_approved|default:"—" }}</td>
-            <td>{{ line.quantity_reserved }}</td>
-            <td>{{ line.quantity_dispatched }}</td>
-            <td>{{ line.quantity_delivered }}</td>
+            <td>{{ entry.line.item }}</td>
+            <td>{{ entry.line.quantity_requested }}</td>
+            <td>{{ entry.line.quantity_approved|default:"—" }}</td>
+            <td>{{ entry.line.quantity_reserved }}</td>
+            <td>{{ entry.line.quantity_dispatched }}</td>
+            <td>{{ entry.line.quantity_delivered }}</td>
             <td>
-                {% if line.quantity_approved %}
-                <form method="post" action="{% url 'requests:reserve-line' request_obj.pk line.pk %}" class="d-flex gap-1">
+                {% if entry.line.quantity_approved %}
+                <form method="post" action="{% url 'requests:reserve-line' request_obj.pk entry.line.pk %}" class="d-flex gap-1">
                     {% csrf_token %}
-                    {{ reserve_form.lot }}
-                    {{ reserve_form.quantity }}
+                    {{ entry.reserve_form.lot }}
+                    {{ entry.reserve_form.quantity }}
                     <button class="btn btn-outline-primary btn-sm" type="submit">Reservar</button>
                 </form>
                 {% else %}
@@ -37,11 +39,40 @@
     {% endfor %}
     </tbody>
 </table>
+</div>
 
-<form method="post" action="{% url 'requests:dispatch' request_obj.pk %}" class="mb-3">
-    {% csrf_token %}
-    <button class="btn btn-primary btn-sm" type="submit">Despachar cantidades reservadas</button>
-</form>
+<div class="card mb-3">
+    <div class="card-header">Despachar reservas (una o varias, incluso de distintos lotes, en un solo envío)</div>
+    <div class="card-body">
+        <form method="post" action="{% url 'requests:dispatch' request_obj.pk %}">
+            {% csrf_token %}
+            {% for entry in lines_with_forms %}
+                {% if entry.reservations %}
+                <p class="mb-1"><strong>{{ entry.line.item }}</strong></p>
+                <div class="table-responsive mb-2">
+                <table class="table table-sm bg-white">
+                    <thead><tr><th>Lote</th><th>Reservado en este lote</th><th>Cantidad a despachar</th></tr></thead>
+                    <tbody>
+                    {% for reservation, remaining in entry.reservations %}
+                        <tr>
+                            <td>{{ reservation.lot }}</td>
+                            <td>{{ remaining }}</td>
+                            <td>
+                                <input type="number" step="0.001" min="0" max="{{ remaining|unlocalize }}"
+                                       name="resv-{{ reservation.pk }}-quantity" value="{{ remaining|unlocalize }}"
+                                       class="form-control form-control-sm">
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                </div>
+                {% endif %}
+            {% endfor %}
+            <button class="btn btn-primary btn-sm" type="submit">Despachar cantidades indicadas</button>
+        </form>
+    </div>
+</div>
 
 {% if deliveries %}
 <div class="card mb-3">

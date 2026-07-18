@@ -22,7 +22,7 @@
 | `/solicitudes/<id>/` | `request_detail` | Requested/approved/reserved/dispatched/delivered quantities; reserve-per-line and dispatch actions; links to generated deliveries |
 | `/solicitudes/<id>/aprobar/` (POST) | `request_approve` | Approve a request (sets `quantity_approved` per line to the requested amount) |
 | `/solicitudes/<id>/linea/<line_id>/reservar/` (POST) | `request_reserve_line` | Reserve inventory against a lot for one request line |
-| `/solicitudes/<id>/despachar/` (POST) | `request_dispatch` | Dispatch reserved quantities; creates the `Dispatch` + initializes the `Delivery` |
+| `/solicitudes/<id>/despachar/` (POST) | `request_dispatch` | Dispatch reserved quantities — supports splitting one line across several reservations/lots in a single submission; creates the `Dispatch` + initializes the `Delivery` |
 | `/solicitudes/entregas/` | `delivery_list` | Deliveries, filterable by project / pending-acceptance |
 | `/solicitudes/entregas/<id>/` | `delivery_detail` | Per-line accepted/rejected/damaged recording, delivery completion, project-receipt creation, "create handoff" for `project_delivery_to_installation`, evidence upload |
 | `/solicitudes/entregas/<id>/linea/<line_id>/registrar/` (POST) | `delivery_record_line` | Records accepted/rejected/damaged quantities for one delivery line (recomputes, never increments) |

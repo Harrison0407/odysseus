@@ -31,6 +31,7 @@ from apps.requests.models import (
     AcceptanceRecord,
     Delivery,
     DeliveryLine,
+    Dispatch,
     InspectionRecord,
     InstallationRecord,
     MaterialRequest,
@@ -290,6 +291,88 @@ def test_06b_delivery_accepted_plus_rejected_above_dispatched_is_rejected(dispat
     delivery_line = dispatched_delivery.lines.first()
     with pytest.raises(rsvc.QuantityInvariantError):
         rsvc.record_delivery_line(delivery_line, quantity_accepted=Decimal("8"), quantity_rejected=Decimal("8"), quantity_damaged=0, user=miguel)
+
+
+# ---------------------------------------------------------------------------
+# Multi-lot / split dispatch
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def second_lot_with_stock(item, warehouse_location, manuel):
+    lot = InventoryLot.objects.create(item=item, lot_code="LOT-DIA-2")
+    InventoryMovement.objects.create(
+        lot=lot, movement_type=MovementType.RECEIPT, quantity=Decimal("10"),
+        unit_of_measure=item.base_unit, to_location=warehouse_location, posted_by=manuel,
+    )
+    return lot
+
+
+class TestMultiLotSplitDispatch:
+    def test_split_dispatch_across_two_lots_creates_two_dispatch_lines(
+        self, approved_request, lot_with_stock, second_lot_with_stock, manuel
+    ):
+        mr, line = approved_request
+        r1 = rsvc.reserve_line(line, lot_with_stock, Decimal("6"), manuel)
+        r2 = rsvc.reserve_line(line, second_lot_with_stock, Decimal("4"), manuel)
+
+        dispatch = rsvc.create_dispatch(
+            mr, [(line, r1, Decimal("6")), (line, r2, Decimal("4"))], manuel
+        )
+        assert dispatch.lines.count() == 2
+        assert set(dispatch.lines.values_list("reservation_id", flat=True)) == {r1.pk, r2.pk}
+        line.refresh_from_db()
+        assert line.quantity_dispatched == Decimal("10")
+
+    def test_dispatching_above_a_specific_reservations_remainder_is_rejected_even_if_line_total_allows_it(
+        self, approved_request, lot_with_stock, second_lot_with_stock, manuel
+    ):
+        """Line-wide remaining (6+4=10) would allow 8 from lot A alone, but
+        lot A's own reservation only holds 6 — must be rejected."""
+        mr, line = approved_request
+        r1 = rsvc.reserve_line(line, lot_with_stock, Decimal("6"), manuel)
+        rsvc.reserve_line(line, second_lot_with_stock, Decimal("4"), manuel)
+
+        with pytest.raises(rsvc.QuantityInvariantError):
+            rsvc.create_dispatch(mr, [(line, r1, Decimal("8"))], manuel)
+
+    def test_http_dispatch_view_splits_across_reservations_from_submitted_form(
+        self, client, harrison, project_access_direccion_dia, approved_request, lot_with_stock, second_lot_with_stock, manuel
+    ):
+        from django.urls import reverse
+
+        mr, line = approved_request
+        r1 = rsvc.reserve_line(line, lot_with_stock, Decimal("6"), manuel)
+        r2 = rsvc.reserve_line(line, second_lot_with_stock, Decimal("4"), manuel)
+
+        client.force_login(harrison)
+        response = client.post(
+            reverse("requests:dispatch", args=[mr.pk]),
+            {f"resv-{r1.pk}-quantity": "6", f"resv-{r2.pk}-quantity": "4"},
+        )
+        assert response.status_code == 302
+        line.refresh_from_db()
+        assert line.quantity_dispatched == Decimal("10")
+        assert Dispatch.objects.filter(pick_list__request=mr).first().lines.count() == 2
+
+    def test_http_dispatch_view_allows_partial_split_leaving_remainder_reserved(
+        self, client, harrison, project_access_direccion_dia, approved_request, lot_with_stock, second_lot_with_stock, manuel
+    ):
+        from django.urls import reverse
+
+        mr, line = approved_request
+        r1 = rsvc.reserve_line(line, lot_with_stock, Decimal("6"), manuel)
+        r2 = rsvc.reserve_line(line, second_lot_with_stock, Decimal("4"), manuel)
+
+        client.force_login(harrison)
+        response = client.post(
+            reverse("requests:dispatch", args=[mr.pk]),
+            {f"resv-{r1.pk}-quantity": "6", f"resv-{r2.pk}-quantity": "0"},
+        )
+        assert response.status_code == 302
+        line.refresh_from_db()
+        assert line.quantity_dispatched == Decimal("6")
+        assert rsvc.reservation_remaining_quantity(r2) == Decimal("4")
 
 
 # ---------------------------------------------------------------------------

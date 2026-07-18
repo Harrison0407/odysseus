@@ -278,3 +278,31 @@ working tree.
     passing (93 pre-existing + 4 new). Verified live: a real multipart
     HTTP upload of a `.jpg` through a running dev server, followed by a
     download of the exact same bytes (`diff` confirmed byte-identical).
+27. **Multi-lot/split dispatch**, closing the remaining Priority 0
+    dispatch gap. Added `DispatchLine.reservation` FK (migration
+    `requests.0003_dispatchline_reservation`) and
+    `reservation_remaining_quantity()`; rewrote the request detail page
+    to list every active reservation per line (lot, remaining, editable
+    quantity) inside one form, and `request_dispatch` to build explicit
+    per-reservation dispatch tuples from whatever was submitted, instead
+    of assuming "first reservation, full remaining." Extended
+    `seed_delivery_demo_data` with a second demo lot so the split path is
+    exercisable live, not just in tests. A live HTTP run of the exact
+    split scenario (6 units from one lot + 4 from a second, dispatched in
+    one submission) surfaced two real bugs, both fixed and covered by new
+    tests before being considered done (ADR-023):
+    - `create_dispatch` silently clobbered one entry's
+      `quantity_dispatched` update with a second entry's stale in-memory
+      copy of the same `MaterialRequestLine` — fixed by re-fetching each
+      line with `select_for_update()` per iteration (also closes a
+      concurrency gap for two simultaneous dispatch calls on the same
+      line).
+    - The split-reservation quantity `<input>` rendered its value with a
+      localized comma decimal (`"6,000"`), which is invalid for an
+      HTML5 `number` input and would silently fail to populate in a real
+      browser — fixed with `{% load l10n %}{{ remaining|unlocalize }}`.
+    4 new tests (`TestMultiLotSplitDispatch`) — 101/101 passing (97
+    pre-existing + 4 new). Verified live end-to-end afterward: reserved
+    6+4 units from two lots, dispatched both in one request, confirmed
+    two distinct `DispatchLine` rows against the correct lots via a
+    direct database query.

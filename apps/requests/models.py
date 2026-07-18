@@ -105,6 +105,13 @@ class DispatchLine(BaseModel):
     dispatch = models.ForeignKey(Dispatch, on_delete=models.CASCADE, related_name="lines")
     request_line = models.ForeignKey(MaterialRequestLine, on_delete=models.PROTECT, related_name="dispatch_lines")
     lot = models.ForeignKey("inventory.InventoryLot", on_delete=models.PROTECT, related_name="+")
+    reservation = models.ForeignKey(
+        "inventory.InventoryReservation", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="dispatch_lines",
+        help_text="Which specific reservation this dispatch quantity was drawn from — lets a single "
+        "request line be split across several lots/reservations without ever dispatching more than "
+        "any one reservation actually holds.",
+    )
     quantity = models.DecimalField(max_digits=14, decimal_places=3)
     photo_document = models.ForeignKey(
         "documents.Document", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"

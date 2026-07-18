@@ -71,6 +71,15 @@ class Command(BaseCommand):
                 unit_of_measure=uom, to_location=location, reason="Stock demo para instalación en Sole-26.",
             )
 
+        # A second lot for the same item lets the demo exercise a real
+        # multi-lot/split dispatch (one request line, two reservations).
+        lot2, created_lot2 = InventoryLot.objects.get_or_create(item=item, lot_code="DEMO-DIA-2")
+        if created_lot2:
+            InventoryMovement.objects.create(
+                lot=lot2, movement_type=MovementType.RECEIPT, quantity=Decimal("5"),
+                unit_of_measure=uom, to_location=location, reason="Segundo lote demo para despacho dividido.",
+            )
+
         mr, created_mr = MaterialRequest.objects.get_or_create(
             project=project, building=building, purpose="Demo: entrega, instalación, inspección y aceptación final.",
         )

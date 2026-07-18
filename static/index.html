@@ -246,6 +246,51 @@
     setTimeout(function(){var l=document.getElementById('app-loader');if(l){l.style.opacity='0';setTimeout(function(){l.remove()},300)}},5000);
   })();
   </script>
+  <!-- MarketMatch Calls transcription pilot -->
+  <div id="calls-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-content calls-modal-content" role="dialog" aria-modal="true" aria-labelledby="calls-title">
+      <div class="modal-header">
+        <h4 id="calls-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:6px"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.69 2.8a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.33 1.84.56 2.8.69A2 2 0 0 1 22 16.92z"/></svg>Calls
+        </h4>
+        <button type="button" class="close-btn" id="calls-close-btn" aria-label="Close Calls">✖</button>
+      </div>
+      <div class="modal-body calls-modal-body">
+        <p class="calls-intro">Transcribe one call locally. Audio and results stay in memory for this page only and are not saved.</p>
+
+        <section class="calls-card" aria-labelledby="calls-upload-heading">
+          <h2 id="calls-upload-heading">Canonical WAV</h2>
+          <p id="calls-requirements" class="calls-requirements">Choose a mono 16 kHz signed 16-bit PCM <code>.wav</code> file, up to 20 MiB. This pilot does not convert other audio formats.</p>
+          <label class="calls-file-label" for="calls-file-input">Select WAV file</label>
+          <input id="calls-file-input" class="calls-file-input" type="file" accept=".wav" aria-describedby="calls-requirements calls-file-details">
+          <p id="calls-file-details" class="calls-file-details" hidden></p>
+          <div class="calls-actions">
+            <button type="button" id="calls-submit-btn" class="calls-button calls-button-primary" disabled>Transcribe</button>
+            <button type="button" id="calls-cancel-btn" class="calls-button" hidden>Cancel</button>
+            <button type="button" id="calls-reset-btn" class="calls-button" disabled>Clear</button>
+          </div>
+          <p id="calls-status" class="calls-status" role="status" aria-live="polite">Select a canonical WAV file to begin.</p>
+        </section>
+
+        <section id="calls-result" class="calls-card calls-result" aria-labelledby="calls-result-heading" hidden>
+          <div class="calls-result-header">
+            <div>
+              <h2 id="calls-result-heading">Transcript</h2>
+              <p id="calls-result-summary" class="calls-result-summary"></p>
+            </div>
+            <button type="button" id="calls-copy-btn" class="calls-button">Copy transcript</button>
+          </div>
+          <p id="calls-empty-result" class="calls-empty-result" hidden>Transcription completed successfully, but no speech was detected.</p>
+          <pre id="calls-transcript" class="calls-transcript" tabindex="0"></pre>
+          <div id="calls-segments-wrap" class="calls-segments-wrap" hidden>
+            <h3>Segments</h3>
+            <ol id="calls-segments" class="calls-segments"></ol>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
   <!-- Memory Management Modal -->
   <div id="memory-modal" class="modal hidden">
     <div class="modal-content memory-modal-content" role="dialog" aria-label="Brain" style="background:var(--bg)">
@@ -885,6 +930,14 @@
             <path d="M21 15l-5-5L5 21"/>
           </svg>
           <span class="grow">Gallery</span>
+        </div>
+        <div class="list-item" id="tool-calls-btn" role="button" tabindex="0" aria-label="Open Calls transcription">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+            style="flex-shrink:0;opacity:0.5;" aria-hidden="true">
+            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.69 2.8a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.33 1.84.56 2.8.69A2 2 0 0 1 22 16.92z"/>
+          </svg>
+          <span class="grow">Calls</span>
         </div>
         <div class="list-item" id="tool-library-btn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;opacity:0.5;">

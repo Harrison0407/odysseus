@@ -5259,6 +5259,7 @@ body.bg-pattern-sparkles {
     @media (min-width: 769px) {
       #calendar-modal,
       #gallery-modal,
+      #calls-modal,
       #tasks-modal,
       #memory-modal,
       #doclib-modal,
@@ -40447,4 +40448,162 @@ body.theme-frosted .modal {
 @media (max-width: 768px) {
   .compare-grid[data-cols] { grid-template-columns: 1fr !important; overflow-y: auto; }
   .compare-pane { min-height: 60dvh; }
+}
+
+/* MarketMatch Calls — small, non-persistent canonical-WAV transcription pilot. */
+.calls-modal-content {
+  width: min(760px, 94vw);
+  max-height: min(88vh, 820px);
+  background: var(--bg);
+}
+
+.calls-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 2px;
+}
+
+.calls-intro,
+.calls-requirements,
+.calls-file-details,
+.calls-result-summary,
+.calls-empty-result {
+  margin: 0;
+  color: color-mix(in srgb, var(--fg) 72%, transparent);
+  line-height: 1.5;
+}
+
+.calls-card {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 14px;
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+}
+
+.calls-card h2,
+.calls-card h3 {
+  margin: 0 0 7px;
+  color: var(--fg);
+  font-size: 0.95rem;
+}
+
+.calls-card h3 { margin-top: 15px; font-size: 0.85rem; }
+.calls-requirements { font-size: 0.84rem; margin-bottom: 12px; }
+
+.calls-file-label,
+.calls-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.calls-file-label:hover,
+.calls-button:hover:not(:disabled) {
+  border-color: var(--fg);
+  background: color-mix(in srgb, var(--fg) 6%, var(--bg));
+}
+
+.calls-file-label:focus-within,
+.calls-button:focus-visible,
+.calls-file-input:focus-visible {
+  outline: 2px solid var(--accent, var(--red));
+  outline-offset: 2px;
+}
+
+.calls-file-input {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  color: var(--fg);
+  font: inherit;
+}
+
+.calls-file-details { margin-top: 10px; font-size: 0.82rem; overflow-wrap: anywhere; }
+.calls-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.calls-button { margin-top: 0 !important; }
+.calls-button-primary { border-color: var(--accent, var(--red)); color: var(--accent, var(--red)); font-weight: 600; }
+.calls-button:disabled { cursor: not-allowed; opacity: 0.42; }
+
+.calls-status {
+  min-height: 1.4em;
+  margin: 10px 0 0;
+  line-height: 1.4;
+}
+
+.calls-status[data-state="loading"]::before { content: "Working — "; font-weight: 600; }
+.calls-status[data-state="success"] { color: var(--color-success, #58b368); }
+.calls-status[data-state="error"] { color: var(--color-error, #e06c75); }
+.calls-status[data-state="cancelled"] { color: var(--color-blind-orange, #d49a3a); }
+
+.calls-result-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.calls-transcript {
+  margin: 12px 0 0;
+  padding: 12px;
+  max-height: 230px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  line-height: 1.55;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+.calls-empty-result {
+  margin-top: 12px;
+  padding: 11px;
+  border: 1px dashed var(--border);
+  border-radius: 7px;
+}
+
+.calls-segments {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.calls-segments li {
+  display: grid;
+  grid-template-columns: minmax(145px, auto) 1fr;
+  gap: 12px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+.calls-segment-time {
+  color: var(--accent, var(--red));
+  font-family: 'Fira Code', monospace;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.calls-segment-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; }
+
+@media (max-width: 768px) {
+  .calls-modal-content { width: 100%; max-height: 94dvh; border-radius: 12px 12px 0 0; }
+  .calls-card { padding: 12px; }
+  .calls-result-header { flex-direction: column; }
+  .calls-result-header .calls-button { width: 100%; }
+  .calls-segments li { grid-template-columns: 1fr; gap: 5px; }
+  .calls-actions .calls-button { flex: 1 1 120px; }
 }

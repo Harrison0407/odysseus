@@ -19,7 +19,7 @@ are production-complete).
 | Physical receiving and risk-based inspection | `apps.receiving` | `Receipt`, `ReceiptLine`, `Inspection`, `SamplingRule` | `/recepcion/` list/detail/post-line | `test_receiving_and_inventory.py` (4 tests) | Done |
 | Quarantine, damage, shortage, overage, claims | `apps.receiving`, `apps.matching` | `QuarantineRecord`, `DamageRecord`, `Discrepancy` | receiving detail page | `test_damaged_quantity_is_quarantined...` | Done for damage/shortage/overage; `Claim`/`ClaimEvidence`/`ClaimDeadline` are **Planned** (Priority 1) |
 | Location-based ledger inventory | `apps.inventory` | `InventoryLot`, `InventoryMovement` | `/almacen/ubicaciones/` | `test_onhand_quantity_is_derived_from_ledger...` | Done |
-| Material requests, dispatch, project acceptance, returns | `apps.requests` | `MaterialRequest`, `Dispatch`, `Delivery`, `ProjectReceipt` | `/solicitudes/` list/create/detail | manual verification | Modeled; dispatch/delivery UI is **Planned** |
+| Material requests, dispatch, project acceptance, returns | `apps.requests` | `MaterialRequest`, `Dispatch`, `Delivery`, `ProjectReceipt` | `/solicitudes/` list/create/detail, reserve/dispatch actions | 40 tests (`tests/test_delivery_installation_acceptance.py`) | Done — see "Delivery, Installation, Inspection, and Final Acceptance milestone" section below |
 | Complex product kits and component completeness | `apps.items` | `AssemblyDefinition`, `KitDefinition`, `KitInstance` | none yet | `test_quartz_slab_and_fabricated_top_are_distinct_identities` | Modeled |
 | Landed cost | `apps.cost` | `CostDocument`, `CostAllocationRun`, `LandedCostVersion` | `/costos/` list/detail | manual verification | Modeled; allocation-run UI (triggering a calculation) is **Planned** |
 | Dashboards and responsibility queues | `apps.core` | — | persona dashboards (6 variants) | manual verification | Done |
@@ -60,9 +60,9 @@ transactional with row-level locking).
 | Logistics → Receiving | `logistics_to_receiving` | `Shipment` | `TestLogisticsToReceiving` (4) — reuses the dual-manifest engine (`ManifestVariance`/`CustomsReviewDecision`) built in the Priority 0 milestone |
 | Receiving → Warehouse | `receiving_to_warehouse` | `Shipment` | `TestReceivingToWarehouse` (5) — quarantine and discrepancy blocking |
 | Warehouse → Project | `warehouse_to_project` | `MaterialRequest` | `TestWarehouseToProject` (2) |
-| Project Delivery → Installation | `project_delivery_to_installation` | `Delivery` | evaluator implemented (`evaluate_project_delivery_to_installation`); no dedicated Delivery UI yet (Priority 0 `KNOWN_LIMITATIONS` #4), so only service-layer coverage exists today — **Done at the engine level, UI Planned** |
-| Installation → Inspection | `installation_to_inspection` | `InstallationRecord` | evaluator implemented; same UI caveat as above |
-| Inspection → Acceptance | `inspection_to_acceptance` | `InstallationRecord` | evaluator implemented; same UI caveat as above |
+| Project Delivery → Installation | `project_delivery_to_installation` | `Delivery` | `TestProjectDeliveryToInstallationGate` (2) — **Done, full UI** (`/solicitudes/entregas/`) |
+| Installation → Inspection | `installation_to_inspection` | `InstallationRecord` | `TestInstallationToInspectionGate` (2) — **Done, full UI** (`/solicitudes/instalaciones/`) |
+| Inspection → Acceptance | `inspection_to_acceptance` | `InstallationRecord` | `test_11`–`test_17` in `tests/test_delivery_installation_acceptance.py` — **Done, full UI** (`/solicitudes/inspecciones/`, `/solicitudes/aceptaciones/`) |
 
 | Capability | Verified by |
 |---|---|
@@ -91,6 +91,58 @@ reason, submitted, and accepted by Manuel — which correctly transitioned
 `Shipment.status` to `released_to_receiving` and transferred
 `ResponsibilityAssignment` to Manuel/Almacén. Full transcript in
 `docs/implementation-log.md`.
+
+## Delivery, Installation, Inspection, and Final Acceptance milestone
+
+Builds production UI/workflows for the 3 gates left engine-only after the
+Gate Controls milestone, reusing that same gate-evaluation engine and
+handoff service layer end to end — no transition logic is duplicated in
+any view, form, template, or JS.
+
+| Capability | Verified by |
+|---|---|
+| Delivery planning/dispatch (reserve → dispatch → deliver) | `apps.requests.services.reserve_line`/`create_dispatch`, `apps/requests/urls.py` reserve/dispatch actions |
+| Complete delivery | `test_01_complete_delivery_accepts_full_dispatched_quantity`; live HTTP walkthrough |
+| Partial delivery | `test_02_partial_delivery_sets_partially_delivered_status_not_delivered` |
+| Multi-trip delivery (never double-counts) | `test_03_multi_trip_delivery_recomputes_never_double_counts` |
+| Failed/refused delivery | `test_04_failed_delivery_recorded_as_rejected_not_silently_dropped` |
+| Delivery damage (quarantine posting, delta-only) | `test_05_damaged_delivery_quarantines_only_the_new_delta` |
+| Quantity exceeding available inventory/dispatched | `test_06_reservation_above_available_inventory_is_rejected`, `test_06b` |
+| Valid installation | `test_07_valid_installation_within_delivered_quantity` |
+| Installation above delivered quantity (blocked / authorized override) | `test_08_installation_above_delivered_quantity_blocked_without_override`, `test_08b_..._with_authorized_override_succeeds_and_is_audited` |
+| Incomplete installation | `test_09_incomplete_installation_leaves_is_complete_false` |
+| Installation damage / missing components | `test_10_installation_damage_and_missing_components_recorded` |
+| Successful / failed / conditional inspection | `test_11`, `test_12`, `test_13` |
+| Punch-list creation | `test_14_failed_inspection_creates_blocking_punch_list_items` |
+| Correction and reinspection (never erases failed history) | `test_15_reinspection_chains_to_previous_and_never_erases_failed_history` |
+| Final acceptance | `test_16_final_acceptance_recorded_once` |
+| Acceptance blocked by open critical defect | `test_17_acceptance_gate_blocked_while_blocking_defect_open` |
+| Authorized / unauthorized gate override | `test_18_authorized_gate_override_at_inspection_to_acceptance`, `test_19_unauthorized_gate_override_denied` |
+| Rejection and return for correction (reuses the generic handoff flow) | `test_20_installation_to_inspection_handoff_can_be_returned_for_correction` |
+| Duplicate form submission | `test_21`–`test_21d` (final acceptance, punch-list close, installation creation, project-receipt creation) |
+| Concurrent update attempt | `test_22_concurrent_handoff_submission_only_first_wins` |
+| Role-aware UI / inbox visibility | `test_23_installation_detail_shows_available_actions_only_to_authorized_roles` |
+| Cross-project isolation (direct URL, list scoping) | `test_24_cross_project_isolation_denies_direct_url_access_to_installation`, `test_24b_..._denies_direct_url_progress_post` |
+| Complete, immutable audit trail | `test_25_complete_audit_trail_for_full_chain` |
+| Mobile-rendering smoke tests | `test_26`, `test_26b` |
+| No regression in existing tests | Full suite: 93/93 passing (53 pre-existing + 40 new) |
+
+Demonstrated live against a running dev server with real seeded users
+(Miguel/Obra, Harrison/Dirección, Markeris/Compras) and real HTTP
+requests (cookies + CSRF tokens, no test client shortcuts): reserve →
+dispatch → full delivery → project receipt → installation → installer
+acknowledgement → supervisor confirmation → `installation_to_inspection`
+handoff created/submitted/accepted → **failed** inspection with 2
+blocking punch-list defects → `inspection_to_acceptance` handoff created
+and confirmed genuinely blocked (both "not approved" and "open blocking
+defects" reasons shown) → a plain submit rejected → an unauthorized
+override attempt by Miguel denied server-side even via a direct POST
+bypassing the UI → both defects closed → a passing reinspection
+recorded → the handoff re-submitted (now ready) → accepted by Harrison →
+final acceptance detail ("Aceptado") recorded → a duplicate final-accept
+submission caught gracefully (no second row) → Markeris (no project
+access) denied both direct-URL access and any trace in the list view.
+Full transcript in `docs/implementation-log.md`.
 
 ## Explicitly out of scope for this delivery (see `KNOWN_LIMITATIONS.md`)
 

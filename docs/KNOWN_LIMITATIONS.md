@@ -22,16 +22,16 @@ is silently claimed to be done when it isn't.
    the underlying data is present and shown on the shipment detail page,
    but not yet in the specific 10-section printable layout the spec
    describes for Manuel's team.
-4. **Dispatch/Delivery UI.** `apps.requests` models the full
-   request→approval→reservation→pick→dispatch→delivery→installation
-   chain; only the request-creation screen is built. Consequently, the
-   `project_delivery_to_installation`, `installation_to_inspection`, and
-   `inspection_to_acceptance` gates are fully implemented and tested at
-   the engine/service layer (see `REQUIREMENTS_TRACEABILITY.md`) but have
-   no "create handoff" button anywhere yet — a handoff for those gates
-   must currently be created via the ORM/a script; once created, the
-   generic `/flujo/` accept/reject/return flow works for them exactly as
-   it does for the two gates that do have buttons.
+4. ~~Dispatch/Delivery UI~~ — **Done in the Delivery, Installation,
+   Inspection, and Final Acceptance milestone.** `/solicitudes/entregas/`,
+   `/solicitudes/instalaciones/`, `/solicitudes/inspecciones/`, and
+   `/solicitudes/aceptaciones/` cover approve → reserve → dispatch →
+   deliver (partial/multi-trip/damage/refusal) → project receipt →
+   install (with quantity-guard and authorized override) → inspect
+   (pass/conditional/fail, punch-list) → correct → reinspect → final
+   accept, all through the same reused `apps.workflow.gates`/
+   `apps.workflow.services` engine — see the dedicated section in
+   `REQUIREMENTS_TRACEABILITY.md`.
 5. **Landed-cost allocation-run trigger UI.** The calculation models
    (`CostAllocationRun`, `LandedCostVersion`) exist; running an allocation
    currently requires the ORM/a script, not a button.
@@ -49,6 +49,46 @@ is silently claimed to be done when it isn't.
    `TestFinanceToLogistics`); only the "create" entry point on that
    specific page is missing.
 
+## Delivery/Installation/Inspection/Final Acceptance milestone — honest gaps
+
+- **Multi-lot split dispatch has no dedicated UI action.** `request_dispatch`
+  dispatches, per material-request line, the full reserved-and-not-yet-
+  dispatched quantity using that line's first active reservation. The
+  service layer (`apps.requests.services.create_dispatch`) fully supports
+  an explicit list of `(line, reservation, quantity)` tuples spanning
+  several lots per line; the UI simply doesn't expose building that list
+  by hand yet, since the pilot's real usage is one lot per line.
+- **Duplicate-click protection is deliberately asymmetric.**
+  `create_installation_record` and `create_project_receipt` are
+  idempotent (a repeated submit returns the existing row — see ADR-018);
+  `create_inspection` is not, because a genuine reinspection must always
+  create a new row. A rapid double-click on "Registrar inspección" could
+  in principle create two near-identical inspection rows with duplicated
+  punch-list items; this is mitigated only by human review (the
+  duplicate would show as a second, identical-looking inspection in the
+  installation's history), not a hard technical constraint.
+- **Installer/inspector assignment dropdowns list every user in the
+  organization**, not scoped to the "Obra" department. Authorization is
+  still fully enforced at the service/view layer regardless of who is
+  picked (any actual action still requires the appropriate role/project
+  access) — this is a pure data-entry convenience gap, not a security one.
+- **Evidence/photo upload is modeled but not wired into these screens
+  yet.** `InstallationRecord.photo_document` (a single legacy FK) and the
+  generic `apps.audit.Attachment` (content_type/object_id, reusable
+  across Delivery/InstallationRecord/InspectionRecord) both exist; no
+  form on the new delivery/installation/inspection screens currently
+  offers a file upload widget. Evidence requirements are enforced today
+  the same way the Gate Controls milestone enforces them for other
+  gates — an evaluator can require evidence and a submission is blocked
+  without it — but none of this milestone's 3 gates currently declares an
+  `evidence_requirements` list, so this gap is not yet exercised.
+- **Mobile rendering is structurally, not visually, verified** — same
+  honesty convention as the Priority 0 milestone's item 7 above. Every
+  new list/detail template uses `table-responsive`, Bootstrap's
+  responsive grid, and the same `min-height: 44px` touch-target rule; no
+  screenshot-based visual regression pass was run at multiple viewport
+  widths.
+
 ## Not yet built (integrations/infrastructure)
 
 8. **OCR.** `DocumentClassificationResult`/`DocumentFieldSource` model
@@ -64,6 +104,29 @@ is silently claimed to be done when it isn't.
 11. **Rate limiting** on login/share-link endpoints is not implemented.
 12. **CI pipeline** (automated test run on every push) was not requested
     and was not built in this pass; tests are run manually via `pytest`.
+
+## Fixed during the Delivery/Installation/Inspection/Final Acceptance milestone
+
+- **Duplicate installation creation** — `create_installation_record` had no
+  idempotency guard; an accidental repeated form submission during this
+  milestone's own live HTTP walkthrough created two `InstallationRecord`
+  rows for the same `(project_receipt, delivery_line)`. Fixed with a
+  `select_for_update` + first-existing-wins guard (ADR-018), covered by
+  `test_21c_duplicate_installation_creation_is_idempotent`. The same
+  pattern was applied preemptively to `create_project_receipt`
+  (`test_21d`).
+- **Final-acceptance detail could become permanently unreachable** — the
+  first version of `installation_final_accept` called
+  `apps.workflow.services.accept_handoff` itself before recording the
+  domain decision. A user who instead accepted the same handoff through
+  the generic, already-exposed `/flujo/<id>/aceptar/` button (a fully
+  valid entry point, reachable from the workflow inbox without ever
+  visiting the installation page) left the record with no way to ever
+  capture the accepted-vs-conditional decision. Caught during this
+  milestone's live walkthrough (not by a unit test, since the tests only
+  called the service functions directly). Fixed per ADR-021: the
+  domain-specific screen now only activates once the handoff is already
+  `ACCEPTED`, by whichever route.
 
 ## Fixed during the Gate Controls milestone
 

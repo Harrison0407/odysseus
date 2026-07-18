@@ -199,6 +199,11 @@ def evaluate_project_delivery_to_installation(delivery) -> GateResult:
         unmet.append("La entrega no ha sido aceptada por el proyecto.")
     if not delivery.project_receipts.exists():
         unmet.append("No existe una recepción de proyecto vinculada a esta entrega.")
+
+    total_accepted = sum((line.quantity_accepted or 0) for line in delivery.lines.all())
+    if total_accepted <= 0:
+        unmet.append("No hay cantidad aceptada registrada en esta entrega — nada disponible para instalar.")
+
     ready = not unmet
     return GateResult(ready=ready, severity="ready" if ready else "blocked", unmet_requirements=unmet)
 
@@ -224,14 +229,38 @@ def evaluate_installation_to_inspection(installation) -> GateResult:
 
 
 def evaluate_inspection_to_acceptance(installation) -> GateResult:
+    """A failed inspection must never transition to acceptance, and open
+    *blocking* punch-list defects must prevent it too (unless a properly
+    authorized gate override is used at submission — see
+    apps.workflow.services.submit_handoff). Only the most recent
+    inspection in the chain (`previous_inspection`) counts — a passed
+    reinspection supersedes an earlier fail without erasing it."""
+    from apps.requests.models import PunchListItem
+
     unmet = []
-    inspections = installation.inspections.all()
-    if not inspections.exists():
+    latest = installation.inspections.order_by("-created_at").first()
+    if latest is None:
         unmet.append("No existe inspección registrada.")
-    elif not inspections.filter(passed=True).exists():
-        unmet.append("Ninguna inspección fue aprobada (passed=True).")
+    elif latest.passed is not True:
+        unmet.append(
+            "La inspección más reciente no fue aprobada — se requiere una reinspección aprobada antes de aceptar."
+        )
+
+    open_blocking_defects = [
+        item.description[:80]
+        for inspection in installation.inspections.all()
+        for item in inspection.punch_list_items.filter(status=PunchListItem.Status.OPEN, is_blocking=True)
+    ]
+    if open_blocking_defects:
+        unmet.append("Existen defectos críticos abiertos que bloquean la aceptación final.")
+
     ready = not unmet
-    return GateResult(ready=ready, severity="ready" if ready else "blocked", unmet_requirements=unmet)
+    return GateResult(
+        ready=ready,
+        severity="ready" if ready else "blocked",
+        unmet_requirements=unmet,
+        unresolved_discrepancies=open_blocking_defects,
+    )
 
 
 GATE_EVALUATORS = {

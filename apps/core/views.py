@@ -1,13 +1,15 @@
 from django.contrib.auth.decorators import login_required
+from django.contrib.contenttypes.models import ContentType
 from django.shortcuts import render
 
 from apps.matching.models import Discrepancy
 from apps.procurement.models import PaymentMilestone, PurchaseOrder
 from apps.receiving.models import Receipt
-from apps.requests.models import MaterialRequest
+from apps.requests.models import AcceptanceRecord, Delivery, InstallationRecord, MaterialRequest
 from apps.shipments.models import ManifestVariance, Shipment
 from apps.tools.models import ToolCheckout
 from apps.workflow import services as workflow_services
+from apps.workflow.models import Handoff, HandoffStatus
 
 
 @login_required
@@ -72,13 +74,23 @@ def dashboard_home(request):
     elif "obra" in role_codes:
         context.update(
             my_requests=MaterialRequest.objects.filter(requester=request.user)[:20],
+            deliveries_pending_count=Delivery.objects.filter(accepted__isnull=True).count(),
+            installations_incomplete_count=InstallationRecord.objects.filter(is_complete=False).count(),
         )
         template = "core/dashboard_obra.html"
     elif "direccion" in role_codes or "management" in role_codes:
+        installation_ct = ContentType.objects.get_for_model(InstallationRecord)
+        awaiting_final_acceptance = InstallationRecord.objects.filter(
+            id__in=Handoff.objects.filter(
+                content_type=installation_ct, gate_definition__code="inspection_to_acceptance",
+                status=HandoffStatus.ACCEPTED,
+            ).values_list("object_id", flat=True)
+        ).exclude(id__in=AcceptanceRecord.objects.values_list("installation_id", flat=True))
         context.update(
             unexplained_variances=ManifestVariance.objects.filter(
                 is_explained=False
             ).select_related("shipment")[:20],
+            installations_awaiting_final_acceptance=awaiting_final_acceptance[:20],
         )
         template = "core/dashboard_direccion.html"
     else:

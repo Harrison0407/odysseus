@@ -17,9 +17,30 @@
 | `/recepcion/<id>/linea/<line_id>/registrar/` | `receipt_line_update` (POST) | Posts the receiving line — the only path that creates `InventoryMovement` |
 | `/almacen/ubicaciones/` | `apps.inventory.views.location_list` | On-hand quantity per location, computed live from the movement ledger |
 | `/almacen/lotes/<id>/` | `lot_detail` | Full movement history for one lot |
-| `/solicitudes/` | `apps.requests.views.request_list` | Material requests |
+| `/solicitudes/` | `apps.requests.views.request_list` | Material requests, scoped to the user's accessible projects |
 | `/solicitudes/nueva/` | `request_create` | Create a material request |
-| `/solicitudes/<id>/` | `request_detail` | Requested/approved/reserved/dispatched/delivered quantities |
+| `/solicitudes/<id>/` | `request_detail` | Requested/approved/reserved/dispatched/delivered quantities; reserve-per-line and dispatch actions; links to generated deliveries |
+| `/solicitudes/<id>/aprobar/` (POST) | `request_approve` | Approve a request (sets `quantity_approved` per line to the requested amount) |
+| `/solicitudes/<id>/linea/<line_id>/reservar/` (POST) | `request_reserve_line` | Reserve inventory against a lot for one request line |
+| `/solicitudes/<id>/despachar/` (POST) | `request_dispatch` | Dispatch reserved quantities; creates the `Dispatch` + initializes the `Delivery` |
+| `/solicitudes/entregas/` | `delivery_list` | Deliveries, filterable by project / pending-acceptance |
+| `/solicitudes/entregas/<id>/` | `delivery_detail` | Per-line accepted/rejected/damaged recording, delivery completion, project-receipt creation, "create handoff" for `project_delivery_to_installation` |
+| `/solicitudes/entregas/<id>/linea/<line_id>/registrar/` (POST) | `delivery_record_line` | Records accepted/rejected/damaged quantities for one delivery line (recomputes, never increments) |
+| `/solicitudes/entregas/<id>/completar/` (POST) | `delivery_complete` | Marks the delivery accepted or rejected/failed |
+| `/solicitudes/entregas/<id>/recepcion/` (POST) | `delivery_create_receipt` | Records the project's confirmed destination/damage/missing-items receipt |
+| `/solicitudes/instalaciones/` | `installation_list` | Installations, filterable by incomplete/rework, scoped to accessible projects |
+| `/solicitudes/recepciones/<receipt_id>/instalacion/nueva/` | `installation_create` | Create an installation record for a delivered line (idempotent) |
+| `/solicitudes/instalaciones/<id>/` | `installation_detail` | Current stage/quantities/blockers/open defects, progress form, ack/supervisor-confirm, inspections, handoff actions for `installation_to_inspection` and `inspection_to_acceptance`, final-acceptance detail |
+| `/solicitudes/instalaciones/<id>/progreso/` (POST) | `installation_progress` | Records installed/not-used/damaged quantities; enforces the delivered-quantity guard (with an authorized-override path) |
+| `/solicitudes/instalaciones/<id>/reconocer/` (POST) | `installation_acknowledge` | Installer acknowledgement |
+| `/solicitudes/instalaciones/<id>/confirmar-supervisor/` (POST) | `installation_supervisor_confirm` | Supervisor confirmation |
+| `/solicitudes/instalaciones/<id>/inspeccionar/` (POST) | `installation_create_inspection` | Records a new inspection (or reinspection) — pass/conditional/fail, punch-list defects one per line |
+| `/solicitudes/instalaciones/<id>/aceptar-final/` (POST) | `installation_final_accept` | Records the accepted-vs-conditional decision detail — only once the `inspection_to_acceptance` handoff is already `ACCEPTED` (see ADR-021) |
+| `/solicitudes/inspecciones/` | `inspection_list` | Inspections, filterable by result |
+| `/solicitudes/inspecciones/<id>/` | `inspection_detail` | Punch-list, technical sign-off, reinspection chain link |
+| `/solicitudes/inspecciones/<id>/items/<item_id>/cerrar/` (POST) | `inspection_close_item` | Closes one punch-list defect |
+| `/solicitudes/inspecciones/<id>/firma-tecnica/` (POST) | `inspection_sign_off` | Records technical sign-off |
+| `/solicitudes/aceptaciones/` | `acceptance_list` | Final acceptance history, scoped to accessible projects |
 | `/costos/` | `apps.cost.views.landed_cost_list` | Landed cost versions (provisional vs. final) |
 | `/costos/<id>/` | `landed_cost_detail` | Per-line cost breakdown |
 | `/flujo/` | `apps.workflow.views.inbox` | **Role-aware handoff inbox** — tabs: para mí / enviadas por mí / devueltas / bloqueadas / completadas / todas; filterable by gate, status, overdue |
@@ -31,7 +52,7 @@
 | `/flujo/<id>/devolver/` (POST) | `handoff_return` | Return for correction with a required reason |
 | `/flujo/<id>/reenviar/` (POST) | `handoff_resubmit` | Corrected resubmission — creates a new superseding `Handoff` version |
 | `/flujo/<id>/comentario/` (POST) | `handoff_comment` | Add a comment (reuses `apps.audit.Comment`) |
-| `/flujo/crear/<content_type_id>/<object_id>/<gate_code>/` | `handoff_create` | Generic create-handoff entry point, linked from the Shipment and Material Request detail pages |
+| `/flujo/crear/<content_type_id>/<object_id>/<gate_code>/` | `handoff_create` | Generic create-handoff entry point, linked from the Shipment, Material Request, Delivery, and Installation detail pages |
 | `/reportes/embarque/<id>/instantanea/` | `apps.reports.views.shipment_snapshot` | Generates and downloads a self-contained HTML snapshot |
 | `/reportes/compartir/<token>/` | `shared_view` | Public, revocable, logged read-only share link |
 | `/api/v1/...` | DRF router | `shipments`, `purchase-orders`, `manifest-lines`, `manifest-variances`, `discrepancies` (read-only, org-scoped) |

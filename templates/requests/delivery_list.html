@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h3>Entregas a proyecto</h3>
+</div>
+<form method="get" class="row g-2 mb-3">
+    <div class="col-auto">
+        <select name="project" class="form-select form-select-sm">
+            <option value="">Todos los proyectos</option>
+            {% for p in projects %}<option value="{{ p.pk }}">{{ p }}</option>{% endfor %}
+        </select>
+    </div>
+    <div class="col-auto form-check mt-2">
+        <input type="checkbox" name="pendientes" value="1" class="form-check-input" id="pend">
+        <label class="form-check-label" for="pend">Solo pendientes de aceptación</label>
+    </div>
+    <div class="col-auto"><button class="btn btn-outline-secondary btn-sm" type="submit">Filtrar</button></div>
+</form>
+<div class="table-responsive">
+<table class="table table-striped bg-white">
+    <thead><tr><th>Entrega</th><th>Solicitud / Proyecto</th><th>Despachada</th><th>Entregada</th><th>Estado</th></tr></thead>
+    <tbody>
+    {% for d in deliveries %}
+        <tr>
+            <td><a href="{% url 'requests:delivery-detail' d.pk %}">{{ d.id|truncatechars:8 }}</a></td>
+            <td>{{ d.dispatch.pick_list.request.project }}</td>
+            <td>{{ d.dispatch.dispatched_at|date:"d/m/Y H:i" }}</td>
+            <td>{{ d.delivered_at|date:"d/m/Y H:i"|default:"—" }}</td>
+            <td>
+                {% if d.accepted == True %}<span class="badge bg-success">Aceptada</span>
+                {% elif d.accepted == False %}<span class="badge bg-danger">Rechazada/fallida</span>
+                {% else %}<span class="badge bg-secondary">Pendiente</span>{% endif %}
+            </td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="5" class="text-muted">Sin entregas.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

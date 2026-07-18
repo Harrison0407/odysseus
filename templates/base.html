@@ -39,6 +39,17 @@
                 <li class="nav-item"><a class="nav-link" href="{% url 'receiving:list' %}">{% trans "Recepción" %}</a></li>
                 <li class="nav-item"><a class="nav-link" href="{% url 'inventory:locations' %}">{% trans "Almacén" %}</a></li>
                 <li class="nav-item"><a class="nav-link" href="{% url 'requests:list' %}">{% trans "Solicitudes" %}</a></li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" id="obraDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        {% trans "Obra" %}
+                    </a>
+                    <ul class="dropdown-menu" aria-labelledby="obraDropdown">
+                        <li><a class="dropdown-item" href="{% url 'requests:delivery-list' %}">{% trans "Entregas" %}</a></li>
+                        <li><a class="dropdown-item" href="{% url 'requests:installation-list' %}">{% trans "Instalaciones" %}</a></li>
+                        <li><a class="dropdown-item" href="{% url 'requests:inspection-list' %}">{% trans "Inspecciones" %}</a></li>
+                        <li><a class="dropdown-item" href="{% url 'requests:acceptance-list' %}">{% trans "Aceptación final" %}</a></li>
+                    </ul>
+                </li>
                 <li class="nav-item"><a class="nav-link" href="{% url 'cost:list' %}">{% trans "Costos" %}</a></li>
                 <li class="nav-item"><a class="nav-link" href="{% url 'workflow:inbox' %}">{% trans "Flujo y Entregas" %}</a></li>
             </ul>

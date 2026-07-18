@@ -2,10 +2,18 @@
 {% block content %}
 <h3>Solicitud — {{ request_obj.project }}</h3>
 <p><span class="badge bg-secondary">{{ request_obj.get_status_display }}</span> {{ request_obj.get_priority_display }}</p>
+
+{% if request_obj.status == "submitted" %}
+<form method="post" action="{% url 'requests:approve' request_obj.pk %}" class="mb-3">
+    {% csrf_token %}
+    <button class="btn btn-success btn-sm" type="submit">Aprobar solicitud (según lo solicitado)</button>
+</form>
+{% endif %}
+
 <table class="table bg-white">
-    <thead><tr><th>Artículo</th><th>Solicitado</th><th>Aprobado</th><th>Reservado</th><th>Despachado</th><th>Entregado</th></tr></thead>
+    <thead><tr><th>Artículo</th><th>Solicitado</th><th>Aprobado</th><th>Reservado</th><th>Despachado</th><th>Entregado</th><th>Reservar cantidad</th></tr></thead>
     <tbody>
-    {% for line in request_obj.lines.all %}
+    {% for line, reserve_form in lines_with_forms %}
         <tr>
             <td>{{ line.item }}</td>
             <td>{{ line.quantity_requested }}</td>
@@ -13,10 +21,42 @@
             <td>{{ line.quantity_reserved }}</td>
             <td>{{ line.quantity_dispatched }}</td>
             <td>{{ line.quantity_delivered }}</td>
+            <td>
+                {% if line.quantity_approved %}
+                <form method="post" action="{% url 'requests:reserve-line' request_obj.pk line.pk %}" class="d-flex gap-1">
+                    {% csrf_token %}
+                    {{ reserve_form.lot }}
+                    {{ reserve_form.quantity }}
+                    <button class="btn btn-outline-primary btn-sm" type="submit">Reservar</button>
+                </form>
+                {% else %}
+                <span class="text-muted">Aprobar primero</span>
+                {% endif %}
+            </td>
         </tr>
     {% endfor %}
     </tbody>
 </table>
+
+<form method="post" action="{% url 'requests:dispatch' request_obj.pk %}" class="mb-3">
+    {% csrf_token %}
+    <button class="btn btn-primary btn-sm" type="submit">Despachar cantidades reservadas</button>
+</form>
+
+{% if deliveries %}
+<div class="card mb-3">
+    <div class="card-header">Entregas generadas</div>
+    <ul class="list-group list-group-flush">
+        {% for d in deliveries %}
+        <li class="list-group-item"><a href="{% url 'requests:delivery-detail' d.pk %}">Entrega {{ d.id }}</a>
+            — {% if d.accepted == True %}<span class="badge bg-success">Aceptada</span>
+            {% elif d.accepted == False %}<span class="badge bg-danger">Rechazada</span>
+            {% else %}<span class="badge bg-secondary">Pendiente</span>{% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
 
 <div class="card mt-3">
     <div class="card-header">Entregas de responsabilidad (Almacén → Obra)</div>

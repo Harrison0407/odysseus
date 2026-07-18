@@ -36,6 +36,45 @@
   `expires_at`/`revoked_at` and an access log (`ShareSnapshot`, records
   IP + timestamp per view).
 
+## Delivery/Installation/Inspection/Final Acceptance milestone
+
+- **Cross-project isolation extended to the new screens.**
+  `apps.workflow.services.can_view_target` (generalized from the
+  existing `can_view_handoff`) is enforced at the top of every
+  delivery/installation/inspection detail and action view
+  (`apps.requests.views._deny_cross_project`), and every list view is
+  additionally scoped at the queryset level
+  (`_scope_to_accessible_projects`) so a user without `UserProjectAccess`
+  to a project never sees the row at all, not just gets denied on
+  click-through. Verified by
+  `test_24_cross_project_isolation_denies_direct_url_access_to_installation`
+  and `test_24b_..._denies_direct_url_progress_post`, and live: a direct
+  URL hit by a user with access only to a different project returns 302,
+  and the record is absent from that user's list view.
+- **Quantity-guard overrides require the same permission as gate
+  overrides, enforced server-side.** `record_installation_progress`
+  checks `apps.workflow.services.can_override_gates(user)` before
+  allowing an installed quantity above the validly delivered amount,
+  regardless of whether an `override_reason` was supplied — an
+  unauthorized user's override attempt raises `QuantityInvariantError`
+  and nothing is written. Verified live during this milestone's
+  walkthrough: a direct POST to `/flujo/<id>/anular-enviar/` by a user
+  without `can_override_gates` was denied with the exact same message
+  the service layer raises, not merely hidden in the template (the
+  override form itself is also conditionally hidden client-side, but the
+  enforcement is server-side and was proven by bypassing the UI).
+- **Final-acceptance detail cannot be recorded before the underlying
+  handoff is genuinely accepted.** `installation_final_accept` requires
+  the `inspection_to_acceptance` `Handoff` to already be `ACCEPTED`
+  (via the unchanged, existing `accept_handoff` authorization checks)
+  before accepting any POST — see ADR-021.
+- **Duplicate-submission protection added at the service layer**, not
+  only via UI disable-on-submit: `create_installation_record` and
+  `create_project_receipt` are idempotent; `record_final_acceptance` and
+  `close_punch_list_item` raise a clear, caught error on a second
+  identical call rather than creating a second row or silently
+  reprocessing.
+
 ## Verified by direct testing in this session
 
 - Unauthorized document download → 404 (not the file), confirmed by

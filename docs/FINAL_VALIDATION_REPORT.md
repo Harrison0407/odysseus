@@ -239,14 +239,83 @@ Baseline verified before starting: branch `main`, HEAD =
   creates a new `Handoff` row and marks the old one `SUPERSEDED` rather
   than editing it (verified by
   `test_return_for_correction_and_resubmission_creates_new_superseding_version`).
-- **What's honestly not covered yet:** the 3 gates anchored on `Delivery`/
+- **Update (later session):** the 3 gates anchored on `Delivery`/
   `InstallationRecord` (`project_delivery_to_installation`,
-  `installation_to_inspection`, `inspection_to_acceptance`) are fully
-  implemented and unit-tested at the engine/service layer but have no
-  "create handoff" UI button, since those target models have no
-  dedicated detail page yet (`docs/KNOWN_LIMITATIONS.md` item 4). They
-  were not exercised via HTTP in this session, only via direct service
-  calls in the test suite.
+  `installation_to_inspection`, `inspection_to_acceptance`), noted below
+  as engine-only at the time this section was written, now have full
+  production UI and were exercised live via real HTTP requests — see
+  section 23 ("Delivery, Installation, Inspection, and Final Acceptance
+  milestone") further down this document.
+
+## 23. Delivery, Installation, Inspection, and Final Acceptance milestone
+
+Baseline verified before starting: branch `main`, HEAD =
+`86c31016d057e0338e542577aa08fd3d6a7c7cb1`, clean working tree.
+
+- **Migrations from empty:** one new migration
+  (`requests.0002_alter_delivery_options_and_more`) applied cleanly;
+  `makemigrations --check` confirms no drift.
+- **Automated tests:** 40 new tests
+  (`tests/test_delivery_installation_acceptance.py`) covering all 27
+  required scenarios, plus the pre-existing 53 — **93/93 passing**.
+- **Live HTTP walkthrough** (not just unit tests) against a running dev
+  server, real cookies + CSRF tokens, seeded pilot users and a dedicated
+  demo dataset (`seed_delivery_demo_data`):
+  1. Miguel (Obra): approved → reserved → dispatched → recorded the
+     delivery line fully accepted → completed the delivery → created the
+     project receipt → created the installation record → recorded full
+     installation progress → acknowledged as installer → confirmed as
+     supervisor.
+  2. Created and submitted the `installation_to_inspection` handoff;
+     accepted it (Miguel, Obra department on both sides of this gate).
+  3. Recorded a **failed** inspection with 2 blocking punch-list
+     defects. Created the `inspection_to_acceptance` handoff and
+     confirmed it genuinely blocked — the detail page showed both "la
+     inspección más reciente no fue aprobada" and "existen defectos
+     críticos abiertos" purely from the data, not a canned message.
+  4. Confirmed a plain submit was rejected and the handoff stayed
+     `not_ready`. Confirmed a direct-POST **unauthorized override**
+     attempt (Miguel, whose Obra role lacks `can_override_gates`) was
+     denied server-side with the exact permission-denied message — the
+     override form itself is also hidden from him in the UI, but this
+     was proven by bypassing the UI entirely via a direct POST to
+     `/flujo/<id>/anular-enviar/`.
+  5. Closed both punch-list defects; recorded a passing reinspection;
+     re-submitted the handoff — now genuinely ready and accepted.
+  6. Harrison (Dirección) accepted the handoff via the generic, reused
+     accept endpoint, then recorded the final-acceptance detail
+     ("Aceptado") through the domain-specific screen. A duplicate
+     final-accept submission was caught gracefully — confirmed via
+     direct database query that exactly one `AcceptanceRecord` exists.
+  7. Markeris (Compras, no project access to the demo project) was
+     denied both a direct URL hit on the installation detail page (302
+     redirect) and any trace of the record in his own installation list
+     view (queryset-level scoping, not just click-through denial).
+- **Inventory/quantity safeguards confirmed live and by test:** delivered
+  quantities never exceed dispatched; installed quantities never exceed
+  validly delivered quantities except through an audited, permission-
+  gated override (`AuditEvent.Action.WAIVER`); every inventory
+  consequence (dispatch, damage quarantine, installation consumption) is
+  a real posted `InventoryMovement`; partial and multi-trip delivery
+  correctly recompute rather than increment.
+- **Two real bugs found and fixed live, during this milestone's own
+  walkthrough** (not by unit tests, which called the service layer
+  directly and didn't exercise the two-URL interaction that exposed
+  either issue): duplicate installation creation from a repeated
+  submission (fixed with an idempotent creation guard, ADR-018), and the
+  final-acceptance detail becoming permanently unreachable if the
+  generic accept button was used before the domain-specific screen
+  (fixed per ADR-021). Both were re-verified with a fresh walkthrough
+  afterward. See `docs/KNOWN_LIMITATIONS.md` and
+  `docs/implementation-log.md` for the full account.
+- **What's honestly not covered yet:** multi-lot split dispatch has no
+  dedicated UI (service layer supports it); evidence/photo upload is not
+  wired into these new screens; installer/inspector assignment dropdowns
+  list every user, not just Obra department members (a data-entry
+  convenience gap, not a security one — authorization is still fully
+  enforced server-side regardless of who is picked); mobile rendering is
+  structurally but not visually/screenshot verified. See
+  `docs/KNOWN_LIMITATIONS.md` for the complete, itemized list.
 
 ## Overall recommendation
 
@@ -255,9 +324,12 @@ what is modeled-but-not-yet-exercised and what has no UI yet at all. The
 Priority 0 vertical slice (documents, procurement, the dual-manifest
 engine, receiving, inventory ledger, material requests, landed-cost data
 model, dashboards, HTML snapshots, and the full production deployment/
-backup/restore cycle) and the Gate Controls and Formal Handoffs milestone
+backup/restore cycle), the Gate Controls and Formal Handoffs milestone
 (gate evaluation, blocking, authorized override, and the full handoff
-lifecycle for the 8 required transitions) are genuinely working
-end-to-end against the real live-container fixture, not merely designed.
-This is not yet the complete 38-section system the
-governing prompt describes, and should not be represented as such.
+lifecycle for the 8 required transitions), and the Delivery, Installation,
+Inspection, and Final Acceptance milestone (the last 3 of those 8
+transitions now have production UI, a quantity-invariant-safe domain
+service layer, and cross-project-isolated screens) are genuinely working
+end-to-end against real data, not merely designed. This is not yet the
+complete 38-section system the governing prompt describes, and should not
+be represented as such.

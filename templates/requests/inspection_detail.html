@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Inspección — {{ inspection.installation }}</h3>
+<p>
+    {% if inspection.result == "pass" %}<span class="badge bg-success">Aprobado</span>
+    {% elif inspection.result == "conditional_pass" %}<span class="badge bg-warning text-dark">Aprobado condicionado</span>
+    {% else %}<span class="badge bg-danger">Rechazado</span>{% endif %}
+    — Fecha: {{ inspection.inspection_date }}
+    — Inspector: {{ inspection.inspector|default:"—" }}
+    — Cantidad inspeccionada: {{ inspection.inspected_quantity|default:"—" }}
+</p>
+{% if inspection.previous_inspection %}
+<p class="text-muted">Reinspección de: <a href="{% url 'requests:inspection-detail' inspection.previous_inspection.pk %}">{{ inspection.previous_inspection }}</a> ({{ inspection.previous_inspection.get_result_display }})</p>
+{% endif %}
+{% if inspection.notes %}<p>{{ inspection.notes }}</p>{% endif %}
+
+{% if inspection.technical_sign_off_at %}
+<p class="text-success">Firma técnica: {{ inspection.technical_sign_off_by }} el {{ inspection.technical_sign_off_at|date:"d/m/Y H:i" }}</p>
+{% else %}
+<form method="post" action="{% url 'requests:inspection-sign-off' inspection.pk %}" class="mb-3">
+    {% csrf_token %}<button class="btn btn-outline-secondary btn-sm" type="submit">Registrar firma técnica</button>
+</form>
+{% endif %}
+
+<div class="card mb-3">
+    <div class="card-header">Punch-list / defectos</div>
+    <div class="table-responsive">
+    <table class="table table-sm bg-white mb-0">
+        <thead><tr><th>Descripción</th><th>Severidad</th><th>Bloqueante</th><th>Responsable</th><th>Fecha límite</th><th>Estado</th><th></th></tr></thead>
+        <tbody>
+        {% for item in inspection.punch_list_items.all %}
+            <tr>
+                <td>{{ item.description }}</td>
+                <td>{{ item.get_severity_display }}</td>
+                <td>{% if item.is_blocking %}<span class="badge bg-danger">Sí</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}</td>
+                <td>{{ item.responsible_user|default:item.responsible_department|default:"—" }}</td>
+                <td>{{ item.correction_deadline|default:"—" }}</td>
+                <td>
+                    {% if item.status == "open" %}<span class="badge bg-warning text-dark">Abierto</span>
+                    {% else %}<span class="badge bg-success">Cerrado</span>{% endif %}
+                </td>
+                <td>
+                    {% if item.status == "open" %}
+                    <form method="post" action="{% url 'requests:inspection-close-item' inspection.pk item.pk %}" class="d-flex gap-1">
+                        {% csrf_token %}
+                        <input type="text" name="resolution_notes" class="form-control form-control-sm" placeholder="Notas de resolución">
+                        <button class="btn btn-outline-success btn-sm" type="submit">Cerrar</button>
+                    </form>
+                    {% else %}
+                    {{ item.resolved_by }} — {{ item.resolution_notes }}
+                    {% endif %}
+                </td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="7" class="text-muted">Sin ítems de punch-list.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+<a class="btn btn-outline-primary btn-sm" href="{% url 'requests:installation-detail' inspection.installation_id %}">Volver a la instalación</a>
+{% endblock %}

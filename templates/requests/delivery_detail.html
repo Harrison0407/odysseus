@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Entrega — {{ delivery.dispatch.pick_list.request.project }}</h3>
+<p>
+    {% if delivery.accepted == True %}<span class="badge bg-success">Aceptada</span>
+    {% elif delivery.accepted == False %}<span class="badge bg-danger">Rechazada/fallida</span>
+    {% else %}<span class="badge bg-secondary">Pendiente de completar</span>{% endif %}
+    — Despachada: {{ delivery.dispatch.dispatched_at|date:"d/m/Y H:i" }}
+    — Entregada: {{ delivery.delivered_at|date:"d/m/Y H:i"|default:"—" }}
+    — Recibida por: {{ delivery.received_by|default:"—" }}
+</p>
+{% if delivery.delivery_location_note %}<p class="text-muted">Ubicación: {{ delivery.delivery_location_note }}</p>{% endif %}
+
+<div class="table-responsive">
+<table class="table bg-white">
+    <thead><tr><th>Artículo</th><th>Despachado</th><th>Aceptado</th><th>Rechazado</th><th>Dañado</th><th>Registrar</th></tr></thead>
+    <tbody>
+    {% for line, form in lines_with_forms %}
+        <tr>
+            <td>{{ line.dispatch_line.request_line.item }}</td>
+            <td>{{ line.dispatch_line.quantity }}</td>
+            <td>{{ line.quantity_accepted }}</td>
+            <td>{{ line.quantity_rejected }}</td>
+            <td>{{ line.quantity_damaged }}</td>
+            <td>
+                <form method="post" action="{% url 'requests:delivery-record-line' delivery.pk line.pk %}" class="d-flex flex-wrap gap-1">
+                    {% csrf_token %}
+                    <span>Ac. {{ form.quantity_accepted }}</span>
+                    <span>Rec. {{ form.quantity_rejected }}</span>
+                    <span>Dañ. {{ form.quantity_damaged }}</span>
+                    <button class="btn btn-outline-primary btn-sm" type="submit">Guardar</button>
+                </form>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+
+{% if delivery.accepted is None %}
+<div class="card mb-3">
+    <div class="card-header">Completar entrega</div>
+    <div class="card-body">
+        <form method="post" action="{% url 'requests:delivery-complete' delivery.pk %}">
+            {% csrf_token %}
+            {{ complete_form.accepted.label_tag }} {{ complete_form.accepted }}
+            {{ complete_form.rejected_quantity_note.label_tag }} {{ complete_form.rejected_quantity_note }}
+            <button class="btn btn-primary mt-2" type="submit">Confirmar</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<div class="card mb-3">
+    <div class="card-header">Recepción de proyecto (destino, daños, faltantes)</div>
+    <div class="card-body">
+        {% for r in project_receipts %}
+        <div class="border-bottom pb-2 mb-2">
+            Destino: {{ r.confirmed_destination_building|default:"—" }} / {{ r.confirmed_destination_unit|default:r.confirmed_destination_area|default:"—" }}
+            {% if r.site_damage_reported %}<span class="badge bg-danger">Daño en sitio</span>{% endif %}
+            {% if r.missing_items_reported %}<span class="badge bg-warning text-dark">Faltantes</span>{% endif %}
+            {% if r.wrong_material_reported %}<span class="badge bg-warning text-dark">Material incorrecto</span>{% endif %}
+            <a class="btn btn-outline-secondary btn-sm ms-2" href="{% url 'requests:installation-create' r.pk %}">Crear instalación</a>
+        </div>
+        {% empty %}
+        <p class="text-muted">Sin recepción de proyecto registrada aún.</p>
+        {% endfor %}
+        {% if delivery.accepted is not None %}
+        <form method="post" action="{% url 'requests:delivery-create-receipt' delivery.pk %}">
+            {% csrf_token %}
+            {{ receipt_form.as_p }}
+            <button class="btn btn-primary" type="submit">Registrar recepción</button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header">Entrega de responsabilidad (Proyecto → Instalación)</div>
+    <div class="card-body">
+        <ul class="list-group list-group-flush mb-3">
+            {% for h in existing_handoffs %}
+            <li class="list-group-item d-flex justify-content-between">
+                <span>{{ h.gate_definition|default:"(sin gate)" }} → {{ h.to_department|default:"—" }}</span>
+                <span>
+                    <span class="badge bg-secondary">{{ h.get_status_display }}</span>
+                    <a href="{% url 'workflow:detail' h.pk %}" class="ms-2">Ver</a>
+                </span>
+            </li>
+            {% empty %}
+            <li class="list-group-item text-muted">Sin entregas de responsabilidad creadas todavía.</li>
+            {% endfor %}
+        </ul>
+        {% for gate in available_gates %}
+        <a class="btn btn-outline-primary btn-sm me-2"
+           href="{% url 'workflow:create' delivery_content_type_id delivery.pk gate.code %}">
+            Crear entrega: {{ gate.name }}
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

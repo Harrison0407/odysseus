@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Instalación — {{ installation.project_receipt.delivery.dispatch.pick_list.request.project }}</h3>
+<p>
+    Artículo: {{ installation.delivery_line.dispatch_line.request_line.item|default:"—" }}
+    — Entregado (válido): {{ installation.delivery_line.quantity_accepted|default:"—" }}
+    — Instalado: {{ installation.quantity_installed }}
+    — No usado: {{ installation.quantity_not_used }}
+    — Dañado: {{ installation.quantity_damaged }}
+</p>
+<p>
+    {% if installation.is_complete %}<span class="badge bg-success">Completa</span>{% else %}<span class="badge bg-secondary">En progreso</span>{% endif %}
+    {% if installation.requires_rework %}<span class="badge bg-danger">Requiere retrabajo</span>{% endif %}
+    — Instalador asignado: {{ installation.assigned_installer|default:"—" }}
+    — Programada: {{ installation.scheduled_date|default:"—" }}
+</p>
+<p>
+    Reconocimiento del instalador: {{ installation.installer_acknowledged_at|date:"d/m/Y H:i"|default:"Pendiente" }}
+    — Confirmación de supervisor: {{ installation.supervisor_confirmed_at|date:"d/m/Y H:i"|default:"Pendiente" }}
+    {% if installation.supervisor_confirmed_by %}({{ installation.supervisor_confirmed_by }}){% endif %}
+</p>
+{% if installation.missing_components_note %}<p class="text-danger">Componentes faltantes: {{ installation.missing_components_note }}</p>{% endif %}
+{% if installation.observations %}<p class="text-muted">Observaciones: {{ installation.observations }}</p>{% endif %}
+
+<div class="card mb-3">
+    <div class="card-header">Registrar progreso de instalación</div>
+    <div class="card-body">
+        <form method="post" action="{% url 'requests:installation-progress' installation.pk %}">
+            {% csrf_token %}
+            {{ progress_form.as_p }}
+            <button class="btn btn-primary" type="submit">Guardar progreso</button>
+        </form>
+    </div>
+</div>
+
+<div class="d-flex gap-2 mb-3 flex-wrap">
+    <form method="post" action="{% url 'requests:installation-acknowledge' installation.pk %}">
+        {% csrf_token %}<button class="btn btn-outline-secondary btn-sm" type="submit">Reconocer (instalador)</button>
+    </form>
+    <form method="post" action="{% url 'requests:installation-supervisor-confirm' installation.pk %}">
+        {% csrf_token %}<button class="btn btn-outline-secondary btn-sm" type="submit">Confirmar (supervisor)</button>
+    </form>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Entregas de responsabilidad (Instalación → Inspección → Aceptación final)</div>
+    <div class="card-body">
+        <ul class="list-group list-group-flush mb-3">
+            {% for h in existing_handoffs %}
+            <li class="list-group-item d-flex justify-content-between flex-wrap">
+                <span>{{ h.gate_definition }} → {{ h.to_department|default:"—" }}</span>
+                <span>
+                    <span class="badge bg-secondary">{{ h.get_status_display }}</span>
+                    <a href="{% url 'workflow:detail' h.pk %}" class="ms-2">Ver</a>
+                </span>
+            </li>
+            {% empty %}
+            <li class="list-group-item text-muted">Sin entregas de responsabilidad creadas todavía.</li>
+            {% endfor %}
+        </ul>
+        {% for gate in available_gates %}
+        <a class="btn btn-outline-primary btn-sm me-2"
+           href="{% url 'workflow:create' installation_content_type_id installation.pk gate.code %}">
+            Crear entrega: {{ gate.name }}
+        </a>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Inspecciones</div>
+    <div class="card-body">
+        <table class="table table-sm bg-white">
+            <thead><tr><th>Fecha</th><th>Resultado</th><th>Inspector</th><th>Defectos abiertos</th><th></th></tr></thead>
+            <tbody>
+            {% for insp in inspections %}
+                <tr>
+                    <td>{{ insp.inspection_date }}</td>
+                    <td>
+                        {% if insp.result == "pass" %}<span class="badge bg-success">Aprobado</span>
+                        {% elif insp.result == "conditional_pass" %}<span class="badge bg-warning text-dark">Aprobado condicionado</span>
+                        {% else %}<span class="badge bg-danger">Rechazado</span>{% endif %}
+                    </td>
+                    <td>{{ insp.inspector }}</td>
+                    <td>{{ insp.punch_list_items.all|length }}</td>
+                    <td><a href="{% url 'requests:inspection-detail' insp.pk %}">Ver / gestionar</a></td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="5" class="text-muted">Sin inspecciones registradas.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <form method="post" action="{% url 'requests:installation-create-inspection' installation.pk %}">
+            {% csrf_token %}
+            <p class="text-muted mb-1">Registrar nueva inspección (o reinspección tras corrección):</p>
+            <label>Resultado</label>
+            <select name="result" class="form-select form-select-sm mb-2">
+                <option value="pass">Aprobado</option>
+                <option value="conditional_pass">Aprobado condicionado</option>
+                <option value="fail">Rechazado</option>
+            </select>
+            <label>Cantidad inspeccionada</label>
+            <input type="number" step="0.001" name="inspected_quantity" class="form-control form-control-sm mb-2">
+            <label>Notas</label>
+            <textarea name="notes" rows="2" class="form-control form-control-sm mb-2"></textarea>
+            <label>Defectos (uno por línea, cada uno crea un ítem de punch-list bloqueante)</label>
+            <textarea name="defects" rows="3" class="form-control form-control-sm mb-2"></textarea>
+            <button class="btn btn-primary btn-sm" type="submit">Registrar inspección</button>
+        </form>
+    </div>
+</div>
+
+{% if acceptance %}
+<div class="card mb-3 border-success">
+    <div class="card-header">Aceptación final</div>
+    <div class="card-body">
+        <span class="badge bg-success">{{ acceptance.get_decision_display }}</span>
+        por {{ acceptance.accepted_by }} el {{ acceptance.accepted_at|date:"d/m/Y H:i" }}
+        {% if acceptance.conditions_note %}<p class="text-muted mt-2">Condiciones: {{ acceptance.conditions_note }}</p>{% endif %}
+    </div>
+</div>
+{% elif can_finalize %}
+<div class="card mb-3 border-primary">
+    <div class="card-header">Aceptación final pendiente</div>
+    <div class="card-body">
+        <form method="post" action="{% url 'requests:installation-final-accept' installation.pk %}">
+            {% csrf_token %}
+            <label>Decisión</label>
+            <select name="decision" class="form-select form-select-sm mb-2">
+                <option value="accepted">Aceptado</option>
+                <option value="conditional">Aceptado condicionado</option>
+            </select>
+            <label>Notas / condiciones</label>
+            <textarea name="conditions_note" rows="2" class="form-control form-control-sm mb-2"></textarea>
+            <button class="btn btn-success btn-sm" type="submit">Registrar aceptación final</button>
+        </form>
+    </div>
+</div>
+{% elif accepted_acceptance_handoff %}
+<div class="alert alert-warning">La entrega de inspección → aceptación fue aceptada, pero no tiene permiso para registrar el detalle de la decisión final (aceptado / aceptado condicionado).
+    <a href="{% url 'workflow:detail' accepted_acceptance_handoff.pk %}">Ver entrega</a></div>
+{% elif submitted_acceptance_handoff %}
+<div class="alert alert-info">La entrega de inspección → aceptación fue enviada y está a la espera de un usuario autorizado para aceptarla. Una vez aceptada, podrá registrar aquí el detalle de la decisión final (aceptado / aceptado condicionado).
+    <a href="{% url 'workflow:detail' submitted_acceptance_handoff.pk %}">Ver entrega</a></div>
+{% endif %}
+{% endblock %}

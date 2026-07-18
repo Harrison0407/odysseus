@@ -2,6 +2,14 @@
 {% block content %}
 <h3>Dirección — panel ejecutivo</h3>
 {% include "core/_dashboard_common.html" %}
+<div class="card mb-3">
+    <div class="card-header">Instalaciones aceptadas en el gate, pendientes de registrar la decisión final</div>
+    <ul class="list-group list-group-flush">
+        {% for i in installations_awaiting_final_acceptance %}
+        <li class="list-group-item"><a href="{% url 'requests:installation-detail' i.pk %}">{{ i }}</a></li>
+        {% empty %}<li class="list-group-item text-muted">Sin instalaciones pendientes.</li>{% endfor %}
+    </ul>
+</div>
 <div class="card">
     <div class="card-header">Variaciones oficial vs. operativo sin explicar</div>
     <ul class="list-group list-group-flush">

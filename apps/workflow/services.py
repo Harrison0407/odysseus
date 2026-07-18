@@ -82,6 +82,12 @@ def resolve_project(target):
     project_receipt = getattr(target, "project_receipt", None)  # InstallationRecord -> ProjectReceipt -> Delivery
     if project_receipt is not None:
         return resolve_project(project_receipt.delivery)
+    installation = getattr(target, "installation", None)  # InspectionRecord -> InstallationRecord
+    if installation is not None:
+        return resolve_project(installation)
+    inspection = getattr(target, "inspection", None)  # PunchListItem -> InspectionRecord
+    if inspection is not None:
+        return resolve_project(inspection)
     return None
 
 
@@ -139,11 +145,36 @@ def can_view_handoff(user, handoff: Handoff) -> bool:
     if handoff.organization_id and profile.organization_id != handoff.organization_id:
         return False
     if handoff.project_id:
-        has_project_access = UserProjectAccess.objects.filter(user=user, project_id=handoff.project_id).exists()
-        is_management = UserRole.objects.filter(user=user, role__is_management=True, is_active=True).exists()
-        if not (has_project_access or is_management):
+        if not user_can_access_project(user, handoff.project):
             return False
     return True
+
+
+def user_can_access_project(user, project) -> bool:
+    """Same project-isolation rule `can_view_handoff` applies to a Handoff's
+    `project_id` — factored out so it can be applied directly to a target
+    (Delivery, InstallationRecord, MaterialRequest, ...) before any handoff
+    necessarily exists yet."""
+    if project is None:
+        return True
+    if UserProjectAccess.objects.filter(user=user, project=project).exists():
+        return True
+    return UserRole.objects.filter(user=user, role__is_management=True, is_active=True).exists()
+
+
+def can_view_target(user, target) -> bool:
+    """Organization + project isolation applied directly to a delivery/
+    installation-chain target, mirroring `can_view_handoff` — used by the
+    Delivery/InstallationRecord/InspectionRecord views (apps.requests.views)
+    so cross-project access is denied the same way whether or not a
+    handoff has been created yet for that target."""
+    profile = getattr(user, "profile", None)
+    if profile is None:
+        return False
+    organization = resolve_organization(target)
+    if organization is not None and profile.organization_id != organization.id:
+        return False
+    return user_can_access_project(user, resolve_project(target))
 
 
 # ---------------------------------------------------------------------------

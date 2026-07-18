@@ -64,3 +64,35 @@ instead, exactly as required, and is **not** listed here as a resolved assumptio
   keeping both source strings on the `ManifestLineSource` record; the
   canonical apartment/unit identity is left `Unknown — Pending Confirmation`
   until a human resolves it.
+
+## Delivery/Installation/Inspection/Final Acceptance milestone
+
+- **A13. "Approve a material request" defaults every line's
+  `quantity_approved` to the requested amount.** The spec describes an
+  approval step but not a UI for partially approving individual lines at
+  a different quantity than requested. The conservative default is
+  "approve as requested"; a line-by-line different-quantity approval
+  screen is not built, but nothing prevents an approver from directly
+  editing `quantity_approved` via the admin/ORM before reservation if a
+  real partial approval is needed — the quantity-invariant guards
+  downstream (reservation, dispatch, delivery, installation) all read
+  from `quantity_approved`, not the requested amount, so a corrected
+  value is respected everywhere it matters.
+- **A14. One material-request line is assumed to draw from one lot per
+  dispatch.** `request_dispatch` dispatches the full reserved-and-
+  undispatched quantity per line using that line's first active
+  reservation. The service layer supports an explicit multi-lot split
+  per line (`apps.requests.services.create_dispatch` takes an explicit
+  list of `(line, reservation, quantity)` tuples); only the one-lot-per-
+  line UI shortcut is built, since it matches the pilot's real usage
+  (see `docs/KNOWN_LIMITATIONS.md`).
+- **A15. "Final acceptance" is a two-step action by design, not an
+  oversight.** Accepting the `inspection_to_acceptance` handoff (the
+  formal gate transition, via the reused, generic
+  `apps.workflow.services.accept_handoff`) and recording the accepted-
+  vs-conditional decision detail (`apps.requests.services.record_final_acceptance`)
+  are deliberately separate calls — the latter only activates once the
+  former has happened, by whichever route (see ADR-021). This keeps the
+  generic handoff-acceptance action usable from the ordinary workflow
+  inbox for every gate uniformly, while still capturing the domain-
+  specific decision detail this particular gate needs.

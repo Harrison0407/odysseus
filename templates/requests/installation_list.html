@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Instalaciones</h3>
+<form method="get" class="row g-2 mb-3">
+    <div class="col-auto">
+        <select name="estado" class="form-select form-select-sm">
+            <option value="">Todas</option>
+            <option value="incompletas" {% if request.GET.estado == "incompletas" %}selected{% endif %}>Incompletas</option>
+            <option value="rework" {% if request.GET.estado == "rework" %}selected{% endif %}>Requieren retrabajo</option>
+        </select>
+    </div>
+    <div class="col-auto"><button class="btn btn-outline-secondary btn-sm" type="submit">Filtrar</button></div>
+</form>
+<div class="table-responsive">
+<table class="table table-striped bg-white">
+    <thead><tr><th>Proyecto</th><th>Artículo</th><th>Instalador</th><th>Instalado</th><th>Estado</th></tr></thead>
+    <tbody>
+    {% for i in installations %}
+        <tr>
+            <td><a href="{% url 'requests:installation-detail' i.pk %}">{{ i.project_receipt.delivery.dispatch.pick_list.request.project }}</a></td>
+            <td>{{ i.delivery_line.dispatch_line.request_line.item|default:"—" }}</td>
+            <td>{{ i.assigned_installer|default:"—" }}</td>
+            <td>{{ i.quantity_installed }}</td>
+            <td>
+                {% if i.requires_rework %}<span class="badge bg-danger">Retrabajo</span>
+                {% elif i.is_complete %}<span class="badge bg-success">Completa</span>
+                {% else %}<span class="badge bg-secondary">En progreso</span>{% endif %}
+            </td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="5" class="text-muted">Sin instalaciones.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

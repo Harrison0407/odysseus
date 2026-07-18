@@ -2,6 +2,88 @@
 
 Newest first.
 
+## ADR-021 — Final acceptance detail is captured *after* the generic `accept_handoff`, never instead of it
+**Decision:** `installation_final_accept` (the domain-specific "aceptado /
+aceptado condicionado + notas" screen) requires the `inspection_to_acceptance`
+handoff to already be `ACCEPTED` before it does anything; it never calls
+`accept_handoff` itself.
+**Why:** The generic "Aceptar" button (`/flujo/<id>/aceptar/`) is a fully
+valid, already-exposed entry point for accepting *any* handoff, including
+this one — a real user can reach it directly from the workflow inbox
+without ever visiting the installation detail page. An earlier version of
+this view called `accept_handoff` itself before recording the domain
+decision, which meant a user who instead used the generic inbox button
+left the record permanently unable to capture the accepting authority's
+accepted-vs-conditional decision (the dedicated screen only offered its
+form for a still-`SUBMITTED` handoff, and once accepted generically there
+was no path back to it). Caught during the live HTTP walkthrough for this
+milestone, not by a unit test — unit tests called the service functions
+directly and never exercised the two-URL interaction. Fixed by making the
+domain screen strictly additive: it activates only once `accept_handoff`
+(by whichever route) has already run, and it never re-implements or
+races against that transition.
+
+## ADR-020 — Model-level quantity guards are `AuditEvent.Action.WAIVER`, not `GateOverride`
+**Decision:** `apps.requests.services.record_installation_progress` lets an
+installation exceed its validly-delivered quantity only when the caller
+passes `override_reason` and holds `can_override_gates`; this is logged as
+an `AuditEvent.Action.WAIVER`, never a `GateOverride` row.
+**Why:** `GateOverride` is deliberately shaped around the 8-gate
+`Handoff` transition system (`gate_definition`, `handoff` FKs) — it
+answers "why was this *stage transition* allowed to proceed while
+blocked." An over-installation is a narrower, purely quantitative guard
+inside a single model, with no corresponding gate transition or Handoff
+row at the moment it happens. Reusing `GateOverride` here would force a
+fake gate/handoff into existence just to hang a reason on, or would
+weaken `GateOverride`'s FK constraints to make them optional — both worse
+than reusing the same permission check (`can_override_gates`) with the
+audit log the codebase already has for non-gate authorized exceptions.
+
+## ADR-019 — Delivery/installation/inspection screens reuse `apps.workflow.services`, never a second permission engine
+**Decision:** `apps.workflow.services` gained `user_can_access_project`
+(factored out of `can_view_handoff`) and `can_view_target`, used by every
+new `apps.requests.views` detail/action view via a small
+`_deny_cross_project` guard.
+**Why:** Cross-project isolation was already solved once, for `Handoff`,
+in the Gate Controls milestone (ADR-015). The new Delivery/
+InstallationRecord/InspectionRecord screens needed the identical rule
+*before* a handoff necessarily exists for a given target yet (e.g. a
+freshly-created `Delivery` with no handoff at all). Rather than
+re-deriving project/organization scoping in `apps.requests.views`, the
+existing check was generalized to operate directly on a target via the
+already-existing `resolve_project`/`resolve_organization` helpers.
+
+## ADR-018 — Installation and project-receipt creation are idempotent; inspection creation is deliberately not
+**Decision:** `create_installation_record` and `create_project_receipt`
+use a `select_for_update` + first-existing-wins pattern (mirroring
+`get_or_create_delivery`/`create_handoff`) keyed on
+`(project_receipt, delivery_line)` and `delivery` respectively.
+`create_inspection` has no such guard.
+**Why:** A double-click/retry on "Crear instalación" or "Registrar
+recepción" must not create a second work order or a second receipt for
+the same delivered material — confirmed as a real gap during this
+milestone's own live HTTP walkthrough, where an accidental duplicate
+`curl` POST created two `InstallationRecord` rows for the same
+`delivery_line` before this fix (see `docs/implementation-log.md`, and
+`tests/test_delivery_installation_acceptance.py::test_21c/21d`).
+Inspections are the opposite case: a genuine reinspection is *supposed*
+to create a new row every time (that is the entire point of
+`previous_inspection` chaining, ADR-017 in the model docstrings) — adding
+duplicate-prevention there would silently block a legitimate second
+inspection. This is recorded as an honest, deliberate gap in
+`docs/KNOWN_LIMITATIONS.md` rather than papered over.
+
+## ADR-017 — Reinspection chains via a self-referential FK; failed history is never overwritten
+**Decision:** `InspectionRecord.previous_inspection` points to the prior
+cycle; `apps.workflow.gates.evaluate_inspection_to_acceptance` only reads
+the single most-recent inspection's `passed` value (plus all-time open
+*blocking* punch-list items across every inspection in the chain).
+**Why:** Spec requirement: a failed inspection must never be overwritten
+or deleted on reinspection. Modeling each cycle as its own permanent row
+(rather than mutating one row's result field) makes this the structural
+default rather than something application code has to remember to
+preserve.
+
 ## ADR-016 — `ResponsibilityAssignment` reused (not replaced) for ownership transfer
 **Decision:** `accept_handoff()` closes any open `ResponsibilityAssignment`
 for the target and opens a new one, rather than introducing a new

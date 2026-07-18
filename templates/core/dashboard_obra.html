@@ -2,6 +2,24 @@
 {% block content %}
 <h3>Obra — panel de Miguel</h3>
 {% include "core/_dashboard_common.html" %}
+<div class="row g-3 mb-3">
+    <div class="col-sm-6 col-md-4">
+        <a class="text-decoration-none" href="{% url 'requests:delivery-list' %}?pendientes=1">
+            <div class="card border-warning h-100"><div class="card-body">
+                <div class="fs-3">{{ deliveries_pending_count }}</div>
+                <div>Entregas pendientes de completar</div>
+            </div></div>
+        </a>
+    </div>
+    <div class="col-sm-6 col-md-4">
+        <a class="text-decoration-none" href="{% url 'requests:installation-list' %}?estado=incompletas">
+            <div class="card border-warning h-100"><div class="card-body">
+                <div class="fs-3">{{ installations_incomplete_count }}</div>
+                <div>Instalaciones incompletas</div>
+            </div></div>
+        </a>
+    </div>
+</div>
 <div class="card">
     <div class="card-header">Mis solicitudes de material</div>
     <ul class="list-group list-group-flush">

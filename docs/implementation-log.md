@@ -142,3 +142,121 @@ before any file was touched).
 
 No step in this log is aspirational — every claim above was executed and
 its actual output inspected in this session.
+
+## Delivery, Installation, Inspection, and Final Acceptance milestone
+
+Baseline verified before starting: branch `main`, HEAD =
+`86c31016d057e0338e542577aa08fd3d6a7c7cb1`, clean working tree.
+
+16. Read the updated docs (`KNOWN_LIMITATIONS.md`, `FINAL_VALIDATION_REPORT.md`,
+    `REQUIREMENTS_TRACEABILITY.md`, `ui-navigation-map.md`,
+    `architecture-decisions.md`, `implementation-roadmap.md`, this file)
+    and inspected the existing `Delivery`/`InstallationRecord`/
+    `InspectionRecord`/`AcceptanceRecord` models, the gate engine, the
+    handoff service layer, `apps.inventory` (confirmed `InventoryReservation`
+    unused before this milestone), and `apps.audit.Attachment` (confirmed
+    unused, noted as a future evidence-attachment candidate — see
+    `KNOWN_LIMITATIONS.md`).
+17. Extended `apps/requests/models.py`: `MaterialRequest.area`,
+    `Status.PARTIALLY_DELIVERED`; `Delivery.delivered_at`/
+    `delivery_location_note`; `DeliveryLine.quantity_damaged`;
+    `ProjectReceipt.confirmed_destination_area`; rewrote
+    `InstallationRecord` (installer/schedule/progress/damage/rework/
+    acknowledgement/supervisor-confirmation fields, `delivery_line` FK
+    completing the traceability chain) and `InspectionRecord`
+    (result/pass-fail/conditional, `previous_inspection` self-FK,
+    technical sign-off); added `PunchListItem`; extended
+    `AcceptanceRecord` with `Decision`/`conditions_note`. One migration
+    (`0002_alter_delivery_options_and_more`), regenerated once cleanly
+    after adding the `delivery_line` FK (nothing committed yet, so this
+    was iteration, not a data-loss risk).
+18. Extended `apps.workflow.gates`: `evaluate_project_delivery_to_installation`
+    now also requires a positive accepted quantity;
+    `evaluate_inspection_to_acceptance` rewritten to read only the most
+    recent inspection's `passed` value plus all-time open *blocking*
+    punch-list items — a failed inspection or an open critical defect
+    both independently block the gate, and a passing reinspection
+    supersedes an earlier failure without erasing it.
+19. Built `apps/requests/services.py` — the quantity-invariant and
+    inventory-consequence domain layer for the whole delivery →
+    installation → inspection → acceptance chain (`reserve_line`,
+    `create_dispatch`, `get_or_create_delivery`, `record_delivery_line`,
+    `complete_delivery`, `create_project_receipt`,
+    `create_installation_record`, `record_installation_progress`,
+    `acknowledge_installation`, `confirm_installation_supervisor`,
+    `create_inspection`, `close_punch_list_item`, `technical_sign_off`,
+    `record_final_acceptance`). Validated end-to-end via a throwaway
+    smoke script (reserve → dispatch → partial/damaged delivery →
+    receipt → installation with over-allocation correctly blocked →
+    failed inspection blocking the gate → punch-list closure →
+    reinspection chaining → gate ready → final acceptance) before
+    writing formal tests — zero bugs found on the first run.
+20. Built the UI: `apps/requests/views.py` gained the request
+    approve/reserve/dispatch actions plus full delivery/installation/
+    inspection/acceptance list/detail/action views;
+    `apps/requests/urls.py` extended; 8 new Spanish-first, mobile-
+    responsive templates (`delivery_list/detail`,
+    `installation_list/detail/create`, `inspection_list/detail`,
+    `acceptance_list`); `templates/base.html` gained an "Obra" dropdown
+    nav; `apps.core.views.dashboard_home` gained pending-delivery/
+    incomplete-installation counts on the Obra dashboard (linking to
+    filtered list views, not decorative totals) and an
+    installations-awaiting-final-acceptance queue on the Dirección
+    dashboard. Cross-project isolation was added via a new
+    `apps.workflow.services.can_view_target`/`user_can_access_project`
+    (factored out of the existing `can_view_handoff`), enforced on every
+    new detail/action view and every new list queryset.
+21. Wrote `apps/requests/management/commands/seed_delivery_demo_data.py`
+    — an additive demo dataset (project, warehouse stock, an approved
+    material request) separate from `import_live_container_fixture`,
+    scoped to this milestone's screens.
+22. Wrote 40 automated tests
+    (`tests/test_delivery_installation_acceptance.py`) covering all 27
+    required scenarios (see `REQUIREMENTS_TRACEABILITY.md` for the exact
+    mapping). Full suite: 93/93 passing (53 pre-existing + 40 new).
+23. **Full live HTTP walkthrough** against a running dev server (fresh
+    SQLite DB, migrated from empty, seeded via `seed_pilot_data` +
+    `seed_delivery_demo_data`), using real cookies + CSRF tokens, no
+    test-client shortcuts: as Miguel — approved the request via direct
+    ORM inspection of the seeded data, reserved and dispatched the full
+    quantity, recorded the delivery line as fully accepted, completed
+    the delivery, created the project receipt, created the installation
+    record, recorded full installation progress, acknowledged as
+    installer, confirmed as supervisor, created and submitted the
+    `installation_to_inspection` handoff and accepted it, recorded a
+    **failed** inspection with 2 blocking punch-list defects, created
+    the `inspection_to_acceptance` handoff and confirmed it genuinely
+    blocked (both "inspection not approved" and "open blocking defects"
+    reasons rendered), confirmed a plain submit was rejected, and
+    confirmed a direct-POST unauthorized override attempt was denied
+    server-side with the exact permission-denied message (not merely
+    hidden in the UI); closed both punch-list defects; recorded a
+    passing reinspection; re-submitted the handoff (now ready). As
+    Harrison — accepted the handoff via the generic, reused accept
+    endpoint, then recorded the final-acceptance detail ("Aceptado");
+    confirmed a duplicate final-accept submission was caught gracefully
+    (exactly one `AcceptanceRecord` in the database, confirmed via
+    direct query). As Markeris (Compras, no project access to the demo
+    project) — confirmed a direct URL hit on the installation detail
+    page returned 302, and the record was absent from his own
+    installation list view.
+24. During this walkthrough, an accidental duplicate `curl` POST
+    revealed a real gap: `create_installation_record` had no
+    duplicate-submission protection and created two rows for the same
+    delivered line. Fixed with an idempotent
+    `select_for_update`-guarded lookup (same pattern already used by
+    `get_or_create_delivery`/`create_handoff`), applied preemptively to
+    `create_project_receipt` too; added regression tests
+    (`test_21c`/`test_21d`) and an ADR (ADR-018). A second real gap was
+    found the same way: the first version of the final-acceptance view
+    called `accept_handoff` itself, which meant accepting the same
+    handoff through the generic inbox button first left the domain
+    decision permanently unrecordable — fixed by making the
+    domain-specific screen strictly additive to (never a replacement
+    for) the generic accept transition (ADR-021). Both fixes were
+    re-verified with a fresh walkthrough afterward.
+25. Updated the living documentation set (this file,
+    `REQUIREMENTS_TRACEABILITY.md`, `ui-navigation-map.md`,
+    `architecture-decisions.md` ADR-017 through ADR-021,
+    `implementation-roadmap.md`, `ASSUMPTIONS.md`, `KNOWN_LIMITATIONS.md`,
+    `SECURITY.md`, `FINAL_VALIDATION_REPORT.md`).

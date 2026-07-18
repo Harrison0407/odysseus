@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Inspecciones</h3>
+<form method="get" class="row g-2 mb-3">
+    <div class="col-auto">
+        <select name="resultado" class="form-select form-select-sm">
+            <option value="">Todos los resultados</option>
+            <option value="pass" {% if request.GET.resultado == "pass" %}selected{% endif %}>Aprobado</option>
+            <option value="conditional_pass" {% if request.GET.resultado == "conditional_pass" %}selected{% endif %}>Aprobado condicionado</option>
+            <option value="fail" {% if request.GET.resultado == "fail" %}selected{% endif %}>Rechazado</option>
+        </select>
+    </div>
+    <div class="col-auto"><button class="btn btn-outline-secondary btn-sm" type="submit">Filtrar</button></div>
+</form>
+<div class="table-responsive">
+<table class="table table-striped bg-white">
+    <thead><tr><th>Instalación</th><th>Fecha</th><th>Resultado</th><th>Inspector</th><th>Defectos abiertos</th></tr></thead>
+    <tbody>
+    {% for insp in inspections %}
+        <tr>
+            <td><a href="{% url 'requests:inspection-detail' insp.pk %}">{{ insp.installation }}</a></td>
+            <td>{{ insp.inspection_date }}</td>
+            <td>
+                {% if insp.result == "pass" %}<span class="badge bg-success">Aprobado</span>
+                {% elif insp.result == "conditional_pass" %}<span class="badge bg-warning text-dark">Aprobado condicionado</span>
+                {% else %}<span class="badge bg-danger">Rechazado</span>{% endif %}
+            </td>
+            <td>{{ insp.inspector }}</td>
+            <td>{{ insp.punch_list_items.all|length }}</td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="5" class="text-muted">Sin inspecciones.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

@@ -11,12 +11,41 @@ from apps.audit.models import AuditEvent
 from apps.core.ratelimit import is_rate_limited, record_attempt
 from apps.core.storage import document_storage
 from apps.documents.models import Document, DocumentType, DocumentVersion
+from apps.matching.models import Discrepancy
+from apps.receiving.models import Inspection, Receipt
 from apps.shipments.models import ManifestPurpose, ManifestVariance, Shipment
 
 from .models import ReportVersion, SecureShareLink, ShareSnapshot
 
 SHARE_VIEW_MAX_REQUESTS = 30
 SHARE_VIEW_WINDOW_SECONDS = 60
+
+
+def _save_html_snapshot(html, *, report_type, user, organization, title, filename):
+    """Shared persistence for every self-contained HTML snapshot (spec
+    section 29): stores the rendered HTML as a real `Document`/
+    `DocumentVersion` (SHA-256 hashed, same as any other upload — never
+    a bespoke storage path) and records a `ReportVersion` pointing at it.
+    Both `shipment_snapshot` and `receiving_manifest_snapshot` call this
+    rather than duplicating the create-document-and-version dance."""
+    report_version = ReportVersion.objects.create(report_type=report_type, generated_by=user, created_by=user)
+
+    stored = document_storage.save(io.BytesIO(html.encode("utf-8")), filename)
+    doc_type, _ = DocumentType.objects.get_or_create(
+        organization=organization, code="generated-html-snapshot",
+        defaults={"name": "Instantánea HTML generada"},
+    )
+    document = Document.objects.create(
+        organization=organization, document_type=doc_type, title=title, uploaded_by=user, created_by=user,
+    )
+    DocumentVersion.objects.create(
+        document=document, version_number=1, stored_name=stored["stored_name"],
+        original_filename=stored["original_filename"], sha256=stored["sha256"], size_bytes=stored["size_bytes"],
+        mime_type="text/html", uploaded_by=user, created_by=user,
+    )
+    report_version.rendered_html_document = document
+    report_version.save()
+    return report_version
 
 
 def _build_shipment_snapshot_context(shipment):
@@ -43,48 +72,65 @@ def shipment_snapshot(request, pk):
     context = _build_shipment_snapshot_context(shipment)
     html = render_to_string("reports/snapshot_shipment.html", context)
 
-    report_version = ReportVersion.objects.create(
-        report_type=ReportVersion.ReportType.SHIPMENT_DOSSIER,
-        generated_by=request.user,
-        created_by=request.user,
+    _save_html_snapshot(
+        html, report_type=ReportVersion.ReportType.SHIPMENT_DOSSIER, user=request.user,
+        organization=request.user.profile.organization, title=f"Instantánea — {shipment.reference}",
+        filename=f"snapshot-{shipment.reference}.html",
     )
-
-    stored = document_storage.save(io.BytesIO(html.encode("utf-8")), f"snapshot-{shipment.reference}.html")
-    doc_type, _ = DocumentType.objects.get_or_create(
-        organization=request.user.profile.organization,
-        code="generated-html-snapshot",
-        defaults={"name": "Instantánea HTML generada"},
-    )
-    document = Document.objects.create(
-        organization=request.user.profile.organization,
-        document_type=doc_type,
-        title=f"Instantánea — {shipment.reference}",
-        uploaded_by=request.user,
-        created_by=request.user,
-    )
-    DocumentVersion.objects.create(
-        document=document,
-        version_number=1,
-        stored_name=stored["stored_name"],
-        original_filename=stored["original_filename"],
-        sha256=stored["sha256"],
-        size_bytes=stored["size_bytes"],
-        mime_type="text/html",
-        uploaded_by=request.user,
-        created_by=request.user,
-    )
-    report_version.rendered_html_document = document
-    report_version.save()
-
     audit.log(
-        AuditEvent.Action.OTHER,
-        instance=report_version,
-        actor=request.user,
+        AuditEvent.Action.OTHER, actor=request.user,
         summary=f"Instantánea HTML generada para {shipment.reference}",
     )
 
     response = HttpResponse(html, content_type="text/html; charset=utf-8")
     response["Content-Disposition"] = f'attachment; filename="snapshot-{shipment.reference}.html"'
+    return response
+
+
+@login_required
+def receiving_manifest_snapshot(request, pk):
+    """Detailed internal receiving manifest (spec 13A.8) for Manuel's
+    team — a self-contained, downloadable HTML document covering the
+    official summary, the full internal manifest, physical receiving
+    detail per line, inspections, quarantine/damage, discrepancies, the
+    receiving plan, and the official-vs-operational variance matrix that
+    requires attention (spec 13A.8 item 10 — the one section number this
+    session could independently confirm from `OFFICIAL_VS_OPERATIONAL_MANIFEST_ANALYSIS.md`;
+    see `docs/ASSUMPTIONS.md` for why the remaining section numbering is
+    a faithful reconstruction from `BUSINESS_REQUIREMENTS.md` and the
+    existing data model rather than a verbatim copy of the original spec
+    text, which was not available to re-read in this session)."""
+    receipt = get_object_or_404(
+        Receipt.objects.select_related("container", "release_packet__shipment").prefetch_related(
+            "lines__manifest_line__item", "inspections", "packages",
+        ),
+        pk=pk,
+        release_packet__shipment__organization=request.user.profile.organization,
+    )
+    shipment = receipt.release_packet.shipment
+    context = _build_shipment_snapshot_context(shipment)
+    context.update({
+        "receipt": receipt,
+        "receiving_plan": getattr(shipment, "receiving_plan", None),
+        "discrepancies": Discrepancy.objects.filter(shipment=shipment).order_by("-severity", "-created_at"),
+        "inspections": Inspection.objects.filter(receipt=receipt).select_related("receipt_line__manifest_line", "inspector"),
+        "damaged_package_count": receipt.packages.filter(is_damaged=True).count(),
+    })
+    html = render_to_string("reports/snapshot_receiving_manifest.html", context)
+
+    organization = request.user.profile.organization
+    _save_html_snapshot(
+        html, report_type=ReportVersion.ReportType.ACTUAL_RECEIVING_REPORT, user=request.user,
+        organization=organization, title=f"Manifiesto detallado de recepción — {receipt.container}",
+        filename=f"manifiesto-recepcion-{receipt.container}.html",
+    )
+    audit.log(
+        AuditEvent.Action.OTHER, actor=request.user,
+        summary=f"Manifiesto detallado de recepción generado para {receipt.container}",
+    )
+
+    response = HttpResponse(html, content_type="text/html; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="manifiesto-recepcion-{receipt.container}.html"'
     return response
 
 

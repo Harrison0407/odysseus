@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manifiesto detallado de recepción — {{ receipt.container }}</title>
+<style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 2rem; color: #212529; }
+    h1 { font-size: 1.4rem; }
+    .banner { background: #fff3cd; border: 1px solid #ffe69c; padding: .75rem 1rem; margin-bottom: 1rem; border-radius: .25rem; }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 1.5rem; font-size: .85rem; }
+    th, td { border: 1px solid #dee2e6; padding: .4rem .6rem; text-align: left; }
+    th { background: #f8f9fa; }
+    .critical { color: #842029; font-weight: bold; }
+    .section-title { background: #e9ecef; padding: .4rem .6rem; font-weight: bold; margin-top: 1.5rem; }
+    footer { margin-top: 2rem; font-size: .75rem; color: #6c757d; }
+    a.toc { margin-right: 1rem; display: inline-block; }
+    .table-scroll { overflow-x: auto; margin-bottom: 1.5rem; }
+    .table-scroll table { margin-bottom: 0; }
+    @media (max-width: 576px) {
+        body { margin: 0.75rem; }
+    }
+</style>
+</head>
+<body>
+
+<div class="banner">
+    <strong>Esta es una instantánea estática (snapshot).</strong> No es la fuente de la verdad en vivo.
+    Generada el {{ generated_at }}. Para el estado actual, consulte el sistema en línea.
+</div>
+
+<h1>Manifiesto detallado de recepción — Contenedor {{ receipt.container }}</h1>
+<p>Embarque: {{ shipment.reference }}</p>
+<p>
+    <a class="toc" href="#encabezado">1. Encabezado</a>
+    <a class="toc" href="#oficial">2. Resumen Oficial</a>
+    <a class="toc" href="#interno">3. Manifiesto Interno</a>
+    <a class="toc" href="#recepcion">4. Recepción física</a>
+    <a class="toc" href="#lineas">5. Detalle por línea</a>
+    <a class="toc" href="#inspecciones">6. Inspecciones</a>
+    <a class="toc" href="#cuarentena">7. Cuarentena y daños</a>
+    <a class="toc" href="#discrepancias">8. Discrepancias</a>
+    <a class="toc" href="#plan">9. Plan de recepción</a>
+    <a class="toc" href="#variaciones">10. Variaciones que requieren atención</a>
+</p>
+
+<div id="encabezado" class="section-title">1. Encabezado — Identificación del contenedor/embarque</div>
+<div class="table-scroll">
+<table>
+    <tr><th>Contenedor</th><td>{{ receipt.container }}</td></tr>
+    <tr><th>Embarque</th><td>{{ shipment.reference }}</td></tr>
+    <tr><th>Estado del recibo</th><td>{{ receipt.get_status_display }}</td></tr>
+    <tr><th>Sello confirmado íntegro</th><td>{{ receipt.seal_confirmed_intact|yesno:"Sí,No,Sin confirmar" }}</td></tr>
+    <tr><th>Inicio de descarga</th><td>{{ receipt.unloading_started_at|default:"—" }}</td></tr>
+    <tr><th>Fin de descarga</th><td>{{ receipt.unloading_ended_at|default:"—" }}</td></tr>
+    <tr><th>Recibido por</th><td>{{ receipt.received_by|default:"—" }}</td></tr>
+    <tr><th>Plazo provisional</th><td>{{ receipt.provisional_deadline|default:"—" }}</td></tr>
+</table>
+</div>
+
+<div id="oficial" class="section-title">2. Resumen Oficial (tal como fue emitido)</div>
+{% if bl %}
+<div class="table-scroll">
+<table>
+    <tr><th>BL</th><td>{{ bl.bl_number }}</td></tr>
+    <tr><th>Shipper</th><td>{{ bl.shipper_name }}</td></tr>
+    <tr><th>Consignee</th><td>{{ bl.consignee_name }}</td></tr>
+    <tr><th>Puerto de carga</th><td>{{ bl.port_of_loading }}</td></tr>
+    <tr><th>Puerto de descarga</th><td>{{ bl.port_of_discharge }}</td></tr>
+    <tr><th>Descripción oficial de carga</th><td>{{ bl.official_cargo_description|linebreaksbr }}</td></tr>
+    <tr><th>Paquetes declarados</th><td>{{ bl.declared_packages }}</td></tr>
+    <tr><th>Peso bruto declarado</th><td>{{ bl.declared_gross_weight_kg }} kg</td></tr>
+    <tr><th>CBM declarado</th><td>{{ bl.declared_cbm }}</td></tr>
+</table>
+</div>
+{% else %}
+<p>Sin BL cargado.</p>
+{% endif %}
+
+<div id="interno" class="section-title">3. Manifiesto Operativo Interno completo</div>
+<div class="table-scroll">
+<table>
+    <thead><tr><th>Ref.</th><th>Descripción</th><th>Destino</th><th>Cantidad</th><th>Paquetes</th><th>Estado de declaración</th></tr></thead>
+    <tbody>
+    {% for line in internal_lines %}
+        <tr>
+            <td>{{ line.reference_on_document }}</td>
+            <td>{{ line.description }}</td>
+            <td>{{ line.building|default:line.get_destination_scope_display }}</td>
+            <td>{{ line.quantity }}</td>
+            <td>{{ line.packages|default:"—" }}</td>
+            <td>{{ line.get_declaration_status_display }}</td>
+        </tr>
+    {% empty %}<tr><td colspan="6">Sin líneas.</td></tr>{% endfor %}
+    </tbody>
+</table>
+</div>
+
+<div id="recepcion" class="section-title">4. Recepción física — resumen</div>
+<p>
+    Paquetes escaneados: {{ receipt.packages.count }} ·
+    Dañados: {{ damaged_package_count }}
+</p>
+
+<div id="lineas" class="section-title">5. Detalle de recepción por línea</div>
+<div class="table-scroll">
+<table>
+    <thead><tr><th>Línea de manifiesto</th><th>Esperado</th><th>Recibido</th><th>Dañado</th><th>Faltante</th><th>Excepción</th><th>Notas</th></tr></thead>
+    <tbody>
+    {% for line in receipt.lines.all %}
+        <tr class="{% if line.exception_type != 'none' %}critical{% endif %}">
+            <td>{{ line.manifest_line }}</td>
+            <td>{{ line.quantity_expected }}</td>
+            <td>{{ line.quantity_received }}</td>
+            <td>{{ line.quantity_damaged }}</td>
+            <td>{{ line.quantity_missing }}</td>
+            <td>{{ line.get_exception_type_display }}</td>
+            <td>{{ line.notes|default:"—" }}</td>
+        </tr>
+    {% empty %}<tr><td colspan="7">Sin líneas de recepción registradas.</td></tr>{% endfor %}
+    </tbody>
+</table>
+</div>
+
+<div id="inspecciones" class="section-title">6. Inspecciones de esta recepción</div>
+<div class="table-scroll">
+<table>
+    <thead><tr><th>Línea</th><th>Inspector</th><th>Muestra</th><th>Población</th><th>Resultado</th><th>Hallazgos</th></tr></thead>
+    <tbody>
+    {% for insp in inspections %}
+        <tr>
+            <td>{{ insp.receipt_line.manifest_line }}</td>
+            <td>{{ insp.inspector|default:"—" }}</td>
+            <td>{{ insp.sample_size|default:"—" }}</td>
+            <td>{{ insp.population_size|default:"—" }}</td>
+            <td>
+                {% if insp.passed == True %}Aprobado{% elif insp.passed == False %}Rechazado{% else %}Pendiente{% endif %}
+                {% if insp.expanded_due_to_failure %} (muestra ampliada por falla){% endif %}
+            </td>
+            <td>{{ insp.findings|default:"—" }}</td>
+        </tr>
+    {% empty %}<tr><td colspan="6">Sin inspecciones registradas para esta recepción.</td></tr>{% endfor %}
+    </tbody>
+</table>
+</div>
+
+<div id="cuarentena" class="section-title">7. Cuarentena y daños</div>
+<div class="table-scroll">
+<table>
+    <thead><tr><th>Línea</th><th>Dañado</th><th>Faltante</th></tr></thead>
+    <tbody>
+    {% for line in receipt.lines.all %}
+        {% if line.quantity_damaged or line.quantity_missing %}
+        <tr class="critical">
+            <td>{{ line.manifest_line }}</td>
+            <td>{{ line.quantity_damaged }}</td>
+            <td>{{ line.quantity_missing }}</td>
+        </tr>
+        {% endif %}
+    {% empty %}<tr><td colspan="3">Sin daños o faltantes registrados.</td></tr>{% endfor %}
+    </tbody>
+</table>
+</div>
+
+<div id="discrepancias" class="section-title">8. Discrepancias</div>
+<div class="table-scroll">
+<table>
+    <thead><tr><th>Tipo</th><th>Severidad</th><th>Descripción</th><th>Resuelta</th><th>Bloquea gate</th></tr></thead>
+    <tbody>
+    {% for d in discrepancies %}
+        <tr class="{% if d.severity == 'critical' %}critical{% endif %}">
+            <td>{{ d.get_discrepancy_type_display }}</td>
+            <td>{{ d.get_severity_display }}</td>
+            <td>{{ d.description|default:"—" }}</td>
+            <td>{{ d.is_resolved|yesno:"Sí,No" }}</td>
+            <td>{{ d.blocks_gate|default:"—" }}</td>
+        </tr>
+    {% empty %}<tr><td colspan="5">Sin discrepancias registradas.</td></tr>{% endfor %}
+    </tbody>
+</table>
+</div>
+
+<div id="plan" class="section-title">9. Plan de recepción y ubicación de almacenamiento</div>
+{% if receiving_plan %}
+<div class="table-scroll">
+<table>
+    <tr><th>Estado</th><td>{{ receiving_plan.get_status_display }}</td></tr>
+    <tr><th>Ubicación propuesta</th><td>{{ receiving_plan.proposed_unloading_location|default:"—" }}</td></tr>
+    <tr><th>Paquetes esperados</th><td>{{ receiving_plan.expected_packages|default:"—" }}</td></tr>
+    <tr><th>Peso esperado (kg)</th><td>{{ receiving_plan.expected_weight_kg|default:"—" }}</td></tr>
+    <tr><th>CBM esperado</th><td>{{ receiving_plan.expected_cbm|default:"—" }}</td></tr>
+    <tr><th>Materiales sensibles</th><td>{{ receiving_plan.has_sensitive_materials|yesno:"Sí,No" }}</td></tr>
+    <tr><th>Responsable de recepción</th><td>{{ receiving_plan.responsible_receiving_owner|default:"—" }}</td></tr>
+    {% if receiving_plan.override_reason %}
+    <tr><th>Motivo de anulación</th><td>{{ receiving_plan.override_reason }}</td></tr>
+    {% endif %}
+</table>
+</div>
+{% else %}
+<p>Sin plan de recepción registrado para este embarque.</p>
+{% endif %}
+
+<div id="variaciones" class="section-title">10. Variaciones oficial vs. operativo que requieren atención</div>
+<div class="table-scroll">
+<table>
+    <thead><tr><th>Categoría oficial</th><th>Línea interna</th><th>Explicada</th><th>Severidad</th></tr></thead>
+    <tbody>
+    {% for v in variances %}
+        <tr class="{% if v.severity == 'critical' %}critical{% endif %}">
+            <td>{{ v.official_category_text|default:"(sin categoría oficial)" }}</td>
+            <td>{{ v.internal_manifest_line }}</td>
+            <td>{{ v.is_explained|yesno:"Sí,No" }}</td>
+            <td>{{ v.get_severity_display }}</td>
+        </tr>
+    {% empty %}<tr><td colspan="4">Sin variaciones registradas.</td></tr>{% endfor %}
+    </tbody>
+</table>
+</div>
+
+<footer>
+    Generado por DT Beach Supply Control · {{ generated_at }} · Instantánea de solo lectura, sin dependencias externas.
+    La numeración exacta de las 10 secciones de la especificación original (13A.8) no pudo verificarse
+    palabra por palabra en esta sesión; esta estructura fue reconstruida a partir de
+    <code>BUSINESS_REQUIREMENTS.md</code> y el modelo de datos existente — un revisor humano con el texto
+    original de la especificación debería confirmar el orden/numeración exactos.
+</footer>
+</body>
+</html>

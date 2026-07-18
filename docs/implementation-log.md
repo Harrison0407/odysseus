@@ -371,3 +371,24 @@ working tree.
     new). Documented honestly in `KNOWN_LIMITATIONS.md`/`SECURITY.md`
     that the default `LocMemCache` backend enforces this per Gunicorn
     worker process, not globally across a multi-worker deployment.
+32. **Detailed internal receiving manifest (spec 13A.8).** Checked
+    whether the governing specification's exact 13A.8 text was
+    available to re-read in this session — it was not (only derived
+    docs are stored in `Application/`); confirmed the one independently
+    verifiable fact (`OFFICIAL_VS_OPERATIONAL_MANIFEST_ANALYSIS.md`
+    cites the variance matrix as "spec 13A.8, item 10") and built a
+    genuinely useful 10-section document from `BUSINESS_REQUIREMENTS.md`
+    and the existing receiving/shipment data model rather than either
+    fabricating spec text or refusing the feature — recorded as
+    `ASSUMPTIONS.md` A16. Factored `_save_html_snapshot` out of
+    `shipment_snapshot` (ADR-025) so the new
+    `receiving_manifest_snapshot` reuses the exact same
+    `ReportVersion`/`Document`/`DocumentVersion` persistence path, not a
+    second reporting mechanism. 4 new tests
+    (`tests/test_receiving_manifest_snapshot.py`) — 114/114 passing (110
+    pre-existing + 4 new). Verified live against the actual imported
+    MEDUWY575021 fixture: created a real `Receipt` for the fixture's
+    container, downloaded the manifest, and confirmed all 10 sections
+    rendered with the fixture's real 11 internal manifest lines and 11
+    variances, and that a real `ReportVersion`/`Document` with a genuine
+    SHA-256 was persisted.

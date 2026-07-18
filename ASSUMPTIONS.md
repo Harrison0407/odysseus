@@ -96,3 +96,32 @@ instead, exactly as required, and is **not** listed here as a resolved assumptio
   generic handoff-acceptance action usable from the ordinary workflow
   inbox for every gate uniformly, while still capturing the domain-
   specific decision detail this particular gate needs.
+
+## Priority 0 completion (continuing autonomous session)
+
+- **A16. The detailed internal receiving manifest's 10-section layout
+  (spec 13A.8) was reconstructed, not copied verbatim.** The governing
+  specification document itself is not stored anywhere in
+  `Application/` — only documents derived from it during earlier
+  sessions are (`BUSINESS_REQUIREMENTS.md`,
+  `OFFICIAL_VS_OPERATIONAL_MANIFEST_ANALYSIS.md`, etc.), and the exact
+  original section numbering/wording could not be re-read in this
+  session. The conservative choice was to build a genuinely useful
+  10-section document covering the same operational content Manuel's
+  interview describes (container/shipment header, official summary,
+  full internal manifest, physical receiving detail, inspections,
+  quarantine/damage, discrepancies, receiving plan, and the variance
+  matrix) rather than either fabricating spec text from memory or
+  refusing to build the feature. Section 10 (the variance matrix) is
+  independently confirmed correct via a direct citation in
+  `OFFICIAL_VS_OPERATIONAL_MANIFEST_ANALYSIS.md` ("spec 13A.8, item
+  10"); the other 9 are a faithful reconstruction, not a verified
+  match to the original numbering. See `KNOWN_LIMITATIONS.md` item 3.
+- **A17. Rate limiting uses Django's default in-process cache, not a
+  shared store.** No Redis/Celery dependency is added (A3), so the
+  10-attempts/5-minutes login limit and the 30-requests/minute
+  share-link limit are enforced per Gunicorn worker process, not
+  globally across a multi-worker production deployment. Acceptable at
+  this pilot's scale (a single small server, ~8 named users); a real
+  multi-worker rollout wanting a global limit would need a shared cache
+  backend (e.g. Redis) — deliberately not added here per A3.

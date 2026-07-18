@@ -13,7 +13,7 @@
 | `/embarques/` | `apps.shipments.views.shipment_list` | All shipments |
 | `/embarques/<id>/` | `shipment_detail` | **Flagship screen**: Official Summary panel, Internal Operational Manifest panel, totals reconciliation, variance matrix |
 | `/recepcion/` | `apps.receiving.views.receipt_list` | Containers in receiving |
-| `/recepcion/<id>/` | `receipt_detail` | Per-line receiving form: received/damaged/missing quantities, exception type, notes |
+| `/recepcion/<id>/` | `receipt_detail` | Per-line receiving form: received/damaged/missing quantities, exception type, notes; link to the detailed receiving manifest download |
 | `/recepcion/<id>/linea/<line_id>/registrar/` | `receipt_line_update` (POST) | Posts the receiving line — the only path that creates `InventoryMovement` |
 | `/almacen/ubicaciones/` | `apps.inventory.views.location_list` | On-hand quantity per location, computed live from the movement ledger |
 | `/almacen/lotes/<id>/` | `lot_detail` | Full movement history for one lot |
@@ -57,6 +57,7 @@
 | `/flujo/<id>/comentario/` (POST) | `handoff_comment` | Add a comment (reuses `apps.audit.Comment`) |
 | `/flujo/crear/<content_type_id>/<object_id>/<gate_code>/` | `handoff_create` | Generic create-handoff entry point, linked from the Shipment, Material Request, Delivery, and Installation detail pages |
 | `/reportes/embarque/<id>/instantanea/` | `apps.reports.views.shipment_snapshot` | Generates and downloads a self-contained HTML snapshot |
+| `/reportes/recepcion/<receipt_id>/manifiesto/` | `apps.reports.views.receiving_manifest_snapshot` | Detailed internal receiving manifest (spec 13A.8) — 10-section self-contained HTML download, linked from the receiving detail page |
 | `/reportes/compartir/<token>/` | `shared_view` | Public, revocable, logged read-only share link |
 | `/api/v1/...` | DRF router | `shipments`, `purchase-orders`, `manifest-lines`, `manifest-variances`, `discrepancies` (read-only, org-scoped) |
 | `/admin/` | Django admin | Back-office/debug only — every model auto-registered; never the intended business-user interface (spec requirement) |

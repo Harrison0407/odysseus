@@ -18,10 +18,30 @@ is silently claimed to be done when it isn't.
    filterable inbox (para mí / enviadas por mí / devueltas / bloqueadas /
    completadas / todas), with accept/reject/return/resubmit/comment all
    wired to real permission-checked actions.
-3. **Detailed internal receiving manifest, exact spec 13A.8 layout.** All
-   the underlying data is present and shown on the shipment detail page,
-   but not yet in the specific 10-section printable layout the spec
-   describes for Manuel's team.
+3. ~~Detailed internal receiving manifest, exact spec 13A.8 layout~~ —
+   **Done, with an honest caveat.** `apps.reports.views.receiving_manifest_snapshot`
+   (`/reportes/recepcion/<receipt_id>/manifiesto/`, linked from the
+   receiving detail page) generates a self-contained, downloadable HTML
+   document with 10 numbered sections: container/shipment header,
+   official BL summary, full internal operational manifest, physical
+   receiving summary, per-line receiving detail (expected/received/
+   damaged/missing/exception), inspections, quarantine/damage, open
+   discrepancies, the receiving plan, and the official-vs-operational
+   variance matrix requiring attention. **The exact section
+   numbering/wording of the original spec 13A.8 text could not be
+   re-read verbatim in this session** (the governing specification
+   document itself is not stored in `Application/`, only derived docs
+   are) — section 10 (the variance matrix) is independently confirmed
+   correct against `OFFICIAL_VS_OPERATIONAL_MANIFEST_ANALYSIS.md`, which
+   cites it explicitly ("spec 13A.8, item 10"); the other 9 sections
+   were reconstructed from `BUSINESS_REQUIREMENTS.md` (Manuel's
+   interview themes) and the existing receiving data model, covering the
+   same operational content, not necessarily in the exact original
+   order or wording. See `ASSUMPTIONS.md` A16. A human reviewer with the
+   original spec text should confirm and reorder if needed. Verified
+   live against the actual imported MEDUWY575021 fixture (11 internal
+   manifest lines, 11 variances, all rendered correctly) and by 4
+   automated tests.
 4. ~~Dispatch/Delivery UI~~ — **Done in the Delivery, Installation,
    Inspection, and Final Acceptance milestone.** `/solicitudes/entregas/`,
    `/solicitudes/instalaciones/`, `/solicitudes/inspecciones/`, and

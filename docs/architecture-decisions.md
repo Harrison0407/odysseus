@@ -2,6 +2,23 @@
 
 Newest first.
 
+## ADR-025 — Detailed receiving manifest reuses the snapshot/document persistence path, not a new report mechanism
+**Decision:** `apps.reports.views._save_html_snapshot` was factored out
+of `shipment_snapshot` (previously inlined there) and is now called by
+both `shipment_snapshot` and the new `receiving_manifest_snapshot` —
+same `ReportVersion` + `Document`/`DocumentVersion` creation, same
+SHA-256 hashing via the existing document storage layer, same
+share-link eligibility (any `ReportVersion` with a
+`rendered_html_document` can be attached to a `SecureShareLink`,
+unchanged).
+**Why:** The detailed receiving manifest is, mechanically, exactly the
+same kind of artifact as the shipment snapshot (spec section 29,
+self-contained HTML, no live dependency) — reusing the persistence path
+means the new report automatically gets versioning, hashing, and
+share-link support for free, and a second, subtly different
+"generate-and-store-a-report" code path never gets a chance to drift
+from the first one's behavior.
+
 ## ADR-024 — Assignment dropdowns scoped by the gate's own configured department, not a hard-coded name
 **Decision:** `apps.requests.views._department_for_gate(organization,
 gate_code, attr)` reads `GateDefinition.from_department`/`to_department`

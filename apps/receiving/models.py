@@ -98,21 +98,91 @@ class InspectionPlan(BaseModel):
     requires_full_inspection = models.BooleanField(default=False)
 
 
-class AlternativeStorageOption(BaseModel):
-    """External/port storage comparison (spec section 17)."""
+class StorageComparisonScenario(BaseModel):
+    """A versioned, named external-storage comparison exercise for one
+    receiving plan (spec section 17). Immutable once `FINALIZED`: a new
+    comparison creates a new version rather than editing a decided one
+    — mirrors `ReleasePacketVersion`/`LandedCostVersion`'s
+    version_number + is_current pattern."""
 
-    receiving_plan = models.ForeignKey(ReceivingPlan, on_delete=models.CASCADE, related_name="alternative_storage_options")
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Borrador"
+        FINALIZED = "finalized", "Finalizado"
+
+    receiving_plan = models.ForeignKey(ReceivingPlan, on_delete=models.CASCADE, related_name="storage_comparison_scenarios")
+    name = models.CharField(max_length=150, blank=True)
+    version_number = models.PositiveIntegerField()
+    is_current = models.BooleanField(default=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    chosen_option = models.ForeignKey(
+        "AlternativeStorageOption", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    recommendation_rationale = models.TextField(blank=True)
+    decided_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    decided_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = [("receiving_plan", "version_number")]
+        ordering = ["-version_number"]
+
+    def __str__(self):
+        return f"Comparación de almacenaje v{self.version_number} — {self.receiving_plan}"
+
+
+class AlternativeStorageOption(BaseModel):
+    """One internal-baseline or external option inside a
+    `StorageComparisonScenario` (spec section 17)."""
+
+    class OptionType(models.TextChoices):
+        INTERNAL_BASELINE = "internal_baseline", "Almacén propio (referencia)"
+        EXTERNAL_WAREHOUSE = "external_warehouse", "Almacén externo"
+        PORT_STORAGE = "port_storage", "Almacenaje en puerto"
+        OTHER = "other", "Otro"
+
+    scenario = models.ForeignKey(
+        StorageComparisonScenario, on_delete=models.CASCADE, null=True, blank=True, related_name="options"
+    )
+    option_type = models.CharField(max_length=30, choices=OptionType.choices, default=OptionType.EXTERNAL_WAREHOUSE)
     option_name = models.CharField(max_length=150, help_text="Holding in China, port storage, external warehouse, immediate delivery")
-    storage_cost = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
-    additional_transport_cost = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    internal_location = models.ForeignKey(
+        "inventory.WarehouseLocation", on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+        help_text="Solo para option_type=internal_baseline — reutiliza la capacidad/idoneidad ya registrada de esta ubicación en vez de duplicarla.",
+    )
+    currency = models.ForeignKey("cost.Currency", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+
+    storage_cost = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True, help_text="Costo total estimado de almacenaje para la duración evaluada, no una tarifa diaria.")
+    inbound_transport_cost = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    outbound_transport_cost = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     handling_cost = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     insurance_cost = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    minimum_commitment_amount = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+
     free_days = models.PositiveIntegerField(null=True, blank=True)
     expected_duration_days = models.PositiveIntegerField(null=True, blank=True)
+    operational_lead_time_days = models.PositiveIntegerField(null=True, blank=True, help_text="Tiempo operativo estimado para mover material hacia/desde esta opción.")
+    contract_period_days = models.PositiveIntegerField(null=True, blank=True)
     estimated_movement_count = models.PositiveIntegerField(null=True, blank=True)
+
+    demurrage_penalty_estimated_cost = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    demurrage_penalty_notes = models.TextField(blank=True)
+
+    capacity_volume_cbm = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
+    capacity_weight_kg = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
+    location_description = models.CharField(max_length=255, blank=True)
+    covered = models.BooleanField(default=False)
+    dry = models.BooleanField(default=False)
+    climate_controlled = models.BooleanField(default=False)
+    secure = models.BooleanField(default=False)
+    access_controlled = models.BooleanField(default=False)
+    access_restrictions_notes = models.TextField(blank=True)
+
     risk_notes = models.TextField(blank=True)
-    decision = models.CharField(max_length=150, blank=True)
-    decided_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+
+    class Meta:
+        ordering = ["option_type", "option_name"]
+
+    def __str__(self):
+        return f"{self.option_name} ({self.scenario})"
 
 
 # ---------------------------------------------------------------------------

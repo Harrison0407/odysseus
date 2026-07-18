@@ -159,11 +159,41 @@ is silently claimed to be done when it isn't.
      lot split across more than one origin location is refused with an
      explicit error rather than silently guessing a source. 20 new
      tests (`tests/test_storage_suitability.py`).
-   - External-storage comparison calculator, supplier claim package
-     generation, QR label printing remain **not yet built**. Data
-     models exist for some of these
-     (`apps.receiving.AlternativeStorageOption`); none has a UI yet —
-     see `docs/implementation-roadmap.md` for build order.
+   - ~~External-storage comparison calculator~~ — **Done.**
+     `AlternativeStorageOption` (modeled since Priority 0, never
+     previously used by any UI) is now grouped under a new
+     `StorageComparisonScenario` (version_number + is_current,
+     mirroring `ReleasePacketVersion`/`LandedCostVersion`'s versioning
+     pattern) instead of pointing directly at `ReceivingPlan` — this
+     was a schema change to the previously-unused model, safe since it
+     had zero rows/callers anywhere. `apps.receiving.services
+     .compare_scenario_options` never fabricates a currency
+     conversion: it reuses `apps.cost.services.convert_to_base_currency`
+     (the exact function landed-cost calculation already uses,
+     renamed from private to public for cross-app reuse) and returns
+     `converted_total=None` with an explanatory note when no
+     `ExchangeRate` is on file for that currency pair, rather than
+     assuming 1:1 or guessing a rate. Demurrage/penalty exposure is
+     deliberately excluded from the guaranteed comparable total (it's
+     contingent risk, not a certain cost) and shown alongside it
+     instead (A24). An `internal_baseline` option can link to a real
+     `WarehouseLocation` and reuses its already-registered
+     `LocationSuitability` rather than duplicating capacity/suitability
+     data entry for our own warehouse. A scenario is immutable once
+     `FINALIZED` — `add_storage_option`/`update_storage_option` both
+     refuse further edits; a new comparison always creates a new
+     version rather than editing a decided one.
+     `/recepcion/planes/<id>/` (receiving-plan overview, linked from
+     the Shipment detail page) and
+     `/recepcion/comparaciones/<id>/` (comparison table, ranked
+     results, add-option/finalize forms) are the new screens; a
+     printable/downloadable HTML export reuses the exact same
+     `_save_html_snapshot`/`ReportVersion` mechanism as the receiving
+     manifest snapshot, not a new export path. 21 new tests
+     (`tests/test_storage_comparison.py`).
+   - Supplier claim package generation, QR label printing remain **not
+     yet built**. See `docs/implementation-roadmap.md` for build
+     order.
 7. ~~`purchasing_to_finance`/`finance_to_logistics` have no "create
    handoff" button" on the Purchase Order detail page~~ — **Done.** All
    8 required gates now have a "create handoff" entry point on their

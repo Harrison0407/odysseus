@@ -203,3 +203,35 @@ instead, exactly as required, and is **not** listed here as a resolved assumptio
   This is a deliberate scope limit of the new UI, not a limitation of
   the `Transfer` model or `transfer_lot` service itself, both of which
   accept an explicit `from_location` from any caller.
+- **A24. Demurrage/penalty exposure is excluded from a storage option's
+  guaranteed comparable total, shown separately instead.**
+  `apps.receiving.services._option_guaranteed_total` sums
+  storage/handling/transport/insurance costs (applying the minimum
+  commitment as a floor when it's higher), but never adds
+  `demurrage_penalty_estimated_cost` into that guaranteed figure — a
+  contingent risk exposure is not the same kind of number as a firm
+  quoted cost, and blending them would make a single "total" number
+  misleadingly certain. Both are shown side by side in the comparison
+  table/export so nothing is hidden, just not summed together.
+- **A25. `AlternativeStorageOption.storage_cost`/`handling_cost`/
+  `inbound_transport_cost`/`outbound_transport_cost`/`insurance_cost`
+  are each entered as a total for the option's entire evaluated
+  period (`expected_duration_days`), not a per-day/per-unit rate.**
+  No rate-basis field was added (e.g. "per day," "per CBM") since the
+  spec doesn't mandate one and inventing a unit-conversion system here
+  would be speculative; a user comparing quoted rates must do the
+  arithmetic to the same evaluated period before entering a total.
+  Documented here rather than silently assumed identical across every
+  option.
+- **A26. `AlternativeStorageOption.scenario` and `.currency` are
+  schema-nullable (`null=True`) even though every option created
+  through the service layer always has both set.** This is the same
+  "nullable in schema, required in practice, enforced by the service/
+  form layer" pattern already used throughout this codebase (e.g. most
+  optional-in-schema FKs elsewhere) — chosen here specifically because
+  `AlternativeStorageOption` had zero existing rows in every
+  environment before this feature (confirmed: no calling code
+  anywhere), so adding a true non-nullable FK would have required an
+  arbitrary one-off migration default with no real row to apply it to.
+  `add_storage_option`/`StorageOptionForm` both require a currency in
+  practice.

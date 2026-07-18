@@ -30,6 +30,7 @@ class ReportVersion(BaseModel):
         DESTINATION_REASSIGNMENT_REPORT = "destination_reassignment_report", "Reporte de reasignación de destino"
         INSTALLATION_ACCEPTANCE_HISTORY = "installation_acceptance_history", "Historial de instalación/aceptación"
         CLAIM_PACKAGE = "claim_package", "Paquete de reclamo"
+        EXTERNAL_STORAGE_COMPARISON = "external_storage_comparison", "Comparación de almacenaje externo"
         CONFOTUR_RECONCILIATION = "confotur_reconciliation", "Conciliación CONFOTUR"
         RESPONSIBILITY_HANDOFF_TIMELINE = "responsibility_handoff_timeline", "Línea de tiempo de responsabilidad"
         FULL_TRACEABILITY_TIMELINE = "full_traceability_timeline", "Línea de tiempo de trazabilidad completa"

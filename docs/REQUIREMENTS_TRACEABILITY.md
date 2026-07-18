@@ -15,7 +15,7 @@ are production-complete).
 | Multilingual document upload + provenance | `apps.documents` | `Document`, `DocumentVersion`, `DocumentFieldSource` | `/documentos/` upload/list/detail | `test_documents.py` (3 tests) | Done (upload/hash/duplicate/download-auth); OCR/translation adapters modeled but not wired to a real engine — **Modeled** |
 | PO / invoice / packing-list / BL / container matching | `apps.matching`, `apps.shipments` | `MatchRun`, `MatchCandidate`, `ManifestLineSource` | Shipment detail (variance matrix) | `test_live_container_fixture.py` | Done for the live fixture case; automatic fuzzy-matching engine (scoring heuristics beyond the fixture) is **Modeled**, not yet generalized |
 | Payment and origin readiness | `apps.procurement` | `PaymentMilestone`, `PaymentRecord` | PO detail page | manual verification | Modeled |
-| Pre-arrival storage and receiving plan | `apps.receiving` | `ReceivingPlan`, `StorageCapacityReservation`, `InspectionPlan` | none yet (data model only) | none yet | Modeled |
+| Pre-arrival storage and receiving plan | `apps.receiving` | `ReceivingPlan`, `StorageCapacityReservation`, `InspectionPlan` | `/recepcion/planes/<id>/` overview (added alongside the external storage comparison calculator — see below); `StorageCapacityReservation`/`InspectionPlan` themselves have no dedicated UI yet | `tests/test_storage_comparison.py` (plan-detail view coverage) | Modeled — the plan overview and its comparison scenarios are Done; the reservation/inspection-plan sub-records are still data-model only |
 | Physical receiving and risk-based inspection | `apps.receiving` | `Receipt`, `ReceiptLine`, `Inspection`, `SamplingRule` | `/recepcion/` list/detail/post-line | `test_receiving_and_inventory.py` (4 tests) | Done |
 | Quarantine, damage, shortage, overage, claims | `apps.receiving`, `apps.matching` | `QuarantineRecord`, `DamageRecord`, `Discrepancy` | receiving detail page | `test_damaged_quantity_is_quarantined...` | Done for damage/shortage/overage; `Claim`/`ClaimEvidence`/`ClaimDeadline` are **Planned** (Priority 1) |
 | Location-based ledger inventory | `apps.inventory` | `InventoryLot`, `InventoryMovement` | `/almacen/ubicaciones/` | `test_onhand_quantity_is_derived_from_ledger...` | Done |
@@ -138,6 +138,7 @@ any view, form, template, or JS.
 | Tool custody screens — Priority 1 (added in a later session) | `apps.tools.services` (ADR-028), `/herramientas/` screens, `tests/test_tool_custody.py` (11 tests) — also fixed and regression-tested a real pre-existing `FieldError` crash in the Almacén persona dashboard found while building this |
 | Cycle-count screens — Priority 1 (added in a later session) | `apps.inventory.services` (`start_cycle_count`/`record_physical_count`/`approve_adjustment`, A19), `/almacen/conteos/` screens, `tests/test_cycle_count.py` (12 tests) — blind counting, recount tracking, and every approved variance posted as a real `InventoryMovement` |
 | Storage capacity/suitability warnings — Priority 1 (added in a later session) | `apps.inventory.services` (`check_location_suitability`/`enforce_location_suitability`/`location_current_utilization`, ADR-029), `apps.requests.services.transfer_lot` (activates the previously-unused `Transfer` model), `apps.receiving.services.post_receipt_line` (put-away integration), `/almacen/ubicaciones/<id>/` detail+transfer screens, `tests/test_storage_suitability.py` (20 tests, including cross-organization isolation, authorized/unauthorized override, capacity-exceeded blocking, and warning-only sensitive-material placement) |
+| External storage comparison calculator — Priority 1 (added in a later session) | `StorageComparisonScenario` (new, versioned) + `AlternativeStorageOption` (re-parented, extended — ADR-030), `apps.receiving.services` (`create_comparison_scenario`/`add_storage_option`/`compare_scenario_options`/`finalize_comparison_scenario`), `apps.cost.services.convert_to_base_currency` (made public for reuse — never fabricates a rate), `/recepcion/planes/<id>/` + `/recepcion/comparaciones/<id>/` screens, printable/downloadable HTML export via the existing `_save_html_snapshot` mechanism, `tests/test_storage_comparison.py` (21 tests, including multi-currency-without-a-rate, provenance-recorded conversion, immutable scenario versioning, cross-organization isolation, and a full create→add-option→finalize HTTP lifecycle) |
 
 Demonstrated live against a running dev server with real seeded users
 (Miguel/Obra, Harrison/Dirección, Markeris/Compras) and real HTTP
@@ -160,7 +161,7 @@ Full transcript in `docs/implementation-log.md`.
 
 Local OCR execution, automated translation, CONFOTUR government submission
 (never in scope per spec), WhatsApp/QuickBooks live integration, and the
-remaining Priority 1 breadth (external storage comparison UI, supplier
-claim package generation, QR label printing) are modeled at the schema
-level but do not yet have a finished UI or dedicated test. This is
-recorded here rather than silently omitted.
+remaining Priority 1 breadth (supplier claim package generation, QR
+label printing) are modeled at the schema level but do not yet have a
+finished UI or dedicated test. This is recorded here rather than
+silently omitted.

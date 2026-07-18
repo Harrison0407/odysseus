@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Plan de recepción — {{ plan.shipment }}</h3>
+<p class="text-muted">
+    Proyecto: {{ plan.project|default:"—" }} ·
+    Estado: <span class="badge bg-secondary">{{ plan.get_status_display }}</span>
+    {% if plan.has_sensitive_materials %}<span class="badge bg-warning text-dark">Material sensible</span>{% endif %}
+</p>
+
+<div class="card mb-3">
+    <div class="card-header">Datos esperados</div>
+    <div class="card-body">
+        <table class="table table-sm mb-0">
+            <tr><th>Ubicación de descarga propuesta</th><td>{{ plan.proposed_unloading_location|default:"—" }}</td></tr>
+            <tr><th>Bultos esperados</th><td>{{ plan.expected_packages|default:"—" }}</td></tr>
+            <tr><th>Peso esperado</th><td>{{ plan.expected_weight_kg|default:"—" }} kg</td></tr>
+            <tr><th>CBM esperado</th><td>{{ plan.expected_cbm|default:"—" }} m³</td></tr>
+            <tr><th>Duración de almacenaje estimada</th><td>{{ plan.estimated_storage_duration_days|default:"—" }} días</td></tr>
+        </table>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Comparaciones de almacenaje externo</span>
+        <form method="post" action="{% url 'receiving:comparison-create' plan.pk %}" class="d-flex gap-2">
+            {% csrf_token %}
+            <input type="text" name="name" class="form-control form-control-sm" placeholder="Nombre (opcional)">
+            <button class="btn btn-primary btn-sm text-nowrap" type="submit">Iniciar nueva comparación</button>
+        </form>
+    </div>
+    <div class="table-responsive">
+    <table class="table table-sm bg-white mb-0">
+        <thead><tr><th>Versión</th><th>Nombre</th><th>Estado</th><th>Opción elegida</th><th>Actual</th></tr></thead>
+        <tbody>
+        {% for scenario in scenarios %}
+            <tr>
+                <td><a href="{% url 'receiving:comparison-detail' scenario.pk %}">v{{ scenario.version_number }}</a></td>
+                <td>{{ scenario.name|default:"—" }}</td>
+                <td><span class="badge bg-secondary">{{ scenario.get_status_display }}</span></td>
+                <td>{{ scenario.chosen_option|default:"—" }}</td>
+                <td>{{ scenario.is_current|yesno:"Sí,No" }}</td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="5" class="text-muted">Sin comparaciones registradas todavía.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comparación de almacenaje externo — {{ scenario.receiving_plan.shipment }}</title>
+<style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 2rem; color: #212529; }
+    h1 { font-size: 1.4rem; }
+    .banner { background: #fff3cd; border: 1px solid #ffe69c; padding: .75rem 1rem; margin-bottom: 1rem; border-radius: .25rem; }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 1.5rem; font-size: .85rem; }
+    th, td { border: 1px solid #dee2e6; padding: .4rem .6rem; text-align: left; }
+    th { background: #f8f9fa; }
+    .section-title { background: #e9ecef; padding: .4rem .6rem; font-weight: bold; margin-top: 1.5rem; }
+    .chosen { background: #d1e7dd; }
+    .warn { color: #997404; }
+    .noconv { color: #842029; }
+    footer { margin-top: 2rem; font-size: .75rem; color: #6c757d; }
+    .table-scroll { overflow-x: auto; margin-bottom: 1.5rem; }
+    .table-scroll table { margin-bottom: 0; }
+    @media (max-width: 576px) {
+        body { margin: 0.75rem; }
+    }
+</style>
+</head>
+<body>
+
+<div class="banner">
+    <strong>Esta es una instantánea estática (snapshot).</strong> No es la fuente de la verdad en vivo.
+    Generada el {{ generated_at }}. Para el estado actual, consulte el sistema en línea.
+</div>
+
+<h1>Comparación de almacenaje externo — v{{ scenario.version_number }}</h1>
+<p>Embarque: {{ scenario.receiving_plan.shipment.reference }} · Estado: {{ scenario.get_status_display }}</p>
+
+{% if scenario.status == "finalized" %}
+<div class="section-title">Decisión</div>
+<p><strong>Opción elegida:</strong> {{ scenario.chosen_option.option_name }}</p>
+<p><strong>Justificación:</strong> {{ scenario.recommendation_rationale }}</p>
+<p>Decidido por {{ scenario.decided_by }} el {{ scenario.decided_at }}</p>
+{% endif %}
+
+<div class="section-title">Tabla comparativa</div>
+<div class="table-scroll">
+<table>
+    <thead>
+    <tr>
+        <th>#</th><th>Opción</th><th>Tipo</th><th>Moneda</th>
+        <th>Costo total (moneda propia)</th><th>Total comparable</th>
+        <th>Exposición demora/penalidad</th><th>Días libres</th><th>Plazo de contrato</th>
+        <th>Capacidad</th><th>Condiciones</th><th>Riesgos cualitativos</th><th>Advertencias</th>
+    </tr>
+    </thead>
+    <tbody>
+    {% for r in results %}
+        <tr {% if scenario.chosen_option_id == r.option.id %}class="chosen"{% endif %}>
+            <td>{{ r.rank|default:"—" }}</td>
+            <td>{{ r.option.option_name }}</td>
+            <td>{{ r.option.get_option_type_display }}</td>
+            <td>{{ r.option.currency|default:"—" }}</td>
+            <td>{{ r.guaranteed_total|default:"Desconocido" }}{% if r.used_minimum_commitment %} (compromiso mínimo aplicado){% endif %}</td>
+            <td>{% if r.converted_total %}{{ r.converted_total }}{% else %}<span class="noconv">{{ r.conversion_note }}</span>{% endif %}</td>
+            <td>{{ r.demurrage_exposure|default:"—" }}</td>
+            <td>{{ r.option.free_days|default:"—" }}</td>
+            <td>{{ r.option.contract_period_days|default:"—" }}</td>
+            <td>{{ r.option.capacity_volume_cbm|default:"—" }} m³ / {{ r.option.capacity_weight_kg|default:"—" }} kg</td>
+            <td>
+                {% if r.option.covered %}Techada{% endif %}
+                {% if r.option.dry %} · Seca{% endif %}
+                {% if r.option.climate_controlled %} · Clima controlado{% endif %}
+                {% if r.option.secure %} · Segura{% endif %}
+                {% if r.option.access_controlled %} · Acceso controlado{% endif %}
+            </td>
+            <td>{{ r.option.risk_notes|default:"—" }}</td>
+            <td>{% for w in r.suitability_warnings %}<div class="warn">{{ w }}</div>{% endfor %}</td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="13">Sin opciones registradas.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+
+<footer>
+    Generado automáticamente por DT Beach — Control de Suministro. Documento de referencia, no sustituye el registro vivo del sistema.
+</footer>
+</body>
+</html>

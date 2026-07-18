@@ -530,3 +530,44 @@ documented order.
     pre-existing + 20 new). `manage.py check` clean; `makemigrations
     --check` reports no changes (no model fields were added — every
     piece of this reuses pre-existing model structure).
+38. **External storage comparison calculator.**
+    `AlternativeStorageOption` was modeled since Priority 0
+    (`receiving_plan` FK) but had zero calling code anywhere — confirmed
+    before making any schema change, so the re-parenting to a new
+    `StorageComparisonScenario` (ADR-030) carried no data-migration
+    risk. `StorageComparisonScenario` uses the same `version_number` +
+    `is_current` pattern as `ReleasePacketVersion`/`LandedCostVersion`:
+    a new comparison always creates a new version rather than editing a
+    decided one, and once `status=FINALIZED`,
+    `apps.receiving.services.add_storage_option`/`update_storage_option`
+    both refuse further edits. `compare_scenario_options` computes a
+    guaranteed comparable total per option (storage + handling +
+    inbound/outbound transport + insurance, floored by
+    `minimum_commitment_amount` when higher) and deliberately excludes
+    `demurrage_penalty_estimated_cost` from it — shown alongside as
+    contingent exposure, not blended into a misleadingly certain single
+    number (A24). Currency conversion reuses
+    `apps.cost.services.convert_to_base_currency` (renamed from the
+    private `_convert_to_base_currency` so both features share one
+    never-fabricate-a-rate implementation): an option in a currency
+    with no `ExchangeRate` on file is still shown in the comparison
+    table, just with `converted_total=None` and an explanatory note,
+    never assumed 1:1. An `internal_baseline` option can link to a real
+    `WarehouseLocation` and reuses its already-registered
+    `LocationSuitability` — no duplicated capacity/suitability entry
+    for our own warehouse. New `/recepcion/planes/<id>/` (receiving-plan
+    overview, linked from the Shipment detail page) and
+    `/recepcion/comparaciones/<id>/` (comparison table, ranked results,
+    add-option/finalize forms, printable HTML export reusing the exact
+    same `_save_html_snapshot`/`ReportVersion` mechanism as the
+    receiving manifest snapshot) screens. 21 new tests
+    (`tests/test_storage_comparison.py`), covering complete/incomplete
+    cost calculation, minimum-commitment flooring, demurrage-exposure
+    exclusion, multi-currency comparison without a rate, a
+    provenance-recorded conversion, multi-option ranking, suitability
+    scoring (including the internal-baseline/`LocationSuitability`
+    reuse path), immutable scenario versioning, cross-organization
+    isolation, and a full create→add-option→finalize HTTP lifecycle —
+    202/202 passing (181 pre-existing + 21 new). Verified migrations
+    apply cleanly from an empty test database (`pytest --create-db`);
+    `manage.py check` and `makemigrations --check` both clean.

@@ -2,6 +2,31 @@
 
 Newest first.
 
+## ADR-030 — External-storage comparison scenarios are versioned like `LandedCostVersion`/`ReleasePacketVersion`, not edited in place; never fabricate a currency conversion
+**Decision:** `StorageComparisonScenario` (new) wraps a set of
+`AlternativeStorageOption` rows for one `ReceivingPlan`, using the same
+`version_number` + `is_current` pattern as `ReleasePacketVersion`. Once
+`status=FINALIZED`, `apps.receiving.services
+.add_storage_option`/`update_storage_option` refuse further edits — a
+new comparison creates a new version. Currency conversion for the
+comparison table reuses `apps.cost.services.convert_to_base_currency`
+(renamed from the private `_convert_to_base_currency`, now a public,
+cross-app function) rather than a second implementation — an option in
+a currency with no `ExchangeRate` on file shows `converted_total=None`
+and an explanation, never a fabricated or assumed 1:1 rate.
+**Why:** `AlternativeStorageOption` was modeled since Priority 0
+(originally FK'd directly to `ReceivingPlan`) but had zero calling code
+anywhere — confirmed before making any schema change. Re-parenting it
+under a new versioned scenario, rather than adding an ad-hoc
+"is_finalized" flag directly on the option or on `ReceivingPlan`, gives
+"immutable historical scenario versions" (an explicit spec requirement)
+the same treatment every other decided/frozen record in this system
+already gets, instead of a bespoke one-off mechanism. Reusing
+`apps.cost`'s exchange-rate lookup (rather than adding a second
+`exchange_rate`/`exchange_rate_source` pair of fields directly on
+`AlternativeStorageOption`) keeps "never fabricate a conversion rate"
+enforced in exactly one place for the whole system.
+
 ## ADR-029 — Storage suitability is enforced at the put-away/transfer service layer, reusing previously-dormant models; blocking vs. warning is a fixed rule, not per-location config
 **Decision:** `apps.inventory.services.check_location_suitability`/
 `enforce_location_suitability` are the single point where a

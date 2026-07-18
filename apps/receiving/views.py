@@ -1,13 +1,19 @@
 from django import forms
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
+from django.utils import timezone
 
+from apps.audit import services as audit
+from apps.audit.models import AuditEvent
+from apps.cost.models import Currency
 from apps.inventory.models import WarehouseLocation
 from apps.inventory.services import StoragePermissionError, StorageSuitabilityError
 
 from . import services
-from .models import Receipt, ReceiptLine
+from .models import AlternativeStorageOption, Receipt, ReceiptLine, ReceivingPlan, StorageComparisonScenario
 
 
 class ReceiptLineForm(forms.Form):
@@ -91,3 +97,143 @@ def receipt_line_update(request, pk, line_pk):
         else:
             messages.error(request, "Revise los valores ingresados.")
     return redirect("receiving:detail", pk=receipt.pk)
+
+
+# ---------------------------------------------------------------------------
+# External storage comparison calculator (spec section 17)
+# ---------------------------------------------------------------------------
+
+
+class StorageOptionForm(forms.ModelForm):
+    class Meta:
+        model = AlternativeStorageOption
+        exclude = ["scenario", "created_by"]
+        widgets = {
+            "risk_notes": forms.Textarea(attrs={"rows": 2}),
+            "demurrage_penalty_notes": forms.Textarea(attrs={"rows": 2}),
+            "access_restrictions_notes": forms.Textarea(attrs={"rows": 2}),
+        }
+
+    def __init__(self, *args, organization=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["internal_location"].queryset = (
+            WarehouseLocation.objects.filter(zone__site__organization=organization)
+            if organization else WarehouseLocation.objects.none()
+        )
+        self.fields["currency"].queryset = Currency.objects.all().order_by("code")
+        for field in self.fields.values():
+            field.widget.attrs.setdefault("class", "form-control form-control-sm")
+
+
+class FinalizeComparisonForm(forms.Form):
+    chosen_option = forms.ModelChoiceField(queryset=AlternativeStorageOption.objects.none(), label="Opción elegida")
+    rationale = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}), label="Justificación de la decisión")
+
+    def __init__(self, *args, scenario=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if scenario is not None:
+            self.fields["chosen_option"].queryset = scenario.options.all()
+        for field in self.fields.values():
+            field.widget.attrs.setdefault("class", "form-control form-control-sm")
+
+
+@login_required
+def receiving_plan_detail(request, pk):
+    plan = get_object_or_404(
+        ReceivingPlan.objects.select_related("shipment", "project", "proposed_unloading_location"),
+        pk=pk, shipment__organization=request.user.profile.organization,
+    )
+    scenarios = plan.storage_comparison_scenarios.select_related("chosen_option").order_by("-version_number")
+    return render(request, "receiving/receiving_plan_detail.html", {"plan": plan, "scenarios": scenarios})
+
+
+@login_required
+def comparison_scenario_create(request, plan_pk):
+    plan = get_object_or_404(ReceivingPlan, pk=plan_pk, shipment__organization=request.user.profile.organization)
+    if request.method == "POST":
+        scenario = services.create_comparison_scenario(plan, request.user, name=request.POST.get("name", ""))
+        messages.success(request, "Nueva versión de comparación de almacenaje iniciada.")
+        return redirect("receiving:comparison-detail", pk=scenario.pk)
+    return redirect("receiving:plan-detail", pk=plan_pk)
+
+
+@login_required
+def comparison_scenario_detail(request, pk):
+    scenario = get_object_or_404(
+        StorageComparisonScenario.objects.select_related("receiving_plan__shipment", "chosen_option"),
+        pk=pk, receiving_plan__shipment__organization=request.user.profile.organization,
+    )
+    organization = request.user.profile.organization
+    option_form = StorageOptionForm(organization=organization)
+    results = services.compare_scenario_options(scenario)
+    finalize_form = FinalizeComparisonForm(scenario=scenario)
+    return render(request, "receiving/comparison_scenario_detail.html", {
+        "scenario": scenario, "option_form": option_form, "results": results, "finalize_form": finalize_form,
+    })
+
+
+@login_required
+def comparison_option_create(request, pk):
+    scenario = get_object_or_404(
+        StorageComparisonScenario, pk=pk, receiving_plan__shipment__organization=request.user.profile.organization
+    )
+    if request.method == "POST":
+        form = StorageOptionForm(request.POST, organization=request.user.profile.organization)
+        if form.is_valid():
+            try:
+                services.add_storage_option(scenario, created_by=request.user, **form.cleaned_data)
+                messages.success(request, "Opción de almacenaje agregada.")
+            except services.StorageComparisonError as exc:
+                messages.error(request, str(exc))
+        else:
+            messages.error(request, "Revise los datos de la opción.")
+    return redirect("receiving:comparison-detail", pk=pk)
+
+
+@login_required
+def comparison_finalize(request, pk):
+    scenario = get_object_or_404(
+        StorageComparisonScenario, pk=pk, receiving_plan__shipment__organization=request.user.profile.organization
+    )
+    if request.method == "POST":
+        form = FinalizeComparisonForm(request.POST, scenario=scenario)
+        if form.is_valid():
+            try:
+                services.finalize_comparison_scenario(
+                    scenario, form.cleaned_data["chosen_option"], request.user, rationale=form.cleaned_data["rationale"]
+                )
+                messages.success(request, "Comparación finalizada.")
+            except services.StorageComparisonError as exc:
+                messages.error(request, str(exc))
+        else:
+            messages.error(request, "Revise los datos de la decisión.")
+    return redirect("receiving:comparison-detail", pk=pk)
+
+
+@login_required
+def comparison_export(request, pk):
+    from apps.reports.models import ReportVersion
+    from apps.reports.views import _save_html_snapshot
+
+    scenario = get_object_or_404(
+        StorageComparisonScenario.objects.select_related("receiving_plan__shipment", "chosen_option"),
+        pk=pk, receiving_plan__shipment__organization=request.user.profile.organization,
+    )
+    results = services.compare_scenario_options(scenario)
+    html = render_to_string(
+        "receiving/snapshot_storage_comparison.html",
+        {"scenario": scenario, "results": results, "generated_at": timezone.now()},
+    )
+    filename = f"comparacion-almacenaje-{scenario.receiving_plan.shipment.reference}-v{scenario.version_number}.html"
+    _save_html_snapshot(
+        html, report_type=ReportVersion.ReportType.EXTERNAL_STORAGE_COMPARISON, user=request.user,
+        organization=request.user.profile.organization, title=f"Comparación de almacenaje — {scenario}",
+        filename=filename,
+    )
+    audit.log(
+        AuditEvent.Action.OTHER, actor=request.user,
+        summary=f"Comparación de almacenaje exportada: {scenario}",
+    )
+    response = HttpResponse(html, content_type="text/html; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response

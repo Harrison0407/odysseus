@@ -128,9 +128,16 @@ fixture through real HTTP requests against a running dev server — see
     (`apps.receiving.services.post_receipt_line`) and the
     newly-activated `apps.requests.services.transfer_lot`;
     `/almacen/ubicaciones/<id>/` detail+transfer screens.
+29. ~~External storage comparison calculator~~ — **Done.**
+    `StorageComparisonScenario`/`AlternativeStorageOption`
+    (re-parented + extended, ADR-030), `apps.receiving.services`
+    (`create_comparison_scenario`/`add_storage_option`/
+    `compare_scenario_options`/`finalize_comparison_scenario`);
+    `/recepcion/planes/<id>/` + `/recepcion/comparaciones/<id>/`
+    screens, printable HTML export.
 
-Remaining, in documented order: external storage comparison
-calculator, supplier claim package generation, QR label printing.
+Remaining, in documented order: supplier claim package generation, QR
+label printing.
 
 ## Explicitly out of scope for any near-term increment
 

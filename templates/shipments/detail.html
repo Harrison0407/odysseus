@@ -82,6 +82,11 @@
 <a class="btn btn-outline-secondary btn-sm mt-3" href="{% url 'cost:shipment-dashboard' shipment.pk %}">
     Ver costo de importación (landed cost) de este embarque
 </a>
+{% if shipment.receiving_plan %}
+<a class="btn btn-outline-secondary btn-sm mt-3" href="{% url 'receiving:plan-detail' shipment.receiving_plan.pk %}">
+    Ver plan de recepción y comparación de almacenaje externo
+</a>
+{% endif %}
 
 <div class="card mt-3">
     <div class="card-header">Reconciliación de totales</div>

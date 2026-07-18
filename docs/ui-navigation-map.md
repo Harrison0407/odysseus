@@ -15,6 +15,12 @@
 | `/recepcion/` | `apps.receiving.views.receipt_list` | Containers in receiving |
 | `/recepcion/<id>/` | `receipt_detail` | Per-line receiving form: received/damaged/missing quantities, exception type, notes; link to the detailed receiving manifest download |
 | `/recepcion/<id>/linea/<line_id>/registrar/` | `receipt_line_update` (POST) | Posts the receiving line — the only path that creates `InventoryMovement` |
+| `/recepcion/planes/<id>/` | `receiving_plan_detail` | Receiving-plan overview (expected quantities, project, status) plus its external-storage comparison scenarios; linked from the Shipment detail page when a plan exists |
+| `/recepcion/planes/<id>/comparaciones/nueva/` (POST) | `comparison_scenario_create` | Starts a new versioned storage-comparison scenario for this plan |
+| `/recepcion/comparaciones/<id>/` | `comparison_scenario_detail` | Comparison table (ranked, converted totals, suitability warnings), add-option form, finalize-decision form |
+| `/recepcion/comparaciones/<id>/opciones/nueva/` (POST) | `comparison_option_create` | Adds one internal-baseline/external storage option to the scenario |
+| `/recepcion/comparaciones/<id>/finalizar/` (POST) | `comparison_finalize` | Records the chosen option + rationale, once — immutable afterward |
+| `/recepcion/comparaciones/<id>/exportar/` | `comparison_export` | Downloads a self-contained HTML comparison snapshot (same mechanism as the receiving manifest snapshot) |
 | `/almacen/ubicaciones/` | `apps.inventory.views.location_list` | On-hand quantity per location, computed live from the movement ledger; org-scoped |
 | `/almacen/ubicaciones/<id>/` | `location_detail` | Capacity/utilization, suitability conditions, live suitability checker, assigned inventory, pending inbound quantities, responsible custodian, transfer form |
 | `/almacen/ubicaciones/<id>/transferir/` (POST) | `location_transfer` | Transfers a lot into this location via `apps.requests.services.transfer_lot`, enforcing storage suitability |

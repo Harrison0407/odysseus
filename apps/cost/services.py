@@ -163,9 +163,12 @@ def _original_unit_price(line):
     return po_line.unit_price, po_line.purchase_order.currency
 
 
-def _convert_to_base_currency(amount, currency_code, organization):
+def convert_to_base_currency(amount, currency_code, organization):
     """Returns None (never a silently-assumed 1:1 rate) if no
-    `ExchangeRate` is on file for this currency pair."""
+    `ExchangeRate` is on file for this currency pair. Public: reused
+    by `apps.receiving.services` for the external-storage comparison
+    calculator so both features share one never-fabricate-a-rate
+    implementation rather than two."""
     if amount is None:
         return None
     base_code = organization.default_currency
@@ -217,7 +220,7 @@ def calculate_landed_cost(shipment, user) -> LandedCostVersion:
         other_per_unit = (other_total / quantity).quantize(Decimal("0.0001"))
 
         original_unit_price, original_currency = _original_unit_price(line)
-        base_unit_price = _convert_to_base_currency(original_unit_price, original_currency, shipment.organization)
+        base_unit_price = convert_to_base_currency(original_unit_price, original_currency, shipment.organization)
 
         final_per_unit = None
         total_value = None

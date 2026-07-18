@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Comparación de almacenaje externo v{{ scenario.version_number }} — {{ scenario.receiving_plan.shipment }}</h3>
+<p class="text-muted">
+    Estado: <span class="badge bg-secondary">{{ scenario.get_status_display }}</span>
+    {% if not scenario.is_current %}<span class="badge bg-warning text-dark">Versión histórica — no editable</span>{% endif %}
+</p>
+<a class="small" href="{% url 'receiving:plan-detail' scenario.receiving_plan.pk %}">&larr; Volver al plan de recepción</a>
+<a class="btn btn-outline-secondary btn-sm float-end" href="{% url 'receiving:comparison-export' scenario.pk %}">Descargar comparación (HTML)</a>
+
+{% if scenario.status == "finalized" %}
+<div class="alert alert-success mt-3">
+    <strong>Decisión:</strong> {{ scenario.chosen_option.option_name }} — {{ scenario.recommendation_rationale }}
+    <div class="small text-muted">Decidido por {{ scenario.decided_by }} el {{ scenario.decided_at }}</div>
+</div>
+{% endif %}
+
+<div class="card my-3">
+    <div class="card-header">Tabla comparativa</div>
+    <div class="table-responsive">
+    <table class="table table-sm bg-white mb-0">
+        <thead>
+        <tr>
+            <th>#</th><th>Opción</th><th>Tipo</th><th>Moneda</th>
+            <th>Costo total (moneda propia)</th><th>Total comparable</th>
+            <th>Exposición demora/penalidad</th><th>Plazo</th><th>Capacidad</th>
+            <th>Advertencias</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for r in results %}
+            <tr {% if scenario.chosen_option_id == r.option.id %}class="table-success"{% endif %}>
+                <td>{{ r.rank|default:"—" }}</td>
+                <td>{{ r.option.option_name }}</td>
+                <td>{{ r.option.get_option_type_display }}</td>
+                <td>{{ r.option.currency|default:"—" }}</td>
+                <td>
+                    {{ r.guaranteed_total|default:"Desconocido" }}
+                    {% if r.used_minimum_commitment %}<span class="badge bg-info text-dark">Aplica compromiso mínimo</span>{% endif %}
+                </td>
+                <td>
+                    {% if r.converted_total %}{{ r.converted_total }}{% else %}<span class="text-danger">{{ r.conversion_note }}</span>{% endif %}
+                </td>
+                <td>{{ r.demurrage_exposure|default:"—" }}</td>
+                <td>{{ r.option.expected_duration_days|default:"—" }} días</td>
+                <td>{{ r.option.capacity_volume_cbm|default:"—" }} m³ / {{ r.option.capacity_weight_kg|default:"—" }} kg</td>
+                <td>
+                    {% for w in r.suitability_warnings %}<div class="small text-warning">{{ w }}</div>{% endfor %}
+                </td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="10" class="text-muted">Sin opciones registradas todavía.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+{% if scenario.status != "finalized" %}
+<div class="card mb-3">
+    <div class="card-header">Agregar opción</div>
+    <div class="card-body">
+        <form method="post" action="{% url 'receiving:comparison-option-create' scenario.pk %}">
+            {% csrf_token %}
+            {{ option_form.as_p }}
+            <button class="btn btn-primary btn-sm" type="submit">Agregar opción</button>
+        </form>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Finalizar decisión</div>
+    <div class="card-body">
+        <form method="post" action="{% url 'receiving:comparison-finalize' scenario.pk %}">
+            {% csrf_token %}
+            {{ finalize_form.as_p }}
+            <button class="btn btn-success btn-sm" type="submit">Finalizar comparación</button>
+        </form>
+        <p class="small text-muted mt-2">Una vez finalizada, esta versión queda inmutable — cualquier cambio posterior requiere iniciar una nueva versión de comparación.</p>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

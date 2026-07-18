@@ -71,5 +71,74 @@ Chronological, factual log of this delivery pass.
 8. Wrote the full `docs/` set (this file included) and the top-level
    `README.md`/`ASSUMPTIONS.md`.
 
+## Milestone 2: Gate Controls and Formal Handoffs
+
+Baseline commit verified before starting: `3aa6127b22efda46a4bb6532f319e6a83ae72043`
+(branch `main`, HEAD, clean working tree — confirmed via `git status`
+before any file was touched).
+
+9. Extended `apps.workflow.models`: `GateDefinition` (8 seeded rows, one
+   per required transition), `GateOverride` (immutable override record:
+   reason, actor, before/after state), and extended `Handoff` with
+   `gate_definition`, `project`/`organization` (denormalized for fast,
+   correct inbox scoping and cross-project isolation), `readiness_ready`/
+   `readiness_snapshot`, `supersedes`, and a partial unique constraint
+   (`unique_active_handoff_per_target_gate`) preventing more than one open
+   handoff per target+gate. Added `Role.can_override_gates`. Two
+   migrations generated cleanly; one had to be deleted and regenerated
+   after making a new FK nullable to avoid an interactive
+   "provide a one-off default" prompt this environment can't answer —
+   documented as a normal part of iterating on an uncommitted migration,
+   not a data-loss risk (nothing had been committed yet).
+10. Built `apps.workflow.gates` (8 evaluator functions + a `GATE_EVALUATORS`
+    registry + `evaluate_gate()` dispatcher) and `apps.workflow.services`
+    (`create_handoff`, `submit_handoff`, `accept_handoff`, `reject_handoff`,
+    `return_for_correction`, `resubmit_handoff`, plus permission helpers
+    `can_accept_handoff`/`can_override_gates`/`can_view_handoff`). Every
+    mutating function wraps `select_for_update()` in a transaction.
+11. Built the handoff inbox (`/flujo/`, 6 filterable views) and detail
+    screen (live readiness explanation, evidence, comments, decision
+    history, action buttons gated by real permission checks), wired
+    "create handoff" buttons into the Shipment and Material Request
+    detail pages, and changed the dashboard's handoff card to link into
+    the filtered inbox instead of showing a static count.
+12. Extended `seed_pilot_data` with 9 `WorkflowStage` rows and the 8
+    `GateDefinition` rows, and set `can_override_gates=True` for the
+    Dirección/Gerencia/Administrador roles. Extended
+    `import_live_container_fixture` to create a real
+    `logistics_to_receiving` handoff against the imported shipment.
+    Ran from a clean database: the demonstration handoff came back
+    **genuinely blocked** (4 discrepancies, 3 requiring customs review,
+    1 missing requirement — a real receiving plan) purely from the
+    already-imported fixture data, with no test-specific fixture rigging.
+13. **Full live HTTP walkthrough** against a running dev server, using
+    the actual seeded users and imported fixture (not test doubles):
+    logged in as Harrison, confirmed the demonstration handoff rendered
+    all its real blockers on the detail page; attempted a plain submit
+    and confirmed it was rejected with a clear message and the handoff
+    stayed `not_ready`; submitted again with `harrison`'s override
+    permission and a written reason — confirmed a `GateOverride` row was
+    created with the reason, actor, and timestamp, and the handoff moved
+    to `submitted`; logged in as Manuel, confirmed the handoff appeared
+    in his "para mí" inbox, accepted it, and confirmed both
+    `Shipment.status` advanced to `released_to_receiving` and a new open
+    `ResponsibilityAssignment` pointed at Manuel/Almacén.
+14. Wrote 32 new automated tests (`tests/test_workflow_gates.py`,
+    `tests/test_workflow_handoffs.py`) covering all 15 required
+    scenarios: successful handoff, blocked handoff, missing evidence,
+    unresolved discrepancy, quarantined inventory, official-vs-operational
+    mismatch, rejection/return for correction, corrected resubmission,
+    authorized override, unauthorized override, duplicate submission,
+    concurrent acceptance, role-aware inbox filtering, cross-project
+    isolation, and complete audit history. One test bug of my own
+    (forgot to attach required evidence in the "successful lifecycle"
+    test) was caught by the first run and fixed; every other test passed
+    on the first attempt. Full suite: 53/53 passing (21 pre-existing + 32
+    new), confirming no regression.
+15. Updated the living documentation set (this file, `REQUIREMENTS_TRACEABILITY.md`,
+    `ui-navigation-map.md`, `architecture-decisions.md` ADR-013 through
+    ADR-016, `implementation-roadmap.md`, `KNOWN_LIMITATIONS.md`,
+    `FINAL_VALIDATION_REPORT.md`).
+
 No step in this log is aspirational — every claim above was executed and
 its actual output inspected in this session.

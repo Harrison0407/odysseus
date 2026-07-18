@@ -1,5 +1,8 @@
 from django.contrib.auth.decorators import login_required
+from django.contrib.contenttypes.models import ContentType
 from django.shortcuts import get_object_or_404, render
+
+from apps.workflow.models import GateDefinition, Handoff
 
 from .models import (
     Container,
@@ -72,6 +75,16 @@ def shipment_detail(request, pk):
         "cbm_diff": (official_cbm - internal_cbm) if official_cbm is not None else None,
     }
 
+    shipment_content_type = ContentType.objects.get_for_model(Shipment)
+    available_gates = GateDefinition.objects.filter(
+        organization=request.user.profile.organization,
+        target_content_type=shipment_content_type,
+        code__in=["logistics_to_receiving", "receiving_to_warehouse"],
+    )
+    existing_handoffs = Handoff.objects.filter(
+        content_type=shipment_content_type, object_id=shipment.pk
+    ).select_related("gate_definition", "to_department").order_by("-created_at")
+
     return render(
         request,
         "shipments/detail.html",
@@ -83,5 +96,8 @@ def shipment_detail(request, pk):
             "variances": variances,
             "totals": totals,
             "unresolved_critical_count": variances.filter(severity="critical", is_explained=False).count(),
+            "shipment_content_type_id": shipment_content_type.id,
+            "available_gates": available_gates,
+            "existing_handoffs": existing_handoffs,
         },
     )

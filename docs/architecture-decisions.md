@@ -2,6 +2,46 @@
 
 Newest first.
 
+## ADR-016 — `ResponsibilityAssignment` reused (not replaced) for ownership transfer
+**Decision:** `accept_handoff()` closes any open `ResponsibilityAssignment`
+for the target and opens a new one, rather than introducing a new
+"current owner" model.
+**Why:** `ResponsibilityAssignment` already existed from the Priority 0
+milestone specifically to answer "who owns this record now" (ADR-004
+established the generic content-type pattern this relies on) but was
+never actually written to by any code path. This milestone is what
+finally makes it real, instead of adding a parallel concept.
+
+## ADR-015 — `UserProjectAccess` enforced for the first time
+**Decision:** `can_view_handoff`/`can_accept_handoff` check
+`UserProjectAccess` for any handoff whose target resolves to a project
+(currently `MaterialRequest`), with a bypass for management-role users.
+**Why:** `UserProjectAccess` was modeled in the Priority 0 milestone but
+`grep`-confirmed unused anywhere before this milestone. Cross-project
+isolation was an explicit requirement here, and this was the obvious
+existing model to wire up rather than inventing a second
+project-authorization mechanism.
+
+## ADR-014 — Gate readiness is evaluated by a pure function registry, not stored as a workflow engine's state machine
+**Decision:** `apps.workflow.gates.GATE_EVALUATORS` maps a gate `code` to
+a plain Python function returning a `GateResult`; there is no generic
+rule-configuration UI or DSL.
+**Why:** The 8 required gates each depend on genuinely different
+business signals (payment milestones, manifest variances, quarantine
+records, reservation quantities, installation/inspection records) drawn
+from models that already exist across 6 different apps. A configurable
+rule engine would need to reinvent expressive power Python already has,
+for a fixed, spec-mandated set of 8 transitions — not a case where more
+abstraction pays for itself. Each evaluator is independently unit-tested
+(`tests/test_workflow_gates.py`).
+
+## ADR-013 — `ServiceLevelTarget` reused for overdue tracking, no new SLA model
+**Decision:** `apps.workflow.services.is_overdue()` compares
+`Handoff.submitted_at` against `GateDefinition.to_stage.sla_targets`.
+**Why:** `ServiceLevelTarget` (tied to `WorkflowStage`) already existed
+from the Priority 0 milestone and was unused. Reused rather than adding a
+duplicate `Handoff.due_at`/SLA concept.
+
 ## ADR-012 — `.dockerignore` must exclude `.env`; production DB choice guarded by `DEBUG`
 **Decision:** Added `.dockerignore` excluding `.env`/`.env.*` (except
 `.env.example`), and added `if DEBUG and env_bool("USE_SQLITE_FOR_TESTS")`

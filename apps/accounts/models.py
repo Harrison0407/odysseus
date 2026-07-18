@@ -58,6 +58,12 @@ class Role(BaseModel):
         help_text="Should always be False for business roles — spec requires a normal business "
         "interface, never Django Admin, for day-to-day operational users.",
     )
+    can_override_gates = models.BooleanField(
+        default=False,
+        help_text="Grants permission to override a blocked workflow gate with a written reason "
+        "(spec: 'any authorized override must require a permission'). Never granted by default — "
+        "assigned explicitly per role in seed data (e.g. Dirección, Gerencia).",
+    )
 
     class Meta:
         unique_together = [("organization", "code")]

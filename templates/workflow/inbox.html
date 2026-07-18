@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Flujo y Entregas de Responsabilidad</h3>
+
+<ul class="nav nav-pills mb-3">
+    <li class="nav-item"><a class="nav-link {% if view == 'para_mi' %}active{% endif %}" href="?vista=para_mi">Para mi aceptación</a></li>
+    <li class="nav-item"><a class="nav-link {% if view == 'enviadas_por_mi' %}active{% endif %}" href="?vista=enviadas_por_mi">Enviadas por mí</a></li>
+    <li class="nav-item"><a class="nav-link {% if view == 'devueltas' %}active{% endif %}" href="?vista=devueltas">Devueltas para corrección</a></li>
+    <li class="nav-item"><a class="nav-link {% if view == 'bloqueadas' %}active{% endif %}" href="?vista=bloqueadas">Bloqueadas</a></li>
+    <li class="nav-item"><a class="nav-link {% if view == 'completadas' %}active{% endif %}" href="?vista=completadas">Completadas recientemente</a></li>
+    <li class="nav-item"><a class="nav-link {% if view == 'todas' %}active{% endif %}" href="?vista=todas">Todas</a></li>
+</ul>
+
+<form method="get" class="row g-2 mb-3">
+    <input type="hidden" name="vista" value="{{ view }}">
+    <div class="col-auto">
+        <select name="gate" class="form-select form-select-sm" onchange="this.form.submit()">
+            <option value="">Todos los gates</option>
+            {% for g in gate_definitions %}
+            <option value="{{ g.code }}" {% if request.GET.gate == g.code %}selected{% endif %}>{{ g.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-auto form-check mt-2">
+        <input class="form-check-input" type="checkbox" name="overdue" value="1" id="overdueCheck"
+               {% if request.GET.overdue == "1" %}checked{% endif %} onchange="this.form.submit()">
+        <label class="form-check-label" for="overdueCheck">Solo vencidas</label>
+    </div>
+</form>
+
+<table class="table table-striped bg-white">
+    <thead>
+        <tr>
+            <th>Objeto</th>
+            <th>Gate</th>
+            <th>De</th>
+            <th>Para</th>
+            <th>Estado</th>
+            <th>Listo</th>
+            <th>Vencida</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for row in rows %}
+        <tr class="{% if row.overdue %}table-danger{% endif %}">
+            <td class="small">{{ row.handoff.content_type.name }} — {{ row.handoff.object_id|truncatechars:8 }}</td>
+            <td class="small">{{ row.handoff.gate_definition|default:"—" }}</td>
+            <td class="small">{{ row.handoff.from_department|default:"—" }}</td>
+            <td class="small">{{ row.handoff.to_department|default:row.handoff.to_user|default:"—" }}</td>
+            <td><span class="badge bg-secondary">{{ row.handoff.get_status_display }}</span></td>
+            <td>
+                {% if row.handoff.readiness_ready %}<span class="text-success">Sí</span>
+                {% else %}<span class="text-danger">No</span>{% endif %}
+            </td>
+            <td>{% if row.overdue %}<span class="badge badge-critical text-white">Vencida</span>{% else %}—{% endif %}</td>
+            <td><a href="{% url 'workflow:detail' row.handoff.pk %}">Ver</a></td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="8" class="text-muted">Sin entregas en esta vista.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

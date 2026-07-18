@@ -478,6 +478,28 @@ class Command(BaseCommand):
             },
         )
 
+        # -- Gate Controls milestone: demonstrate a real, blocked handoff ---
+        # against this exact fixture. logistics_to_receiving is genuinely
+        # blocked here: 3 unresolved critical ManifestVariance rows (see
+        # test_unattributed_cargo_flagged_for_customs_review), a critical
+        # quartz-quantity Discrepancy, and no ReceivingPlan — this is not a
+        # contrived example, it is what the imported data actually implies.
+        from apps.workflow.gates import evaluate_gate
+        from apps.workflow.models import GateDefinition
+        from apps.workflow.services import create_handoff
+
+        gate_definition = GateDefinition.objects.filter(organization=org, code="logistics_to_receiving").first()
+        if gate_definition is not None:
+            handoff = create_handoff(shipment, gate_definition, harrison)
+            result = evaluate_gate(gate_definition, shipment)
+            self.stdout.write(
+                f"Entrega de demostración creada: {handoff.gate_definition} — "
+                f"{'lista' if result.ready else 'BLOQUEADA'} "
+                f"({len(result.unresolved_discrepancies)} discrepancia(s), "
+                f"{len(result.customs_review_required)} en revisión aduanal, "
+                f"{len(result.unmet_requirements)} requisito(s) pendiente(s))."
+            )
+
         self.stdout.write(self.style.SUCCESS(
             f"Fixture importado: {shipment.reference} / {container.container_number} — "
             f"{internal_version.lines.count()} líneas internas, {ManifestVariance.objects.filter(shipment=shipment).count()} variaciones."

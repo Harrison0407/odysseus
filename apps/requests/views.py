@@ -1,10 +1,12 @@
 from django import forms
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.contrib.contenttypes.models import ContentType
 from django.shortcuts import get_object_or_404, redirect, render
 
 from apps.items.models import Item
 from apps.projects.models import Project
+from apps.workflow.models import GateDefinition, Handoff
 
 from .models import MaterialRequest, MaterialRequestLine
 
@@ -58,4 +60,22 @@ def request_detail(request, pk):
         MaterialRequest.objects.select_related("project", "building", "unit").prefetch_related("lines__item"),
         pk=pk,
     )
-    return render(request, "requests/detail.html", {"request_obj": mr})
+    content_type = ContentType.objects.get_for_model(MaterialRequest)
+    available_gates = GateDefinition.objects.filter(
+        organization=getattr(request.user.profile, "organization", None),
+        target_content_type=content_type,
+        code="warehouse_to_project",
+    )
+    existing_handoffs = Handoff.objects.filter(
+        content_type=content_type, object_id=mr.pk
+    ).select_related("gate_definition", "to_department").order_by("-created_at")
+    return render(
+        request,
+        "requests/detail.html",
+        {
+            "request_obj": mr,
+            "request_content_type_id": content_type.id,
+            "available_gates": available_gates,
+            "existing_handoffs": existing_handoffs,
+        },
+    )

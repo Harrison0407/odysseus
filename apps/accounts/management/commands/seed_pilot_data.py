@@ -1,13 +1,16 @@
 import os
 import secrets
 
+from django.apps import apps as django_apps
 from django.contrib.auth import get_user_model
+from django.contrib.contenttypes.models import ContentType
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from apps.accounts.models import Department, Organization, Role, UserProfile, UserRole
 from apps.documents.models import DocumentType, DocumentTypeAlias
 from apps.items.models import ProductCategory, UnitOfMeasure
+from apps.workflow.models import GateDefinition, WorkflowStage
 
 User = get_user_model()
 
@@ -84,17 +87,43 @@ DEPARTMENTS = [
 ]
 
 ROLES = [
-    ("compras", "Compras", False),
-    ("china_origin", "China / Origen", False),
-    ("finanzas", "Finanzas", False),
-    ("almacen", "Almacén / Custodia", False),
-    ("recepcion", "Recepción", False),
-    ("obra", "Obra", False),
-    ("direccion", "Dirección Ejecutiva", True),
-    ("management", "Gerencia (solo lectura)", True),
-    ("read_only", "Solo lectura", True),
-    ("customs_logistics", "Aduanas y Logística", False),
-    ("system_admin", "Administrador del sistema", True),
+    # code, name, is_management, can_override_gates
+    ("compras", "Compras", False, False),
+    ("china_origin", "China / Origen", False, False),
+    ("finanzas", "Finanzas", False, False),
+    ("almacen", "Almacén / Custodia", False, False),
+    ("recepcion", "Recepción", False, False),
+    ("obra", "Obra", False, False),
+    ("direccion", "Dirección Ejecutiva", True, True),
+    ("management", "Gerencia (solo lectura)", True, True),
+    ("read_only", "Solo lectura", True, False),
+    ("customs_logistics", "Aduanas y Logística", False, False),
+    ("system_admin", "Administrador del sistema", True, True),
+]
+
+# The 8 required minimum transitions (Gate Controls milestone). Each entry:
+# (code, name, sequence, from_stage_code, to_stage_code, from_dept, to_dept, target_app_label.model)
+WORKFLOW_STAGES = [
+    ("purchasing", "Compras", "compras", 1),
+    ("finance", "Finanzas", "finanzas", 2),
+    ("logistics", "Logística", "aduanas_logistica", 3),
+    ("receiving", "Recepción", "almacen", 4),
+    ("warehouse", "Almacén", "almacen", 5),
+    ("project", "Obra", "obra", 6),
+    ("installation", "Instalación", "obra", 7),
+    ("inspection", "Inspección", "obra", 8),
+    ("acceptance", "Aceptación", "direccion", 9),
+]
+
+GATE_DEFINITIONS = [
+    ("purchasing_to_finance", "Compras → Finanzas", 1, "purchasing", "finance", "compras", "finanzas", "procurement.purchaseorder"),
+    ("finance_to_logistics", "Finanzas → Logística", 2, "finance", "logistics", "finanzas", "aduanas_logistica", "procurement.purchaseorder"),
+    ("logistics_to_receiving", "Logística → Recepción", 3, "logistics", "receiving", "aduanas_logistica", "almacen", "shipments.shipment"),
+    ("receiving_to_warehouse", "Recepción → Almacén", 4, "receiving", "warehouse", "almacen", "almacen", "shipments.shipment"),
+    ("warehouse_to_project", "Almacén → Obra", 5, "warehouse", "project", "almacen", "obra", "requests.materialrequest"),
+    ("project_delivery_to_installation", "Entrega a Proyecto → Instalación", 6, "project", "installation", "obra", "obra", "requests.delivery"),
+    ("installation_to_inspection", "Instalación → Inspección", 7, "installation", "inspection", "obra", "obra", "requests.installationrecord"),
+    ("inspection_to_acceptance", "Inspección → Aceptación", 8, "inspection", "acceptance", "obra", "direccion", "requests.installationrecord"),
 ]
 
 DOCUMENT_TYPES = [
@@ -161,10 +190,14 @@ class Command(BaseCommand):
             departments[code] = dept
 
         roles = {}
-        for code, name, is_management in ROLES:
-            role, _ = Role.objects.get_or_create(
-                organization=org, code=code, defaults={"name": name, "is_management": is_management}
+        for code, name, is_management, can_override_gates in ROLES:
+            role, created = Role.objects.get_or_create(
+                organization=org, code=code,
+                defaults={"name": name, "is_management": is_management, "can_override_gates": can_override_gates},
             )
+            if not created and role.can_override_gates != can_override_gates:
+                role.can_override_gates = can_override_gates
+                role.save(update_fields=["can_override_gates"])
             roles[code] = role
 
         for code, name in UNITS:
@@ -172,6 +205,33 @@ class Command(BaseCommand):
 
         for name in CATEGORIES:
             ProductCategory.objects.get_or_create(organization=org, name=name)
+
+        stages = {}
+        for code, name, department_code, sequence in WORKFLOW_STAGES:
+            stage, _ = WorkflowStage.objects.get_or_create(
+                organization=org, code=code,
+                defaults={"name": name, "department": departments.get(department_code), "sequence": sequence},
+            )
+            stages[code] = stage
+
+        gate_count = 0
+        for code, name, sequence, from_stage, to_stage, from_dept, to_dept, target_label in GATE_DEFINITIONS:
+            app_label, model_name = target_label.split(".")
+            model_class = django_apps.get_model(app_label, model_name)
+            target_content_type = ContentType.objects.get_for_model(model_class)
+            GateDefinition.objects.get_or_create(
+                organization=org, code=code,
+                defaults={
+                    "name": name,
+                    "sequence": sequence,
+                    "from_stage": stages.get(from_stage),
+                    "to_stage": stages.get(to_stage),
+                    "from_department": departments.get(from_dept),
+                    "to_department": departments.get(to_dept),
+                    "target_content_type": target_content_type,
+                },
+            )
+            gate_count += 1
 
         for code, name, is_official, aliases in DOCUMENT_TYPES:
             doc_type, _ = DocumentType.objects.get_or_create(
@@ -181,7 +241,10 @@ class Command(BaseCommand):
                 DocumentTypeAlias.objects.get_or_create(document_type=doc_type, alias_text=alias)
 
         self.stdout.write(self.style.SUCCESS(f"Organización: {org.name}"))
-        self.stdout.write(f"Departamentos: {len(departments)} · Roles: {len(roles)} · Tipos de documento: {len(DOCUMENT_TYPES)}")
+        self.stdout.write(
+            f"Departamentos: {len(departments)} · Roles: {len(roles)} · Tipos de documento: {len(DOCUMENT_TYPES)} · "
+            f"Etapas de flujo: {len(stages)} · Gates: {gate_count}"
+        )
 
         self.stdout.write("")
         self.stdout.write(self.style.WARNING("Credenciales generadas (guárdelas ahora, no se muestran de nuevo):"))

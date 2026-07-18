@@ -22,6 +22,16 @@
 | `/solicitudes/<id>/` | `request_detail` | Requested/approved/reserved/dispatched/delivered quantities |
 | `/costos/` | `apps.cost.views.landed_cost_list` | Landed cost versions (provisional vs. final) |
 | `/costos/<id>/` | `landed_cost_detail` | Per-line cost breakdown |
+| `/flujo/` | `apps.workflow.views.inbox` | **Role-aware handoff inbox** — tabs: para mí / enviadas por mí / devueltas / bloqueadas / completadas / todas; filterable by gate, status, overdue |
+| `/flujo/<id>/` | `handoff_detail` | Live gate readiness (why blocked/ready), evidence, comments, decision history, action buttons |
+| `/flujo/<id>/enviar/` (POST) | `handoff_submit` | Submit — blocked if the gate is not ready |
+| `/flujo/<id>/anular-enviar/` (POST) | `handoff_override_submit` | Submit with an authorized override + written reason (only shown to users with `can_override_gates`) |
+| `/flujo/<id>/aceptar/` (POST) | `handoff_accept` | Accept — transfers `ResponsibilityAssignment` and, for `Shipment`-anchored gates, advances `Shipment.status` |
+| `/flujo/<id>/rechazar/` (POST) | `handoff_reject` | Reject with a required reason |
+| `/flujo/<id>/devolver/` (POST) | `handoff_return` | Return for correction with a required reason |
+| `/flujo/<id>/reenviar/` (POST) | `handoff_resubmit` | Corrected resubmission — creates a new superseding `Handoff` version |
+| `/flujo/<id>/comentario/` (POST) | `handoff_comment` | Add a comment (reuses `apps.audit.Comment`) |
+| `/flujo/crear/<content_type_id>/<object_id>/<gate_code>/` | `handoff_create` | Generic create-handoff entry point, linked from the Shipment and Material Request detail pages |
 | `/reportes/embarque/<id>/instantanea/` | `apps.reports.views.shipment_snapshot` | Generates and downloads a self-contained HTML snapshot |
 | `/reportes/compartir/<token>/` | `shared_view` | Public, revocable, logged read-only share link |
 | `/api/v1/...` | DRF router | `shipments`, `purchase-orders`, `manifest-lines`, `manifest-variances`, `discrepancies` (read-only, org-scoped) |

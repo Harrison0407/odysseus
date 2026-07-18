@@ -6,22 +6,32 @@ is silently claimed to be done when it isn't.
 
 ## Not yet built (UI)
 
-1. **Gate-blocking UI.** The storage-readiness gate (spec 9.4) and
-   operational-verification gate (spec 9.5) are structurally enforced by
-   the data model (e.g. a `Receipt` cannot exist without a frozen
-   `ReleasePacketVersion`), but there is no dedicated screen that shows a
-   literal "blocked, here's why, override with reason" message at the
-   `Shipment.status` transition itself.
-2. **Handoff inbox.** `apps.workflow.Handoff`/`HandoffDecision` are fully
-   modeled and covered conceptually, but there is no accept/reject screen
-   yet — only a read-only list on the dashboard.
+1. ~~Gate-blocking UI~~ — **Done in the Gate Controls milestone.** Every
+   one of the 8 required transitions now has a real evaluator
+   (`apps.workflow.gates`) and a handoff detail screen (`/flujo/<id>/`)
+   that shows exactly why a gate is blocked, with an authorized-override
+   path requiring a written reason. One residual gap: the "blocked"
+   message currently lives on the handoff detail page itself, not
+   additionally repeated inline on the Shipment/Material Request detail
+   page at the point a transition is attempted outside the handoff flow.
+2. ~~Handoff inbox~~ — **Done.** `/flujo/` is a full role-aware,
+   filterable inbox (para mí / enviadas por mí / devueltas / bloqueadas /
+   completadas / todas), with accept/reject/return/resubmit/comment all
+   wired to real permission-checked actions.
 3. **Detailed internal receiving manifest, exact spec 13A.8 layout.** All
    the underlying data is present and shown on the shipment detail page,
    but not yet in the specific 10-section printable layout the spec
    describes for Manuel's team.
 4. **Dispatch/Delivery UI.** `apps.requests` models the full
    request→approval→reservation→pick→dispatch→delivery→installation
-   chain; only the request-creation screen is built.
+   chain; only the request-creation screen is built. Consequently, the
+   `project_delivery_to_installation`, `installation_to_inspection`, and
+   `inspection_to_acceptance` gates are fully implemented and tested at
+   the engine/service layer (see `REQUIREMENTS_TRACEABILITY.md`) but have
+   no "create handoff" button anywhere yet — a handoff for those gates
+   must currently be created via the ORM/a script; once created, the
+   generic `/flujo/` accept/reject/return flow works for them exactly as
+   it does for the two gates that do have buttons.
 5. **Landed-cost allocation-run trigger UI.** The calculation models
    (`CostAllocationRun`, `LandedCostVersion`) exist; running an allocation
    currently requires the ORM/a script, not a button.
@@ -31,24 +41,43 @@ is silently claimed to be done when it isn't.
    package generation, QR label printing. Data models exist for all of
    these (`apps.customs`, `apps.tools`, `apps.inventory.CycleCount`,
    `apps.receiving.AlternativeStorageOption`); none has a UI yet.
+7. **`purchasing_to_finance`/`finance_to_logistics` have no "create
+   handoff" button** on the Purchase Order detail page yet (unlike the
+   two Shipment-anchored gates, which do). The evaluators and full
+   accept/reject/return/override flow are implemented and tested
+   (`tests/test_workflow_gates.py::TestPurchasingToFinance`,
+   `TestFinanceToLogistics`); only the "create" entry point on that
+   specific page is missing.
 
 ## Not yet built (integrations/infrastructure)
 
-7. **OCR.** `DocumentClassificationResult`/`DocumentFieldSource` model
+8. **OCR.** `DocumentClassificationResult`/`DocumentFieldSource` model
    what an OCR pipeline would populate; no OCR engine (local Tesseract or
    otherwise) is wired in. Scanned-PDF uploads are stored and downloadable
    but not automatically transcribed.
-8. **Translation.** Same as above — the provenance fields exist
+9. **Translation.** Same as above — the provenance fields exist
    (`proposed_translation`/`confirmed_translation`), no translation
    adapter is implemented.
-9. **QuickBooks / MarketMatch integration.** Deliberately not built —
-   see `QUICKBOOKS_INTEGRATION_DISCOVERY.md` and
-   `MARKETMATCH_INTEGRATION_PATH.md` for why and what would be needed.
-10. **Rate limiting** on login/share-link endpoints is not implemented.
-11. **CI pipeline** (automated test run on every push) was not requested
+10. **QuickBooks / MarketMatch integration.** Deliberately not built —
+    see `QUICKBOOKS_INTEGRATION_DISCOVERY.md` and
+    `MARKETMATCH_INTEGRATION_PATH.md` for why and what would be needed.
+11. **Rate limiting** on login/share-link endpoints is not implemented.
+12. **CI pipeline** (automated test run on every push) was not requested
     and was not built in this pass; tests are run manually via `pytest`.
 
-## Fixed during this delivery (recorded so they aren't rediscovered)
+## Fixed during the Gate Controls milestone
+
+- One test bug (not a product bug): `test_successful_handoff_full_lifecycle`
+  initially forgot to attach the evidence `logistics_to_receiving`
+  requires before submitting, so it failed with `GateBlockedError` on
+  first run — exactly the correct behavior; the test was fixed to attach
+  evidence first, not the product code.
+- A migration had to be deleted and regenerated once after making
+  `Handoff.organization` nullable, to avoid Django's interactive
+  "provide a one-off default" prompt (no data existed yet to make this a
+  real risk — see `docs/implementation-log.md` step 9).
+
+## Fixed during the Priority 0 delivery (recorded so they aren't rediscovered)
 
 - A `lambda` default on a model field broke `makemigrations` — fixed.
 - Whitenoise's manifest storage failed on a vendored CSS file's dangling

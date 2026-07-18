@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+    <div>
+        <h3>Entrega de responsabilidad</h3>
+        <p class="text-muted mb-0">
+            <strong>{{ handoff.gate_definition|default:"(sin gate asignado)" }}</strong> —
+            {{ target }}
+        </p>
+        <p class="text-muted small">
+            De <strong>{{ handoff.from_department|default:"—" }}</strong>
+            {% if handoff.from_user %}({{ handoff.from_user.get_full_name|default:handoff.from_user.username }}){% endif %}
+            → Para <strong>{{ handoff.to_department|default:"—" }}</strong>
+            {% if handoff.to_user %}({{ handoff.to_user.get_full_name|default:handoff.to_user.username }}){% endif %}
+        </p>
+    </div>
+    <div class="text-end">
+        <span class="badge bg-secondary fs-6">{{ handoff.get_status_display }}</span>
+        {% if is_overdue %}<span class="badge badge-critical text-white fs-6">Vencida</span>{% endif %}
+        <p class="small text-muted mb-0">Versión {{ handoff.version }}</p>
+    </div>
+</div>
+
+{% if superseded_chain %}
+<div class="alert alert-secondary small">
+    Esta entrega es una corrección de un intento anterior.
+    {% for old in superseded_chain %}
+        <a href="{% url 'workflow:detail' old.pk %}">Ver versión {{ old.version }} ({{ old.get_status_display }})</a>{% if not forloop.last %}, {% endif %}
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="card mb-3">
+    <div class="card-header bg-white"><strong>¿Por qué está {% if live_result.ready %}listo{% else %}bloqueado{% endif %}?</strong>
+        <span class="small text-muted">(evaluación en vivo, al momento de ver esta página)</span>
+    </div>
+    <div class="card-body">
+        {% if live_result %}
+            {% if live_result.ready %}
+                <p class="text-success mb-0">✔ Todas las condiciones del gate se cumplen actualmente.</p>
+            {% else %}
+                <ul class="mb-0">
+                    {% for item in live_result.unmet_requirements %}<li>{{ item }}</li>{% endfor %}
+                    {% for item in live_result.unresolved_discrepancies %}<li>Discrepancia sin resolver: {{ item }}</li>{% endfor %}
+                    {% for item in live_result.missing_documents %}<li>Documento faltante: {{ item }}</li>{% endfor %}
+                    {% for item in live_result.missing_approvals %}<li>Aprobación faltante: {{ item }}</li>{% endfor %}
+                    {% for item in live_result.quarantined_inventory %}<li>Inventario en cuarentena: {{ item }}</li>{% endfor %}
+                    {% for item in live_result.incomplete_receiving %}<li>Recepción incompleta: {{ item }}</li>{% endfor %}
+                    {% for item in live_result.customs_review_required %}<li>Requiere revisión aduanal: {{ item }}</li>{% endfor %}
+                </ul>
+                {% if live_result.evidence_requirements %}
+                <p class="small text-muted mt-2 mb-0">Evidencia esperada para este gate: {{ live_result.evidence_requirements|join:", " }}</p>
+                {% endif %}
+            {% endif %}
+        {% else %}
+            <p class="text-muted mb-0">Esta entrega no tiene un gate configurado — solo requiere aceptación manual.</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header bg-white">Acciones disponibles</div>
+            <div class="card-body">
+                {% if handoff.status == "not_ready" or handoff.status == "ready_for_submission" %}
+                    <form method="post" action="{% url 'workflow:submit' handoff.pk %}" class="mb-2">
+                        {% csrf_token %}
+                        <button class="btn btn-primary" type="submit">Enviar entrega</button>
+                    </form>
+                    {% if can_override and live_result and not live_result.ready %}
+                    <details class="mt-2">
+                        <summary class="text-danger">Anular bloqueo y enviar de todas formas (requiere motivo)</summary>
+                        <form method="post" action="{% url 'workflow:override-submit' handoff.pk %}" class="mt-2">
+                            {% csrf_token %}
+                            {{ reason_form.reason }}
+                            <button class="btn btn-outline-danger btn-sm mt-2" type="submit">Anular y enviar</button>
+                        </form>
+                    </details>
+                    {% endif %}
+                {% elif handoff.status == "submitted" %}
+                    {% if can_accept %}
+                    <form method="post" action="{% url 'workflow:accept' handoff.pk %}" class="d-inline">
+                        {% csrf_token %}
+                        <button class="btn btn-success" type="submit">Aceptar</button>
+                    </form>
+                    <details class="d-inline-block ms-2">
+                        <summary class="btn btn-outline-danger btn-sm d-inline">Rechazar</summary>
+                        <form method="post" action="{% url 'workflow:reject' handoff.pk %}" class="mt-2">
+                            {% csrf_token %}
+                            {{ reason_form.reason }}
+                            <button class="btn btn-danger btn-sm mt-2" type="submit">Confirmar rechazo</button>
+                        </form>
+                    </details>
+                    <details class="d-inline-block ms-2">
+                        <summary class="btn btn-outline-warning btn-sm d-inline">Devolver para corrección</summary>
+                        <form method="post" action="{% url 'workflow:return' handoff.pk %}" class="mt-2">
+                            {% csrf_token %}
+                            {{ reason_form.reason }}
+                            <button class="btn btn-warning btn-sm mt-2" type="submit">Confirmar devolución</button>
+                        </form>
+                    </details>
+                    {% else %}
+                    <p class="text-muted mb-0">Esperando aceptación de {{ handoff.to_department|default:handoff.to_user }}.</p>
+                    {% endif %}
+                {% elif handoff.status == "rejected" or handoff.status == "returned_for_correction" %}
+                    <p class="mb-2"><strong>Motivo:</strong> {{ handoff.rejection_or_correction_reason }}</p>
+                    <form method="post" action="{% url 'workflow:resubmit' handoff.pk %}">
+                        {% csrf_token %}
+                        <button class="btn btn-primary" type="submit">Crear reenvío corregido</button>
+                    </form>
+                {% elif handoff.status == "accepted" %}
+                    <p class="text-success mb-0">✔ Aceptada el {{ handoff.decided_at }}. La responsabilidad fue transferida.</p>
+                {% elif handoff.status == "superseded" %}
+                    <p class="text-muted mb-0">Esta versión fue reemplazada por un reenvío corregido.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header bg-white">Evidencia adjunta</div>
+            <ul class="list-group list-group-flush">
+                {% for e in evidence %}
+                <li class="list-group-item">{{ e.document.title }}</li>
+                {% empty %}<li class="list-group-item text-muted">Sin evidencia adjunta.</li>{% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header bg-white">Historial de decisiones (auditoría permanente)</div>
+            <ul class="list-group list-group-flush">
+                {% for d in decisions %}
+                <li class="list-group-item">
+                    <strong>{{ d.get_decision_display }}</strong> por {{ d.decided_by }} — {{ d.decided_at }}
+                    {% if d.comment %}<div class="small text-muted">{{ d.comment }}</div>{% endif %}
+                </li>
+                {% empty %}<li class="list-group-item text-muted">Sin decisiones todavía.</li>{% endfor %}
+            </ul>
+        </div>
+
+        <div class="card">
+            <div class="card-header bg-white">Comentarios</div>
+            <ul class="list-group list-group-flush">
+                {% for c in comments %}
+                <li class="list-group-item"><strong>{{ c.author }}</strong>: {{ c.body }}</li>
+                {% empty %}<li class="list-group-item text-muted">Sin comentarios.</li>{% endfor %}
+            </ul>
+            <div class="card-body">
+                <form method="post" action="{% url 'workflow:comment' handoff.pk %}">
+                    {% csrf_token %}
+                    {{ comment_form.body }}
+                    <button class="btn btn-sm btn-secondary mt-2" type="submit">Comentar</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

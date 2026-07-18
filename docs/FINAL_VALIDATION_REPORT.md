@@ -99,10 +99,14 @@ production Docker stack (step 15 below).
 
 ## 11. Handoff blocking
 
-Modeled (`Handoff` requires submit + accept as separate events); no
-dedicated UI screen exists yet to demonstrate rejection interactively —
-see `docs/KNOWN_LIMITATIONS.md` item 2. **Not independently UI-tested**
-in this session.
+**Superseded by the Gate Controls and Formal Handoffs milestone — now
+fully implemented, tested, and live-verified.** See the dedicated
+section at the end of this report for the complete account: gate
+evaluation, blocking, authorized override, submission, acceptance,
+rejection, return-for-correction, and corrected resubmission are all
+implemented, covered by 32 automated tests, and driven end-to-end
+through real HTTP requests against a running server using the actual
+seeded users and the imported live-container fixture.
 
 ## 12. Release packet versioning
 
@@ -183,14 +187,77 @@ code). Created a throwaway shipment after the backup (count 1→2), ran
 was gone and the original fixture data intact (count back to 1, correct
 reference name), with the app healthy immediately after.
 
+## 22. Gate Controls and Formal Handoffs milestone (validated in a later session)
+
+Baseline verified before starting: branch `main`, HEAD =
+`3aa6127b22efda46a4bb6532f319e6a83ae72043`, clean working tree.
+
+- **Migrations from empty:** two new migrations (`accounts.0003`,
+  `workflow.0002`) applied cleanly; `makemigrations --check` confirms no
+  drift.
+- **Automated tests:** 32 new tests (16 gate-evaluator, 16 handoff-
+  lifecycle/security) plus the pre-existing 21 — **53/53 passing**.
+- **Live HTTP walkthrough** (not just unit tests) against a running dev
+  server, using the actual seeded users and the real imported
+  MEDUWY575021 fixture:
+  1. Ran `import_live_container_fixture`; it created a real
+     `logistics_to_receiving` handoff and reported it **genuinely
+     blocked** (4 discrepancies, 3 requiring customs review, 1 missing
+     requirement) purely from the fixture's own data.
+  2. Logged in as Harrison via real POST + CSRF token; loaded the
+     handoff detail page and confirmed it rendered the exact same
+     blockers.
+  3. POSTed a plain submit; confirmed it was rejected with a clear
+     message and the handoff stayed `not_ready` (never silently
+     advanced).
+  4. POSTed an authorized override with a written reason; confirmed the
+     handoff moved to `submitted` and a `GateOverride` row was created
+     recording the reason, actor, and timestamp.
+  5. Logged in as Manuel; confirmed the handoff appeared in his "para
+     mí" inbox (role-based visibility, not a hard-coded name check);
+     accepted it via POST.
+  6. Confirmed, directly against the database: exactly one
+     `HandoffDecision(decision="accepted")`, `Shipment.status` advanced
+     to `released_to_receiving`, and a new open `ResponsibilityAssignment`
+     pointed at Manuel/Almacén.
+- **Security scenarios verified by test:** unauthorized override denied
+  (`test_unauthorized_override_is_denied`), unauthorized acceptance
+  denied (`test_unauthorized_user_cannot_accept_handoff`), cross-role
+  access denied when a gate specifies a required role
+  (`test_required_role_to_accept_enforced`), cross-project isolation
+  denied both at the service layer and via a direct URL hit returning a
+  302 redirect rather than the record
+  (`test_cross_project_isolation_denies_view_and_accept`), duplicate
+  submission is idempotent at both the app and DB-constraint level
+  (`test_creating_handoff_twice_is_idempotent`,
+  `test_submitting_twice_second_call_raises_instead_of_double_processing`),
+  and concurrent acceptance is race-safe via `select_for_update`
+  (`test_concurrent_acceptance_only_the_first_wins`).
+- **Immutable audit history:** every create/submit/accept call produces
+  an `AuditEvent`; `HandoffDecision` and `GateOverride` rows are never
+  updated or deleted by application code; a corrected resubmission
+  creates a new `Handoff` row and marks the old one `SUPERSEDED` rather
+  than editing it (verified by
+  `test_return_for_correction_and_resubmission_creates_new_superseding_version`).
+- **What's honestly not covered yet:** the 3 gates anchored on `Delivery`/
+  `InstallationRecord` (`project_delivery_to_installation`,
+  `installation_to_inspection`, `inspection_to_acceptance`) are fully
+  implemented and unit-tested at the engine/service layer but have no
+  "create handoff" UI button, since those target models have no
+  dedicated detail page yet (`docs/KNOWN_LIMITATIONS.md` item 4). They
+  were not exercised via HTTP in this session, only via direct service
+  calls in the test suite.
+
 ## Overall recommendation
 
 **CONDITIONAL GO** — see `docs/KNOWN_LIMITATIONS.md` for the exact list of
-what is modeled-but-not-yet-exercised (items 11, 12, 15, 16, 17 above) and
-what has no UI yet at all. The Priority 0 vertical slice that *is*
-complete (documents, procurement, the dual-manifest engine, receiving,
-inventory ledger, material requests, landed-cost data model, dashboards,
-HTML snapshots, and the full production deployment/backup/restore cycle)
-is genuinely working end-to-end against the real live-container fixture,
-not merely designed. It is not yet the complete 38-section system the
+what is modeled-but-not-yet-exercised and what has no UI yet at all. The
+Priority 0 vertical slice (documents, procurement, the dual-manifest
+engine, receiving, inventory ledger, material requests, landed-cost data
+model, dashboards, HTML snapshots, and the full production deployment/
+backup/restore cycle) and the Gate Controls and Formal Handoffs milestone
+(gate evaluation, blocking, authorized override, and the full handoff
+lifecycle for the 8 required transitions) are genuinely working
+end-to-end against the real live-container fixture, not merely designed.
+This is not yet the complete 38-section system the
 governing prompt describes, and should not be represented as such.

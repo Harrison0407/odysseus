@@ -1,11 +1,21 @@
 <div class="row mb-4">
     <div class="col-md-6">
         <div class="card">
-            <div class="card-header">Entregas de responsabilidad pendientes de mi aceptación</div>
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <a href="{% url 'workflow:inbox' %}?vista=para_mi" class="text-decoration-none">
+                    Entregas de responsabilidad pendientes de mi aceptación
+                    <span class="badge bg-primary">{{ pending_handoffs_count }}</span>
+                </a>
+                {% if overdue_handoffs_count %}
+                <a href="{% url 'workflow:inbox' %}?vista=para_mi&overdue=1" class="badge badge-critical text-white text-decoration-none">
+                    {{ overdue_handoffs_count }} vencida{{ overdue_handoffs_count|pluralize }}
+                </a>
+                {% endif %}
+            </div>
             <ul class="list-group list-group-flush">
                 {% for h in pending_handoffs_to_me %}
                 <li class="list-group-item d-flex justify-content-between">
-                    <span>{{ h.from_department }} → {{ h.to_department }}</span>
+                    <a href="{% url 'workflow:detail' h.pk %}">{{ h.gate_definition|default:h.from_department }} → {{ h.to_department }}</a>
                     <span class="badge bg-secondary">{{ h.get_status_display }}</span>
                 </li>
                 {% empty %}

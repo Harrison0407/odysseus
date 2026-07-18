@@ -11,7 +11,7 @@ are production-complete).
 
 | Capability | Module(s) | DB records | UI | Test(s) | Status |
 |---|---|---|---|---|---|
-| Users, roles, assignments, handoffs | `apps.accounts`, `apps.workflow` | `UserRole`, `ResponsibilityAssignment`, `Handoff` | Login, persona dashboards | `test_permissions.py` | Done |
+| Users, roles, assignments, handoffs | `apps.accounts`, `apps.workflow` | `UserRole`, `ResponsibilityAssignment`, `Handoff`, `GateDefinition`, `GateOverride` | Login, persona dashboards, `/flujo/` inbox + detail | `test_permissions.py`, `test_workflow_gates.py` (16), `test_workflow_handoffs.py` (16) | Done — see "Gate Controls and Formal Handoffs" section below |
 | Multilingual document upload + provenance | `apps.documents` | `Document`, `DocumentVersion`, `DocumentFieldSource` | `/documentos/` upload/list/detail | `test_documents.py` (3 tests) | Done (upload/hash/duplicate/download-auth); OCR/translation adapters modeled but not wired to a real engine — **Modeled** |
 | PO / invoice / packing-list / BL / container matching | `apps.matching`, `apps.shipments` | `MatchRun`, `MatchCandidate`, `ManifestLineSource` | Shipment detail (variance matrix) | `test_live_container_fixture.py` | Done for the live fixture case; automatic fuzzy-matching engine (scoring heuristics beyond the fixture) is **Modeled**, not yet generalized |
 | Payment and origin readiness | `apps.procurement` | `PaymentMilestone`, `PaymentRecord` | PO detail page | manual verification | Modeled |
@@ -43,6 +43,54 @@ are production-complete).
 | Generate Manuel's receiving manifest | `ReceivingPlan`/`ReleasePacket` modeled; the dedicated "detailed internal receiving manifest" print view (spec 13A.8, 10-section layout) is **Planned** — today Manuel would use the shipment detail page's internal-manifest panel, which has the data but not that exact document layout |
 | Reconcile package/weight/CBM/cost without double counting | Shipment detail "Reconciliación de totales" panel; verified live to show 520/22500kg/40cbm official vs. computed internal totals |
 | Flag cargo not clearly represented for Customs & Logistics | `test_unattributed_cargo_flagged_for_customs_review` (3 flagged lines, each with a `CustomsReviewDecision`) |
+
+## Gate Controls and Formal Handoffs milestone
+
+A stage no longer closes merely by changing a status field — every one of
+the 8 required minimum transitions is enforced through
+`apps.workflow.gates.evaluate_gate()` (a single reusable evaluator per
+gate, never duplicated into a view or template) and
+`apps.workflow.services` (submit/accept/reject/return/resubmit, all
+transactional with row-level locking).
+
+| Required transition | Gate code | Target model | Evaluator test(s) |
+|---|---|---|---|
+| Purchasing → Finance | `purchasing_to_finance` | `PurchaseOrder` | `TestPurchasingToFinance` (2) |
+| Finance → Logistics | `finance_to_logistics` | `PurchaseOrder` | `TestFinanceToLogistics` (2) |
+| Logistics → Receiving | `logistics_to_receiving` | `Shipment` | `TestLogisticsToReceiving` (4) — reuses the dual-manifest engine (`ManifestVariance`/`CustomsReviewDecision`) built in the Priority 0 milestone |
+| Receiving → Warehouse | `receiving_to_warehouse` | `Shipment` | `TestReceivingToWarehouse` (5) — quarantine and discrepancy blocking |
+| Warehouse → Project | `warehouse_to_project` | `MaterialRequest` | `TestWarehouseToProject` (2) |
+| Project Delivery → Installation | `project_delivery_to_installation` | `Delivery` | evaluator implemented (`evaluate_project_delivery_to_installation`); no dedicated Delivery UI yet (Priority 0 `KNOWN_LIMITATIONS` #4), so only service-layer coverage exists today — **Done at the engine level, UI Planned** |
+| Installation → Inspection | `installation_to_inspection` | `InstallationRecord` | evaluator implemented; same UI caveat as above |
+| Inspection → Acceptance | `inspection_to_acceptance` | `InstallationRecord` | evaluator implemented; same UI caveat as above |
+
+| Capability | Verified by |
+|---|---|
+| Gate readiness evaluation (ready/blocked/warning, structured unmet requirements) | `GateResult` dataclass, all 16 `test_workflow_gates.py` tests |
+| Blocking conditions never silently resolved | Every blocked-gate test asserts the target object (BL, manifest line) is untouched after evaluation |
+| Formal handoff creation, submission, acceptance, rejection, return for correction | `test_successful_handoff_full_lifecycle`, `test_rejection_records_reason_and_decision`, `test_return_for_correction_and_resubmission_creates_new_superseding_version` |
+| Corrected resubmission preserves old version untouched | Same test — asserts `SUPERSEDED` status and unmodified `rejection_or_correction_reason` on the old row |
+| Missing-evidence blocking | `test_missing_evidence_blocks_submission_even_if_otherwise_ready`, `test_attaching_evidence_allows_submission` |
+| Authorized override (permission + written reason + actor + timestamp + before/after state) | `test_authorized_override_records_reason_actor_and_before_after_state` |
+| Unauthorized override denied | `test_unauthorized_override_is_denied` |
+| Unauthorized acceptance / cross-role access denied | `test_unauthorized_user_cannot_accept_handoff`, `test_required_role_to_accept_enforced` |
+| Duplicate submission is idempotent (double-click / refresh safe) | `test_creating_handoff_twice_is_idempotent`, `test_submitting_twice_second_call_raises_instead_of_double_processing` — backed by both an app-level pre-check and a DB-level partial unique constraint |
+| Concurrent acceptance race-safety | `test_concurrent_acceptance_only_the_first_wins` (`select_for_update` row locking) |
+| Role-aware inbox filtering | `test_inbox_para_mi_shows_only_handoffs_awaiting_this_user`, live-verified via `curl` (see `FINAL_VALIDATION_REPORT.md`) |
+| Cross-project isolation | `test_cross_project_isolation_denies_view_and_accept` — uses the pre-existing but previously-unenforced `UserProjectAccess` model, now actually wired into `can_view_handoff`/`can_accept_handoff` |
+| Ownership transfer on acceptance | `test_successful_handoff_full_lifecycle` — asserts a new open `ResponsibilityAssignment` row and, for `Shipment`-anchored gates, an automatic `Shipment.status` transition |
+| Complete, immutable audit history | `test_complete_audit_history_recorded_for_full_lifecycle` |
+| Overdue / blocked-work visibility | `apps.workflow.services.is_overdue` (reuses the pre-existing `ServiceLevelTarget` model, no new SLA model needed); inbox "bloqueadas" and "vencidas" views |
+| Dashboard cards link to actionable filtered views, not decorative totals | `templates/core/_dashboard_common.html` links directly to `/flujo/?vista=para_mi` and `&overdue=1` |
+
+Demonstrated live against the actual imported MEDUWY575021 fixture: a
+real `logistics_to_receiving` handoff was created, found genuinely
+blocked (3 unresolved critical `ManifestVariance` rows, 1 critical
+`Discrepancy`, no `ReceivingPlan`), overridden by Harrison with a written
+reason, submitted, and accepted by Manuel — which correctly transitioned
+`Shipment.status` to `released_to_receiving` and transferred
+`ResponsibilityAssignment` to Manuel/Almacén. Full transcript in
+`docs/implementation-log.md`.
 
 ## Explicitly out of scope for this delivery (see `KNOWN_LIMITATIONS.md`)
 

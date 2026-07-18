@@ -353,3 +353,21 @@ working tree.
     clicked the real button on a running dev server and it created a
     handoff correctly evaluated as `ready_for_submission` for an
     approved PO.
+31. **Rate limiting on login and share-link endpoints**, closing the
+    last remaining Priority 0 gap explicitly listed in
+    `KNOWN_LIMITATIONS.md`. Added `apps.core.ratelimit` — a small
+    fixed-window counter on Django's cache framework, no Redis/Celery
+    dependency (per `ASSUMPTIONS.md` A3). `apps.accounts.views.RateLimitedLoginView`
+    (wired into `config/urls.py` in place of the bare
+    `auth_views.LoginView`) blocks further attempts after 10 failed
+    logins/5 minutes per IP; `apps.reports.views.shared_view` returns
+    429 after 30 requests/minute per IP, checked before the token is
+    even looked up. Updated `templates/registration/login.html` to
+    surface the rate-limit message distinctly from the ordinary
+    "usuario o contraseña incorrectos" text. 4 new tests
+    (`tests/test_rate_limiting.py`) — including one that proves even a
+    *correct* password is rejected while blocked, and one confirming a
+    different IP is unaffected — 110/110 passing (106 pre-existing + 4
+    new). Documented honestly in `KNOWN_LIMITATIONS.md`/`SECURITY.md`
+    that the default `LocMemCache` backend enforces this per Gunicorn
+    worker process, not globally across a multi-worker deployment.

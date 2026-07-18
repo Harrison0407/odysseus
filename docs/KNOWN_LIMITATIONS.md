@@ -130,7 +130,18 @@ is silently claimed to be done when it isn't.
 10. **QuickBooks / MarketMatch integration.** Deliberately not built —
     see `QUICKBOOKS_INTEGRATION_DISCOVERY.md` and
     `MARKETMATCH_INTEGRATION_PATH.md` for why and what would be needed.
-11. **Rate limiting** on login/share-link endpoints is not implemented.
+11. ~~Rate limiting on login/share-link endpoints~~ — **Done.**
+    `apps.core.ratelimit` (a small fixed-window counter backed by
+    Django's cache framework, no Redis/Celery dependency per
+    `ASSUMPTIONS.md` A3) gates `RateLimitedLoginView` (10 failed
+    attempts / 5 minutes per IP) and the public `shared_view` share-link
+    endpoint (30 requests / minute per IP, since it's fully
+    unauthenticated). **Known limitation of this implementation:** the
+    default `LocMemCache` backend is per-process, so a multi-worker
+    Gunicorn deployment enforces the limit per worker, not globally
+    across the whole server — acceptable for this pilot's scale (a
+    single small server, ~8 named users), recorded honestly rather than
+    overstated as a hardened, distributed rate limiter.
 12. **CI pipeline** (automated test run on every push) was not requested
     and was not built in this pass; tests are run manually via `pytest`.
 

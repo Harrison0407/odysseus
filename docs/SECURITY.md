@@ -98,12 +98,29 @@
   `docker compose ps` output during production validation (`db` shows no
   host port mapping; only `caddy` does).
 
+## Rate limiting (added in a later session)
+
+- **Login:** `apps.accounts.views.RateLimitedLoginView` blocks further
+  attempts after 10 failed logins from the same IP within 5 minutes —
+  even a correct password is rejected while blocked (verified by
+  `tests/test_rate_limiting.py::test_login_blocked_after_max_failed_attempts`,
+  which explicitly checks this, not just that the generic error
+  repeats). Scoped per IP, not globally — a different IP is unaffected
+  (`test_login_not_blocked_for_a_different_ip`).
+- **Public share links:** `apps.reports.views.shared_view` (fully
+  unauthenticated, reachable by anyone with a token) returns HTTP 429
+  after 30 requests/minute from the same IP, checked *before* the token
+  is even looked up in the database
+  (`test_share_view_rate_limited_after_max_requests`).
+- Backed by `apps.core.ratelimit`, a small fixed-window counter on
+  Django's cache framework — no Redis/Celery dependency added. Known
+  limitation: the default `LocMemCache` backend is per-process, so this
+  enforces the limit per Gunicorn worker, not globally across the whole
+  server — acceptable at this pilot's scale, recorded honestly in
+  `KNOWN_LIMITATIONS.md` rather than overstated.
+
 ## Known gaps (see `KNOWN_LIMITATIONS.md` for the full list)
 
-- Rate limiting on login/share-link endpoints is not yet implemented
-  (spec asks for "rate limiting or reasonable protection" — currently
-  relying on Django's default session/CSRF protections only, no
-  dedicated throttle).
 - No automated dependency vulnerability scan is wired into this delivery
   (no CI pipeline was requested/built in this pass).
 - Backup encryption is documented as an operator responsibility

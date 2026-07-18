@@ -8,11 +8,15 @@ from django.utils import timezone
 
 from apps.audit import services as audit
 from apps.audit.models import AuditEvent
+from apps.core.ratelimit import is_rate_limited, record_attempt
 from apps.core.storage import document_storage
 from apps.documents.models import Document, DocumentType, DocumentVersion
 from apps.shipments.models import ManifestPurpose, ManifestVariance, Shipment
 
 from .models import ReportVersion, SecureShareLink, ShareSnapshot
+
+SHARE_VIEW_MAX_REQUESTS = 30
+SHARE_VIEW_WINDOW_SECONDS = 60
 
 
 def _build_shipment_snapshot_context(shipment):
@@ -86,7 +90,17 @@ def shipment_snapshot(request, pk):
 
 def shared_view(request, token):
     """Public (unauthenticated) read-only view for a revocable share link
-    (spec section 29). Access is logged; expired/revoked links are denied."""
+    (spec section 29). Access is logged; expired/revoked links are
+    denied. Rate limited per IP (spec: "rate limiting or reasonable
+    protection" — see apps.core.ratelimit, docs/KNOWN_LIMITATIONS.md) —
+    this endpoint is fully unauthenticated and reachable by anyone, so
+    it is the highest-value place in the whole app to apply this."""
+    ip = request.META.get("REMOTE_ADDR", "unknown")
+    rate_limit_key = f"share-view:{ip}"
+    if is_rate_limited(rate_limit_key, limit=SHARE_VIEW_MAX_REQUESTS, window_seconds=SHARE_VIEW_WINDOW_SECONDS):
+        return HttpResponse("Demasiadas solicitudes. Intente de nuevo en un minuto.", status=429)
+    record_attempt(rate_limit_key, window_seconds=SHARE_VIEW_WINDOW_SECONDS)
+
     share_link = SecureShareLink.objects.filter(token=token).first()
     if share_link is None:
         return HttpResponseNotFound("Enlace no encontrado.")

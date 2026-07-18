@@ -40462,6 +40462,7 @@ body.theme-frosted .modal {
   flex-direction: column;
   gap: 12px;
   padding: 2px;
+  overflow-y: auto;
 }
 
 .calls-intro,
@@ -40540,9 +40541,55 @@ body.theme-frosted .modal {
 }
 
 .calls-status[data-state="loading"]::before { content: "Working — "; font-weight: 600; }
+.calls-status[data-state="recording"]::before { content: "Microphone active — "; font-weight: 600; }
 .calls-status[data-state="success"] { color: var(--color-success, #58b368); }
 .calls-status[data-state="error"] { color: var(--color-error, #e06c75); }
 .calls-status[data-state="cancelled"] { color: var(--color-blind-orange, #d49a3a); }
+
+.calls-recording-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  margin-top: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--color-error, #e06c75);
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.calls-recording-indicator[hidden] { display: none; }
+
+.calls-recording-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--color-error, #e06c75);
+  animation: calls-recording-pulse 1.2s ease-in-out infinite;
+}
+
+.calls-recording-elapsed {
+  min-width: 4.5ch;
+  font-family: 'Fira Code', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.calls-recording-preview {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+}
+
+.calls-recording-preview[hidden] { display: none; }
+
+@keyframes calls-recording-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.78); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .calls-recording-dot { animation: none; }
+}
 
 .calls-result-header {
   display: flex;

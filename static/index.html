@@ -258,6 +258,28 @@
       <div class="modal-body calls-modal-body">
         <p class="calls-intro">Transcribe one call locally. Audio and results stay in memory for this page only and are not saved.</p>
 
+        <section class="calls-card calls-recording-card" aria-labelledby="calls-recording-heading">
+          <h2 id="calls-recording-heading">Microphone</h2>
+          <p id="calls-recording-requirements" class="calls-requirements">Record in this browser, then review the generated canonical mono 16 kHz PCM WAV before transcription. Microphone access starts only when you choose Start recording.</p>
+          <div id="calls-recording-indicator" class="calls-recording-indicator" role="status" aria-live="polite" hidden>
+            <span class="calls-recording-dot" aria-hidden="true"></span>
+            <span>Recording</span>
+            <span id="calls-recording-elapsed" class="calls-recording-elapsed">00:00</span>
+          </div>
+          <div class="calls-actions calls-recording-actions">
+            <button type="button" id="calls-record-start-btn" class="calls-button calls-button-primary" aria-label="Start microphone recording">Start recording</button>
+            <button type="button" id="calls-record-stop-btn" class="calls-button" aria-label="Stop microphone recording" disabled>Stop recording</button>
+            <button type="button" id="calls-record-cancel-btn" class="calls-button" aria-label="Cancel and discard microphone recording" hidden>Cancel recording</button>
+          </div>
+          <p id="calls-recording-details" class="calls-file-details" hidden></p>
+          <audio id="calls-recording-preview" class="calls-recording-preview" controls preload="metadata" aria-label="Recorded microphone audio preview" hidden></audio>
+          <div class="calls-actions">
+            <button type="button" id="calls-record-submit-btn" class="calls-button calls-button-primary" disabled>Transcribe recorded audio</button>
+            <button type="button" id="calls-record-clear-btn" class="calls-button" disabled>Clear</button>
+          </div>
+          <p id="calls-recording-status" class="calls-status" role="status" aria-live="polite">Start a recording when you are ready.</p>
+        </section>
+
         <section class="calls-card" aria-labelledby="calls-upload-heading">
           <h2 id="calls-upload-heading">Canonical WAV</h2>
           <p id="calls-requirements" class="calls-requirements">Choose a mono 16 kHz signed 16-bit PCM <code>.wav</code> file, up to 20 MiB. This pilot does not convert other audio formats.</p>

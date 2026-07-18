@@ -215,8 +215,349 @@ def test_calls_module_does_not_use_browser_persistence_or_logging():
         "sessionStorage",
         "indexedDB",
         "caches.",
-        "URL.createObjectURL",
         "console.",
         "FormData",
     )
     assert all(token not in SOURCE for token in forbidden)
+    assert "revokeObjectURL" in SOURCE
+    assert "pagehide" in SOURCE
+    assert "beforeunload" in SOURCE
+    assert "MutationObserver" in SOURCE
+
+
+def test_microphone_controls_are_explicit_and_accessible():
+    required = (
+        'id="calls-record-start-btn"',
+        'id="calls-record-stop-btn"',
+        'id="calls-record-cancel-btn"',
+        'id="calls-record-submit-btn"',
+        'id="calls-record-clear-btn"',
+        'id="calls-recording-indicator"',
+        'id="calls-recording-elapsed"',
+        'id="calls-recording-status"',
+        'aria-label="Start microphone recording"',
+        'aria-label="Stop microphone recording"',
+        'aria-live="polite"',
+    )
+    assert all(marker in INDEX for marker in required)
+
+
+def test_canonical_wav_math_header_and_filename():
+    result = _run_node(
+        """
+        import {
+          CALLS_WAV_SAMPLE_RATE, downmixToMono, resamplePcm, float32ToPcm16,
+          encodeCanonicalWav, recordingFilename,
+        } from 'CALLS_MODULE';
+        const mono = downmixToMono([
+          new Float32Array([1, -1, 0.5]),
+          new Float32Array([-1, 1, -0.5]),
+        ]);
+        const resampled = resamplePcm(new Float32Array(48000), 48000);
+        const pcm = float32ToPcm16(new Float32Array([-2, -1, -0.5, 0, 0.5, 1, 2]));
+        const wav = encodeCanonicalWav(new Float32Array([-1, 0, 1]));
+        const view = new DataView(wav.buffer, wav.byteOffset, wav.byteLength);
+        const ascii = (offset, length) => String.fromCharCode(...wav.slice(offset, offset + length));
+        console.log(JSON.stringify({
+          sampleRate: CALLS_WAV_SAMPLE_RATE,
+          mono: Array.from(mono),
+          resampledLength: resampled.length,
+          pcm: Array.from(pcm),
+          header: {
+            riff: ascii(0, 4), wave: ascii(8, 4), fmt: ascii(12, 4), data: ascii(36, 4),
+            riffSize: view.getUint32(4, true), fmtSize: view.getUint32(16, true),
+            format: view.getUint16(20, true), channels: view.getUint16(22, true),
+            rate: view.getUint32(24, true), byteRate: view.getUint32(28, true),
+            alignment: view.getUint16(32, true), bits: view.getUint16(34, true),
+            dataSize: view.getUint32(40, true), total: wav.byteLength,
+          },
+          filename: recordingFilename(new Date('2026-07-18T12:34:56Z')),
+        }));
+        """
+    )
+    assert result["sampleRate"] == 16000
+    assert result["mono"] == [0, 0, 0]
+    assert result["resampledLength"] == 16000
+    assert result["pcm"] == [-32768, -32768, -16384, 0, 16384, 32767, 32767]
+    assert result["header"] == {
+        "riff": "RIFF",
+        "wave": "WAVE",
+        "fmt": "fmt ",
+        "data": "data",
+        "riffSize": 42,
+        "fmtSize": 16,
+        "format": 1,
+        "channels": 1,
+        "rate": 16000,
+        "byteRate": 32000,
+        "alignment": 2,
+        "bits": 16,
+        "dataSize": 6,
+        "total": 50,
+    }
+    assert result["filename"] == "marketmatch-recording-20260718-123456.wav"
+
+
+def test_generated_audio_empty_and_size_limits_fail_safely():
+    result = _run_node(
+        """
+        import {
+          MAX_CALLS_WAV_BYTES, decodeRecordingToCanonicalWav, encodeCanonicalWav,
+          validateGeneratedWavBytes,
+        } from 'CALLS_MODULE';
+        const errors = [];
+        try { encodeCanonicalWav(new Float32Array()); }
+        catch (error) { errors.push({ code: error.code, message: error.message }); }
+        try { validateGeneratedWavBytes({ byteLength: MAX_CALLS_WAV_BYTES + 1 }); }
+        catch (error) { errors.push({ code: error.code, message: error.message }); }
+        try { await decodeRecordingToCanonicalWav(new Blob([]), () => null); }
+        catch (error) { errors.push({ code: error.code, message: error.message }); }
+        try {
+          await decodeRecordingToCanonicalWav(new Blob(['native']), () => ({
+            async decodeAudioData() { throw new Error('PRIVATE_DECODER_DETAIL'); },
+            async close() {},
+          }));
+        } catch (error) { errors.push({ code: error.code, message: error.message }); }
+        console.log(JSON.stringify(errors));
+        """
+    )
+    assert [item["code"] for item in result] == [
+        "RECORDING_EMPTY",
+        "RECORDING_TOO_LARGE",
+        "RECORDING_EMPTY",
+        "RECORDING_FAILED",
+    ]
+    assert "PRIVATE" not in json.dumps(result)
+
+
+def test_recorded_container_is_decoded_downmixed_and_resampled_before_wav_encoding():
+    result = _run_node(
+        """
+        import { decodeRecordingToCanonicalWav } from 'CALLS_MODULE';
+        let closed = 0;
+        const left = new Float32Array(48000).fill(0.5);
+        const right = new Float32Array(48000).fill(-0.5);
+        const context = {
+          async decodeAudioData() {
+            return {
+              sampleRate: 48000, numberOfChannels: 2, length: 48000,
+              getChannelData(index) { return index === 0 ? left : right; },
+            };
+          },
+          async close() { closed += 1; },
+        };
+        const prepared = await decodeRecordingToCanonicalWav(new Blob(['native-container']), () => context);
+        const view = new DataView(prepared.bytes.buffer, prepared.bytes.byteOffset, prepared.bytes.byteLength);
+        console.log(JSON.stringify({
+          duration: prepared.durationMs, bytes: prepared.bytes.byteLength, closed,
+          rate: view.getUint32(24, true), channels: view.getUint16(22, true),
+          firstSample: view.getInt16(44, true), dataSize: view.getUint32(40, true),
+        }));
+        """
+    )
+    assert result == {
+        "duration": 1000,
+        "bytes": 32044,
+        "closed": 1,
+        "rate": 16000,
+        "channels": 1,
+        "firstSample": 0,
+        "dataSize": 32000,
+    }
+
+
+def test_recording_requires_user_action_transitions_and_reuses_raw_wav_request():
+    result = _run_node(
+        """
+        import { createCallsController } from 'CALLS_MODULE';
+        const states = [];
+        const statuses = [];
+        const tracks = [{ stops: 0, stop() { this.stops += 1; } }, { stops: 0, stop() { this.stops += 1; } }];
+        const stream = { getTracks: () => tracks };
+        let permissionRequests = 0;
+        let startTimeslice = null;
+        class Recorder {
+          constructor() { this.state = 'inactive'; this.mimeType = 'audio/native'; }
+          start(timeslice) { this.state = 'recording'; startTimeslice = timeslice; }
+          stop() {
+            this.state = 'inactive';
+            if (this.ondataavailable) this.ondataavailable({ data: new Blob(['native-audio']) });
+            if (this.onstop) this.onstop();
+          }
+        }
+        const view = {
+          clearResult() {}, clearRecording() {}, clearUpload() {}, showSelected() {},
+          showRecording(name, size, duration, url) { states.push(['ready-file', name, size, duration, url]); },
+          setReady(value, source) { states.push(['ready', value, source]); },
+          setBusy(value) { states.push(['busy', value]); },
+          setStatus(message, kind) { statuses.push([kind, message]); },
+          setRecordingStatus(message, kind) { statuses.push([kind, message]); },
+          setRecordingState(value) { states.push(['state', value]); },
+          setRecordingElapsed(value) { states.push(['elapsed', value]); },
+          renderResult(value) { states.push(['result', value.transcript_text]); },
+          reset() {},
+        };
+        let request;
+        const fetchImpl = async (url, options) => {
+          request = { url, options, rawName: options.body.name, form: options.body instanceof FormData };
+          return { ok: true, status: 200, json: async () => ({ duration_ms: 1, segments: [], transcript_text: '' }) };
+        };
+        const controller = createCallsController({
+          view, fetchImpl,
+          mediaDevices: { async getUserMedia() { permissionRequests += 1; return stream; } },
+          MediaRecorderClass: Recorder,
+          decodeRecording: async () => ({ bytes: new Uint8Array(46), durationMs: 1000 }),
+          createWavFile: (bytes, name) => ({ name, size: bytes.byteLength, type: 'audio/wav' }),
+          createObjectURL: () => 'blob:preview', revokeObjectURL() {},
+          setIntervalFn: () => 7, clearIntervalFn() {}, now: () => 1234567890000,
+          isSecureContext: true, copyText: async () => {},
+        });
+        const beforeAction = permissionRequests;
+        const starting = controller.startRecording();
+        const duringPermission = permissionRequests;
+        const duplicate = await controller.startRecording();
+        const started = await starting;
+        const overlapSubmit = await controller.submit();
+        const stopped = await controller.stopRecording();
+        const submitted = await controller.submit();
+        const headers = Object.fromEntries(Object.entries(request.options.headers).map(([k, v]) => [k.toLowerCase(), v]));
+        console.log(JSON.stringify({
+          beforeAction, duringPermission, duplicate, started, overlapSubmit, stopped, submitted,
+          trackStops: tracks.map((track) => track.stops), startTimeslice, states, statuses,
+          request: { url: request.url, method: request.options.method, credentials: request.options.credentials,
+            headers, rawName: request.rawName, form: request.form },
+        }));
+        """
+    )
+    assert result["beforeAction"] == 0
+    assert result["duringPermission"] == 1
+    assert result["duplicate"] is False
+    assert result["started"] is True
+    assert result["overlapSubmit"] is False
+    assert result["stopped"] is True
+    assert result["submitted"] is True
+    assert result["trackStops"] == [1, 1]
+    assert result["startTimeslice"] == 250
+    assert ["state", "permission"] in result["states"]
+    assert ["state", "recording"] in result["states"]
+    assert ["state", "processing"] in result["states"]
+    assert ["state", "ready"] in result["states"]
+    assert result["request"]["url"] == "/api/marketmatch/stt/transcribe"
+    assert result["request"]["method"] == "POST"
+    assert result["request"]["credentials"] == "same-origin"
+    assert result["request"]["headers"] == {"content-type": "audio/wav"}
+    assert result["request"]["rawName"].endswith(".wav")
+    assert result["request"]["form"] is False
+
+
+def test_recording_cancel_clear_panel_close_and_request_overlap_cleanup():
+    result = _run_node(
+        """
+        import { createCallsController } from 'CALLS_MODULE';
+        const stoppedTracks = [];
+        const revoked = [];
+        const clearedTimers = [];
+        const aborts = [];
+        const states = [];
+        let streamNumber = 0;
+        class Recorder {
+          constructor(stream) { this.stream = stream; this.state = 'inactive'; this.mimeType = 'audio/native'; }
+          start() { this.state = 'recording'; }
+          stop() {
+            this.state = 'inactive';
+            if (this.ondataavailable) this.ondataavailable({ data: new Blob(['native']) });
+            if (this.onstop) this.onstop();
+          }
+        }
+        const view = {
+          clearResult() {}, clearRecording() { states.push('cleared-recording'); }, clearUpload() {},
+          showSelected() {}, showRecording() {}, setReady() {}, setBusy() {}, setStatus() {},
+          setRecordingStatus(_message, kind) { states.push(kind); },
+          setRecordingState(value) { states.push(value); }, setRecordingElapsed() {}, renderResult() {}, reset() { states.push('reset'); },
+        };
+        const mediaDevices = { async getUserMedia() {
+          streamNumber += 1;
+          const id = streamNumber;
+          return { getTracks: () => [{ stop() { stoppedTracks.push(id); } }] };
+        } };
+        let pendingReject;
+        const fetchImpl = (_url, options) => new Promise((_resolve, reject) => {
+          pendingReject = reject;
+          options.signal.addEventListener('abort', () => { aborts.push(true); reject(new DOMException('stop', 'AbortError')); });
+        });
+        const controller = createCallsController({
+          view, mediaDevices, MediaRecorderClass: Recorder, fetchImpl,
+          decodeRecording: async () => ({ bytes: new Uint8Array(46), durationMs: 1000 }),
+          createWavFile: (bytes, name) => ({ name, size: bytes.byteLength, type: 'audio/wav' }),
+          createObjectURL: () => 'blob:recording', revokeObjectURL: (url) => revoked.push(url),
+          setIntervalFn: () => 91, clearIntervalFn: (id) => clearedTimers.push(id), now: () => 1,
+          isSecureContext: true, copyText: async () => {},
+        });
+        await controller.startRecording();
+        const cancelled = controller.cancelRecording();
+        await controller.startRecording();
+        const closed = controller.onPanelHidden();
+        await controller.startRecording();
+        await controller.stopRecording();
+        const submitting = controller.submit();
+        const overlapStart = await controller.startRecording();
+        controller.reset();
+        const submitResult = await submitting;
+        await controller.startRecording();
+        controller.reset();
+        await controller.startRecording();
+        controller.destroy();
+        if (pendingReject) pendingReject(new DOMException('stop', 'AbortError'));
+        console.log(JSON.stringify({
+          cancelled, closed, overlapStart, submitResult, stoppedTracks, revoked, clearedTimers, aborts, states,
+          finalState: controller.getRecordingState(),
+        }));
+        """
+    )
+    assert result["cancelled"] is True
+    assert result["closed"] is True
+    assert result["overlapStart"] is False
+    assert result["submitResult"] is False
+    assert result["stoppedTracks"] == [1, 2, 3, 4, 5]
+    assert result["revoked"] == ["blob:recording"]
+    assert result["clearedTimers"] == [91, 91, 91, 91, 91]
+    assert result["aborts"] == [True]
+    assert "cancelled" in result["states"]
+    assert "reset" in result["states"]
+    assert result["finalState"] == "idle"
+
+
+def test_microphone_permission_and_device_errors_are_fixed_and_safe():
+    result = _run_node(
+        """
+        import { createCallsController } from 'CALLS_MODULE';
+        const messages = [];
+        const view = {
+          clearResult() {}, clearRecording() {}, clearUpload() {}, setReady() {}, setRecordingState() {},
+          setRecordingStatus(message, kind) { messages.push([kind, message]); },
+        };
+        const attempt = async (name) => {
+          const controller = createCallsController({
+            view, MediaRecorderClass: class {}, isSecureContext: true,
+            mediaDevices: { async getUserMedia() { throw Object.assign(new Error('PRIVATE_DEVICE_DETAIL'), { name }); } },
+          });
+          return controller.startRecording();
+        };
+        await attempt('NotAllowedError');
+        await attempt('NotFoundError');
+        await attempt('NotReadableError');
+        const unsupported = createCallsController({ view, mediaDevices: null, MediaRecorderClass: null });
+        await unsupported.startRecording();
+        console.log(JSON.stringify(messages));
+        """
+    )
+    assert result == [
+        ["loading", "Waiting for microphone permission…"],
+        ["error", "Microphone permission was denied. Allow access and try again."],
+        ["loading", "Waiting for microphone permission…"],
+        ["error", "No microphone is available."],
+        ["loading", "Waiting for microphone permission…"],
+        ["error", "The microphone could not be started. Check the device and try again."],
+        ["error", "Microphone recording is unavailable in this browser."],
+    ]
+    assert "PRIVATE" not in json.dumps(result)

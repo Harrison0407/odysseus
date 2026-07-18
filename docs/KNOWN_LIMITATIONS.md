@@ -108,11 +108,20 @@ is silently claimed to be done when it isn't.
      exercised an authenticated almacen-role dashboard render before
      now. Fixed and covered by a regression test
      (`tests/test_tool_custody.py::TestAlmacenDashboardRegression`).
-   - Cycle-count screens, storage capacity/suitability warnings,
-     external-storage comparison calculator, supplier claim package
-     generation, QR label printing remain **not yet built**. Data
-     models exist for all of these (`apps.inventory.CycleCount`,
-     `apps.receiving.AlternativeStorageOption`); none has a UI yet —
+   - ~~Cycle-count screens~~ — **Done.** `apps.inventory.services`
+     (`start_cycle_count`/`record_physical_count`/`approve_adjustment`)
+     — a cycle count is seeded from the ledger-derived on-hand quantity
+     per lot (never a stored figure), supports "blind" counting (the
+     system quantity is hidden from the counter in the UI until a
+     physical count is entered), tracks recounts without overwriting
+     the first count's variance history, and posts any approved
+     variance as a real `InventoryMovement`
+     (`MovementType.ADJUSTMENT`) — never a silent stock edit.
+     `/almacen/conteos/` list/create/detail screens. 12 new tests.
+   - Storage capacity/suitability warnings, external-storage comparison
+     calculator, supplier claim package generation, QR label printing
+     remain **not yet built**. Data models exist for all of these
+     (`apps.receiving.AlternativeStorageOption`); none has a UI yet —
      see `docs/implementation-roadmap.md` for which, if any, are
      picked up next.
 7. ~~`purchasing_to_finance`/`finance_to_logistics` have no "create

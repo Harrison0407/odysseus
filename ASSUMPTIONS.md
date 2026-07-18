@@ -139,3 +139,14 @@ instead, exactly as required, and is **not** listed here as a resolved assumptio
   `gross_weight_kg` is), so the `NET_WEIGHT` allocation method currently
   uses gross weight as its basis — recorded here rather than silently
   treated as identical without comment.
+- **A19. `lot_on_hand_quantity` is duplicated once, deliberately.**
+  `apps.inventory.services.lot_on_hand_quantity` and
+  `apps.requests.services.lot_on_hand_quantity` (added in an earlier
+  milestone) compute the identical ledger-derived on-hand quantity for
+  a lot. Rather than having `apps.inventory` (the lower-level, more
+  fundamental app) import a utility from `apps.requests` (a
+  higher-level app built on top of inventory), the small pure function
+  was reimplemented in its more architecturally correct home. A future
+  cleanup pass could extract both into a single shared helper; not done
+  here to avoid touching tested Milestone 3 code for a purely cosmetic
+  gain.

@@ -17,6 +17,11 @@
 | `/recepcion/<id>/linea/<line_id>/registrar/` | `receipt_line_update` (POST) | Posts the receiving line — the only path that creates `InventoryMovement` |
 | `/almacen/ubicaciones/` | `apps.inventory.views.location_list` | On-hand quantity per location, computed live from the movement ledger |
 | `/almacen/lotes/<id>/` | `lot_detail` | Full movement history for one lot |
+| `/almacen/conteos/` | `apps.inventory.views.cycle_count_list` | Cycle counts, scoped to organization |
+| `/almacen/conteos/nuevo/` | `cycle_count_create` | Start a cycle count for a site and set of lots |
+| `/almacen/conteos/<id>/` | `cycle_count_detail` | Per-lot count entry (blind or not), variance, adjustment approval |
+| `/almacen/conteos/<id>/linea/<line_id>/registrar/` (POST) | `cycle_count_record` | Records a physical count (supports recounting) |
+| `/almacen/conteos/<id>/linea/<line_id>/aprobar-ajuste/` (POST) | `cycle_count_approve_adjustment` | Posts an approved variance as a real `InventoryMovement` |
 | `/solicitudes/` | `apps.requests.views.request_list` | Material requests, scoped to the user's accessible projects |
 | `/solicitudes/nueva/` | `request_create` | Create a material request |
 | `/solicitudes/<id>/` | `request_detail` | Requested/approved/reserved/dispatched/delivered quantities; reserve-per-line and dispatch actions; links to generated deliveries |

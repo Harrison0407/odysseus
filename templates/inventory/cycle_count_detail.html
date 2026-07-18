@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Conteo cíclico — {{ cycle_count.site }}</h3>
+<p class="text-muted">
+    Fecha planeada: {{ cycle_count.planned_date|default:"—" }} ·
+    {% if cycle_count.is_blind_count %}<span class="badge bg-info text-dark">Conteo ciego</span>{% endif %}
+    Asignado a: {{ cycle_count.assigned_counter|default:"—" }}
+</p>
+
+{% for entry in lines_with_forms %}
+<div class="card mb-3">
+    <div class="card-header">{{ entry.line.lot.item }} — Lote {{ entry.line.lot.lot_code|default:entry.line.lot.id }}</div>
+    <div class="card-body">
+        <p class="small">
+            {% if cycle_count.is_blind_count and entry.line.physical_quantity == None %}
+                Cantidad de sistema: <em class="text-muted">oculta (conteo ciego)</em>
+            {% else %}
+                Cantidad de sistema: <strong>{{ entry.line.system_quantity }}</strong>
+            {% endif %}
+            {% if entry.line.physical_quantity is not None %}
+                — Cantidad física: <strong>{{ entry.line.physical_quantity }}</strong>
+                — Variación: <strong class="{% if entry.line.variance %}text-danger{% endif %}">{{ entry.line.variance }}</strong>
+                {% if entry.line.recounted %}<span class="badge bg-secondary">Recontado</span>{% endif %}
+            {% endif %}
+        </p>
+
+        {% if entry.line.approved_adjustment %}
+        <p class="text-success small">
+            Ajuste aprobado: {{ entry.line.approved_adjustment.quantity_delta }} —
+            {{ entry.line.approved_adjustment.reason }} ({{ entry.line.approved_adjustment.approved_by }})
+        </p>
+        {% else %}
+            <form method="post" action="{% url 'inventory:cycle-count-record' cycle_count.pk entry.line.pk %}" class="row g-2 mb-2">
+                {% csrf_token %}
+                <div class="col-auto">{{ entry.count_form.physical_quantity }}</div>
+                <div class="col-auto">{{ entry.count_form.explanation }}</div>
+                <div class="col-auto"><button class="btn btn-outline-primary btn-sm" type="submit">Registrar conteo</button></div>
+            </form>
+
+            {% if entry.line.physical_quantity is not None and entry.line.variance %}
+            <form method="post" action="{% url 'inventory:cycle-count-approve-adjustment' cycle_count.pk entry.line.pk %}" class="row g-2">
+                {% csrf_token %}
+                <div class="col-auto">{{ entry.adjustment_form.location }}</div>
+                <div class="col-auto">{{ entry.adjustment_form.reason }}</div>
+                <div class="col-auto"><button class="btn btn-warning btn-sm" type="submit">Aprobar ajuste</button></div>
+            </form>
+            {% endif %}
+        {% endif %}
+    </div>
+</div>
+{% empty %}
+<p class="text-muted">Sin líneas en este conteo.</p>
+{% endfor %}
+
+<a class="btn btn-outline-secondary btn-sm" href="{% url 'inventory:cycle-count-list' %}">Volver a conteos</a>
+{% endblock %}

@@ -119,10 +119,13 @@ fixture through real HTTP requests against a running dev server — see
     `/herramientas/` (ADR-028); also fixed a real pre-existing
     `FieldError` crash in the Almacén dashboard found while building
     this.
+27. ~~Cycle-count UI~~ — **Done.** `apps.inventory.services`/
+    `/almacen/conteos/` — blind counting, recount tracking, approved
+    variances posted as real `InventoryMovement`s (A19).
 
-Remaining, in documented order: cycle-count UI, storage
-capacity/suitability UI, external storage comparison calculator, supplier
-claim package generation, QR label printing.
+Remaining, in documented order: storage capacity/suitability UI,
+external storage comparison calculator, supplier claim package
+generation, QR label printing.
 
 ## Explicitly out of scope for any near-term increment
 

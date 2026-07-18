@@ -460,3 +460,18 @@ documented order.
     "still checked out") and covered by a dedicated regression test. 11
     new tests (`tests/test_tool_custody.py`) — 149/149 passing (138
     pre-existing + 11 new).
+36. **Cycle-count UI.** Built `apps.inventory.services`
+    (`start_cycle_count`/`record_physical_count`/`approve_adjustment`,
+    A19 for the one deliberate small duplication of a ledger helper):
+    a count is seeded from the ledger-derived on-hand quantity per lot
+    (never a stored figure); supports "blind" counting (system quantity
+    hidden from the counter in the UI until they enter a physical
+    count); tracks recounts (`recounted` flag) without overwriting the
+    prior count's variance; posts any approved variance as a real
+    `InventoryMovement` (`MovementType.ADJUSTMENT`) — never a silent
+    stock edit, matching the same ledger discipline as every other
+    inventory-affecting action in the system. `/almacen/conteos/`
+    list/create/detail screens, linked from the main nav. 12 new tests
+    (`tests/test_cycle_count.py`), including an HTTP-level check that
+    the blind-count UI genuinely hides the system quantity until
+    counted — 161/161 passing (149 pre-existing + 12 new).

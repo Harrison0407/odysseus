@@ -561,3 +561,280 @@ def test_microphone_permission_and_device_errors_are_fixed_and_safe():
         ["error", "Microphone recording is unavailable in this browser."],
     ]
     assert "PRIVATE" not in json.dumps(result)
+
+
+def test_library_save_controls_are_explicit_and_unavailable_before_success():
+    required = (
+        'id="calls-save"',
+        'id="calls-save-title"',
+        'id="calls-save-btn"',
+        'id="calls-save-status"',
+        'for="calls-save-title"',
+        'aria-live="polite"',
+        'Save to Library',
+    )
+    assert all(marker in INDEX for marker in required)
+    assert '<div id="calls-save" class="calls-save" hidden>' in INDEX
+    assert 'id="calls-save-btn" class="calls-button calls-button-primary" disabled' in INDEX
+    result = _run_node(
+        """
+        import { createCallsController } from 'CALLS_MODULE';
+        let requests = 0;
+        const controller = createCallsController({
+          view: {},
+          fetchImpl: async () => { requests += 1; return { ok: true, json: async () => ({ id: 'doc' }) }; },
+        });
+        const before = await controller.saveToLibrary('Premature');
+        console.log(JSON.stringify({ before, requests }));
+        """
+    )
+    assert result == {"before": False, "requests": 0}
+
+
+def test_document_save_request_reuses_owner_scoped_json_contract_and_complete_content():
+    result = _run_node(
+        """
+        import {
+          buildCallsDocumentContent, defaultCallsDocumentTitle,
+          requestCallsDocumentSave,
+        } from 'CALLS_MODULE';
+        const transcript = '<b>Complete transcript</b>';
+        const transcription = {
+          duration_ms: 3723456,
+          transcript_text: transcript,
+          segments: [
+            { start_ms: 0, end_ms: 3200, text: '<b>Complete ' },
+            { start_ms: 3200, end_ms: 6543, text: 'transcript</b>' },
+          ],
+        };
+        const createdAt = new Date(2026, 6, 18, 14, 5, 0);
+        let captured;
+        const fetchImpl = async (url, options) => {
+          captured = { url, options, form: options.body instanceof FormData };
+          return { ok: true, status: 200, json: async () => ({ id: 'doc-123', owner: 'PRIVATE_OWNER' }) };
+        };
+        const saved = await requestCallsDocumentSave(
+          { title: '  Calls Persistence Test  ', result: transcription, createdAt },
+          { fetchImpl },
+        );
+        const body = JSON.parse(captured.options.body);
+        const headers = Object.fromEntries(
+          Object.entries(captured.options.headers).map(([key, value]) => [key.toLowerCase(), value]),
+        );
+        console.log(JSON.stringify({
+          saved,
+          defaultTitle: defaultCallsDocumentTitle(createdAt),
+          directContent: buildCallsDocumentContent(transcription, createdAt),
+          silenceContent: buildCallsDocumentContent(
+            { duration_ms: 1000, transcript_text: '', segments: [] }, createdAt,
+          ),
+          request: {
+            url: captured.url,
+            method: captured.options.method,
+            credentials: captured.options.credentials,
+            headers,
+            optionKeys: Object.keys(captured.options).sort(),
+            form: captured.form,
+            body,
+          },
+        }));
+        """
+    )
+    request = result["request"]
+    assert result["saved"] == {"id": "doc-123"}
+    assert result["defaultTitle"] == "Call transcript — 2026-07-18 14:05"
+    assert request["url"] == "/api/document"
+    assert request["method"] == "POST"
+    assert request["credentials"] == "same-origin"
+    assert request["headers"] == {"content-type": "application/json"}
+    assert request["form"] is False
+    assert request["body"]["title"] == "Calls Persistence Test"
+    assert request["body"]["language"] == "markdown"
+    assert set(request["body"]) == {"title", "language", "content"}
+    assert result["directContent"] == request["body"]["content"]
+    content = request["body"]["content"]
+    assert "AI-generated transcript" in content
+    assert "Review before relying" in content
+    assert "Source: MarketMatch Calls" in content
+    assert "Created: 2026-07-18 14:05" in content
+    assert "Duration: 01:02:03.456" in content
+    assert "<b>Complete transcript</b>" in content
+    assert "[00:00.000 – 00:03.200] <b>Complete " in content
+    assert "[00:03.200 – 00:06.543] transcript</b>" in content
+    assert "(No speech was detected.)" in result["silenceContent"]
+    assert "(No speech segments were detected.)" in result["silenceContent"]
+    assert "audio" not in request["body"]
+    assert "owner" not in request["body"]
+    assert "session_id" not in request["body"]
+    assert "Complete transcript" not in request["url"]
+    assert not ({"authorization", "x-api-key", "x-odysseus-internal-token", "x-odysseus-owner"} & request["headers"].keys())
+
+
+def test_save_title_validation_duplicate_prevention_success_and_new_result_reset():
+    result = _run_node(
+        """
+        import { createCallsController } from 'CALLS_MODULE';
+        const events = [];
+        const view = {
+          clearResult() {}, clearSave() { events.push(['clear-save']); }, showSelected() {}, setReady() {},
+          setBusy() {}, setStatus() {}, renderResult() {},
+          showSave(title) { events.push(['show-save', title]); },
+          setSaveBusy(value) { events.push(['save-busy', value]); },
+          setSaved(value) { events.push(['saved', value]); },
+          setSaveStatus(message, kind) { events.push(['save-status', kind, message]); },
+          reset() {},
+        };
+        let transcriptionNumber = 0;
+        let saveRequests = 0;
+        let resolveSave;
+        const fetchImpl = async (url, options) => {
+          if (url === '/api/marketmatch/stt/transcribe') {
+            transcriptionNumber += 1;
+            const text = `Transcript ${transcriptionNumber}`;
+            return { ok: true, status: 200, json: async () => ({
+              duration_ms: 1000,
+              transcript_text: text,
+              segments: [{ start_ms: 0, end_ms: 1000, text }],
+            }) };
+          }
+          saveRequests += 1;
+          return new Promise((resolve) => { resolveSave = () => resolve({ ok: true, status: 200, json: async () => ({ id: `doc-${saveRequests}` }) }); });
+        };
+        const controller = createCallsController({ view, fetchImpl, now: () => new Date(2026, 6, 18, 14, 5).getTime() });
+        controller.selectFile({ name: 'call.wav', size: 46 });
+        await controller.submit();
+        const emptyTitle = await controller.saveToLibrary('   ');
+        const pending = controller.saveToLibrary('  Calls Persistence Test  ');
+        const duplicatePending = await controller.saveToLibrary('Duplicate');
+        resolveSave();
+        const saved = await pending;
+        const duplicateComplete = await controller.saveToLibrary('Duplicate');
+        await controller.submit();
+        const secondPending = controller.saveToLibrary('Second result');
+        resolveSave();
+        const secondSaved = await secondPending;
+        console.log(JSON.stringify({
+          emptyTitle, duplicatePending, saved, duplicateComplete, secondSaved,
+          saveRequests, events,
+        }));
+        """
+    )
+    assert result["emptyTitle"] is False
+    assert result["duplicatePending"] is False
+    assert result["saved"] is True
+    assert result["duplicateComplete"] is False
+    assert result["secondSaved"] is True
+    assert result["saveRequests"] == 2
+    assert any(event[:2] == ["save-status", "error"] and "title" in event[2] for event in result["events"])
+    assert ["saved", True] in result["events"]
+    assert sum(event[0] == "show-save" for event in result["events"]) == 2
+    assert sum(event == ["clear-save"] for event in result["events"]) >= 2
+
+
+def test_save_failure_is_safe_preserves_transcript_and_supports_copy():
+    result = _run_node(
+        """
+        import { createCallsController, requestCallsDocumentSave } from 'CALLS_MODULE';
+        const rendered = [];
+        const saveStatuses = [];
+        let copied = '';
+        const payload = {
+          duration_ms: 1000,
+          transcript_text: 'Keep this transcript',
+          segments: [{ start_ms: 0, end_ms: 1000, text: 'Keep this transcript' }],
+        };
+        let requestNumber = 0;
+        const fetchImpl = async (url) => {
+          requestNumber += 1;
+          if (url.includes('transcribe')) return { ok: true, status: 200, json: async () => payload };
+          return { ok: false, status: 500, json: async () => ({ detail: 'PRIVATE_BACKEND_EXCEPTION' }) };
+        };
+        const view = {
+          clearResult() {}, clearSave() {}, showSelected() {}, setReady() {}, setBusy() {}, setStatus() {},
+          renderResult(value) { rendered.push(value.transcript_text); }, showSave() {}, setSaveBusy() {},
+          setSaveStatus(message, kind) { saveStatuses.push([kind, message]); }, reset() {},
+        };
+        const controller = createCallsController({ view, fetchImpl, copyText: async (text) => { copied = text; } });
+        controller.selectFile({ name: 'call.wav', size: 46 });
+        await controller.submit();
+        const saved = await controller.saveToLibrary('Safe failure');
+        const copiedResult = await controller.copyTranscript();
+        const directErrors = [];
+        for (const response of [
+          { ok: false, status: 401 },
+          { ok: false, status: 403 },
+          { ok: false, status: 413 },
+          { ok: false, status: 422 },
+          { ok: true, status: 200, json: async () => { throw new Error('PRIVATE_HTML'); } },
+        ]) {
+          try {
+            await requestCallsDocumentSave(
+              { title: 'Title', result: payload, createdAt: new Date(0) },
+              { fetchImpl: async () => response },
+            );
+          } catch (error) { directErrors.push([error.code, error.message]); }
+        }
+        console.log(JSON.stringify({ saved, copiedResult, copied, rendered, saveStatuses, directErrors, requestNumber }));
+        """
+    )
+    assert result["saved"] is False
+    assert result["copiedResult"] is True
+    assert result["copied"] == "Keep this transcript"
+    assert result["rendered"] == ["Keep this transcript"]
+    assert result["requestNumber"] == 2
+    assert result["saveStatuses"][-1] == ["error", "The transcript could not be saved. Please try again."]
+    assert [code for code, _ in result["directErrors"]] == [
+        "DOCUMENT_HTTP_401", "DOCUMENT_HTTP_403", "DOCUMENT_HTTP_413",
+        "DOCUMENT_HTTP_422", "DOCUMENT_MALFORMED_RESPONSE",
+    ]
+    assert "PRIVATE" not in json.dumps(result)
+
+
+def test_clear_and_panel_close_abort_pending_save_and_clear_save_state():
+    result = _run_node(
+        """
+        import { createCallsController } from 'CALLS_MODULE';
+        const events = [];
+        let saveAborts = 0;
+        const view = {
+          clearResult() {}, clearSave() { events.push('clear-save'); }, showSelected() {}, setReady() {},
+          setBusy() {}, setStatus() {}, renderResult() {}, showSave() {},
+          setSaveBusy(value) { events.push(['busy', value]); },
+          setSaveStatus(message, kind) { events.push(['status', kind, message]); }, reset() { events.push('reset'); },
+        };
+        const fetchImpl = (url, options) => {
+          if (url.includes('transcribe')) return Promise.resolve({
+            ok: true, status: 200, json: async () => ({
+              duration_ms: 1000, transcript_text: 'Result',
+              segments: [{ start_ms: 0, end_ms: 1000, text: 'Result' }],
+            }),
+          });
+          return new Promise((_resolve, reject) => options.signal.addEventListener('abort', () => {
+            saveAborts += 1;
+            reject(new DOMException('private abort detail', 'AbortError'));
+          }, { once: true }));
+        };
+        const controller = createCallsController({ view, fetchImpl });
+        controller.selectFile({ name: 'call.wav', size: 46 });
+        await controller.submit();
+        const clearing = controller.saveToLibrary('First');
+        controller.reset();
+        const clearedResult = await clearing;
+        controller.selectFile({ name: 'call.wav', size: 46 });
+        await controller.submit();
+        const closing = controller.saveToLibrary('Second');
+        controller.onPanelHidden();
+        const closedResult = await closing;
+        console.log(JSON.stringify({
+          clearedResult, closedResult, saveAborts, events,
+          active: controller.isSaveActive(),
+        }));
+        """
+    )
+    assert result["clearedResult"] is False
+    assert result["closedResult"] is False
+    assert result["saveAborts"] == 2
+    assert result["active"] is False
+    assert "reset" in result["events"]
+    assert "clear-save" in result["events"]
+    assert any(event[:2] == ["status", "cancelled"] for event in result["events"] if isinstance(event, list))

@@ -1,4 +1,5 @@
 const ENDPOINT = '/api/marketmatch/stt/transcribe';
+const DOCUMENT_ENDPOINT = '/api/document';
 export const MAX_CALLS_WAV_BYTES = 20 * 1024 * 1024;
 export const CALLS_WAV_SAMPLE_RATE = 16000;
 const WAV_HEADER_BYTES = 44;
@@ -21,6 +22,15 @@ const STATUS_MESSAGES = Object.freeze({
 
 const GENERIC_FAILURE = 'Transcription could not be completed. Please try again.';
 const RECORDING_FAILURE = 'The recording could not be prepared safely. Please try again.';
+const DOCUMENT_SAVE_FAILURE = 'The transcript could not be saved. Please try again.';
+
+const DOCUMENT_STATUS_MESSAGES = Object.freeze({
+  400: 'Check the document title and try again.',
+  401: 'Your browser session has expired. Sign in again, then retry.',
+  403: 'Your account is not allowed to save documents.',
+  413: 'The transcript is too large to save as a document.',
+  422: 'Check the document title and try again.',
+});
 
 export class CallsUiError extends Error {
   constructor(code, message, status = 0) {
@@ -228,6 +238,52 @@ export function formatCallsTimestamp(milliseconds) {
   return hours ? `${String(hours).padStart(2, '0')}:${core}` : core;
 }
 
+export function formatCallsLocalDateTime(date = new Date()) {
+  const value = date instanceof Date && Number.isFinite(date.getTime()) ? date : new Date(0);
+  return [
+    value.getFullYear(),
+    '-',
+    String(value.getMonth() + 1).padStart(2, '0'),
+    '-',
+    String(value.getDate()).padStart(2, '0'),
+    ' ',
+    String(value.getHours()).padStart(2, '0'),
+    ':',
+    String(value.getMinutes()).padStart(2, '0'),
+  ].join('');
+}
+
+export function defaultCallsDocumentTitle(date = new Date()) {
+  return `Call transcript — ${formatCallsLocalDateTime(date)}`;
+}
+
+export function buildCallsDocumentContent(result, createdAt = new Date()) {
+  const value = _validateSuccessPayload(result);
+  const transcript = value.transcript_text || '(No speech was detected.)';
+  const segments = value.segments.length
+    ? value.segments.map((segment) => (
+      `[${formatCallsTimestamp(segment.start_ms)} – ${formatCallsTimestamp(segment.end_ms)}] ${segment.text}`
+    )).join('\n\n')
+    : '(No speech segments were detected.)';
+  return [
+    '# MarketMatch Calls Transcript',
+    '',
+    '**AI-generated transcript. Review before relying on it for operational decisions.**',
+    '',
+    'Source: MarketMatch Calls',
+    `Created: ${formatCallsLocalDateTime(createdAt)}`,
+    `Duration: ${formatCallsTimestamp(value.duration_ms)}`,
+    '',
+    '## Transcript',
+    '',
+    transcript,
+    '',
+    '## Timestamped segments',
+    '',
+    segments,
+  ].join('\n');
+}
+
 export function fixedCallsError(status) {
   return STATUS_MESSAGES[status] || GENERIC_FAILURE;
 }
@@ -284,6 +340,55 @@ export async function requestCallsTranscription(file, { fetchImpl = globalThis.f
   return _validateSuccessPayload(payload);
 }
 
+export async function requestCallsDocumentSave(
+  { title, result, createdAt },
+  { fetchImpl = globalThis.fetch, signal } = {},
+) {
+  const normalizedTitle = typeof title === 'string' ? title.trim() : '';
+  if (!normalizedTitle) {
+    throw new CallsUiError('DOCUMENT_TITLE_REQUIRED', 'Enter a document title before saving.');
+  }
+  const content = buildCallsDocumentContent(result, createdAt);
+  let response;
+  try {
+    response = await fetchImpl(DOCUMENT_ENDPOINT, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: normalizedTitle,
+        language: 'markdown',
+        content,
+      }),
+      signal,
+    });
+  } catch (error) {
+    if (error && error.name === 'AbortError') {
+      throw new CallsUiError('SAVE_CANCELLED', 'Save cancelled.');
+    }
+    throw new CallsUiError('DOCUMENT_SAVE_FAILED', DOCUMENT_SAVE_FAILURE);
+  }
+  if (!response || response.ok !== true) {
+    const status = response && Number.isInteger(response.status) ? response.status : 0;
+    throw new CallsUiError(
+      `DOCUMENT_HTTP_${status || 'ERROR'}`,
+      DOCUMENT_STATUS_MESSAGES[status] || DOCUMENT_SAVE_FAILURE,
+      status,
+    );
+  }
+  let payload;
+  try {
+    payload = await response.json();
+  } catch (_) {
+    throw new CallsUiError('DOCUMENT_MALFORMED_RESPONSE', DOCUMENT_SAVE_FAILURE);
+  }
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)
+      || typeof payload.id !== 'string' || !payload.id.trim()) {
+    throw new CallsUiError('DOCUMENT_MALFORMED_RESPONSE', DOCUMENT_SAVE_FAILURE);
+  }
+  return { id: payload.id };
+}
+
 export function setElementText(element, value) {
   if (element) element.textContent = String(value ?? '');
 }
@@ -328,6 +433,11 @@ export function createCallsController({
   let timer = null;
   let recordingStartedAt = 0;
   let previewUrl = null;
+  let resultCreatedAt = null;
+  let saveActive = false;
+  let saveController = null;
+  let saveGeneration = 0;
+  let saved = false;
 
   const callView = (method, ...args) => {
     if (view && typeof view[method] === 'function') view[method](...args);
@@ -396,10 +506,22 @@ export function createCallsController({
     callView('setRecordingStatus', recordingError(error).message, 'error');
   }
 
+  function clearSaveState({ clearView = true } = {}) {
+    saveGeneration += 1;
+    if (saveController) saveController.abort();
+    saveController = null;
+    saveActive = false;
+    saved = false;
+    resultCreatedAt = null;
+    callView('setSaveBusy', false);
+    if (clearView) callView('clearSave');
+  }
+
   function selectFile(file) {
-    if (active || ['permission', 'recording', 'processing'].includes(recordingState)) return false;
+    if (active || saveActive || ['permission', 'recording', 'processing'].includes(recordingState)) return false;
     const validation = validateCallsFile(file);
     result = null;
+    clearSaveState();
     view.clearResult();
     discardRecordedSelection();
     setRecordingState('idle');
@@ -420,7 +542,7 @@ export function createCallsController({
   }
 
   async function startRecording() {
-    if (active || ['permission', 'recording', 'processing'].includes(recordingState)) return false;
+    if (active || saveActive || ['permission', 'recording', 'processing'].includes(recordingState)) return false;
     if (!isSecureContext) {
       callView('setRecordingStatus', 'Microphone recording requires HTTPS or localhost.', 'error');
       return false;
@@ -437,6 +559,7 @@ export function createCallsController({
     selectedFile = null;
     selectedSource = null;
     result = null;
+    clearSaveState();
     callView('clearUpload');
     callView('clearResult');
     callView('setReady', false, 'upload');
@@ -564,6 +687,7 @@ export function createCallsController({
     selectedFile = null;
     selectedSource = null;
     result = null;
+    clearSaveState();
     callView('clearResult');
     setRecordingState('idle');
     if (announce) callView('setRecordingStatus', 'Recording cancelled and discarded.', 'cancelled');
@@ -571,13 +695,14 @@ export function createCallsController({
   }
 
   async function submit() {
-    if (active || ['permission', 'recording', 'processing'].includes(recordingState)) return false;
+    if (active || saveActive || ['permission', 'recording', 'processing'].includes(recordingState)) return false;
     const validation = validateCallsFile(selectedFile);
     if (!validation.ok) {
       setTranscriptionStatus(validation.message, 'error');
       return false;
     }
     active = true;
+    clearSaveState();
     const run = ++generation;
     controller = createAbortController();
     view.setBusy(true);
@@ -589,7 +714,9 @@ export function createCallsController({
       });
       if (run !== generation) return false;
       result = next;
+      resultCreatedAt = new Date(now());
       view.renderResult(next);
+      callView('showSave', defaultCallsDocumentTitle(resultCreatedAt));
       setTranscriptionStatus(
         next.segments.length ? 'Transcription complete.' : 'Transcription complete. No speech was detected.',
         'success',
@@ -615,11 +742,50 @@ export function createCallsController({
     return true;
   }
 
+  async function saveToLibrary(title) {
+    if (!result || saveActive || saved || active
+        || ['permission', 'recording', 'processing'].includes(recordingState)) return false;
+    const normalizedTitle = typeof title === 'string' ? title.trim() : '';
+    if (!normalizedTitle) {
+      callView('setSaveStatus', 'Enter a document title before saving.', 'error');
+      return false;
+    }
+    saveActive = true;
+    const run = ++saveGeneration;
+    saveController = createAbortController();
+    callView('setSaveBusy', true);
+    callView('setSaveStatus', 'Saving transcript to Library…', 'loading');
+    try {
+      await requestCallsDocumentSave(
+        { title: normalizedTitle, result, createdAt: resultCreatedAt },
+        { fetchImpl, signal: saveController.signal },
+      );
+      if (run !== saveGeneration) return false;
+      saved = true;
+      callView('setSaved', true);
+      callView('setSaveStatus', 'Saved to Library.', 'success');
+      return true;
+    } catch (error) {
+      if (run !== saveGeneration) return false;
+      const safe = error instanceof CallsUiError
+        ? error : new CallsUiError('DOCUMENT_SAVE_FAILED', DOCUMENT_SAVE_FAILURE);
+      callView('setSaveStatus', safe.message, safe.code === 'SAVE_CANCELLED' ? 'cancelled' : 'error');
+      return false;
+    } finally {
+      if (run === saveGeneration) {
+        saveActive = false;
+        saveController = null;
+        callView('setSaveBusy', false);
+      }
+    }
+  }
+
   function reset() {
     generation += 1;
     if (controller) controller.abort();
     controller = null;
     active = false;
+    clearSaveState();
     recordingGeneration += 1;
     discardCapture();
     discardRecordedSelection();
@@ -633,6 +799,10 @@ export function createCallsController({
 
   function onPanelHidden() {
     if (active) cancel();
+    if (saveActive) {
+      clearSaveState({ clearView: false });
+      callView('setSaveStatus', 'Save cancelled when Calls was closed.', 'cancelled');
+    }
     if (cancelRecording({ announce: false })) {
       callView('setRecordingStatus', 'Recording stopped and discarded when Calls was hidden.', 'cancelled');
     }
@@ -644,12 +814,14 @@ export function createCallsController({
     if (controller) controller.abort();
     controller = null;
     active = false;
+    clearSaveState({ clearView: false });
     recordingGeneration += 1;
     discardCapture();
     revokePreview();
     selectedFile = null;
     selectedSource = null;
     result = null;
+    resultCreatedAt = null;
     recordingState = 'idle';
     return true;
   }
@@ -672,12 +844,14 @@ export function createCallsController({
     cancel,
     reset,
     copyTranscript,
+    saveToLibrary,
     startRecording,
     stopRecording,
     cancelRecording,
     onPanelHidden,
     destroy,
     isActive: () => active,
+    isSaveActive: () => saveActive,
     getRecordingState: () => recordingState,
   };
 }
@@ -698,6 +872,10 @@ function _domView(doc) {
   const segmentsWrap = byId('calls-segments-wrap');
   const segmentsList = byId('calls-segments');
   const copy = byId('calls-copy-btn');
+  const saveSection = byId('calls-save');
+  const saveTitle = byId('calls-save-title');
+  const saveButton = byId('calls-save-btn');
+  const saveStatus = byId('calls-save-status');
   const recordStart = byId('calls-record-start-btn');
   const recordStop = byId('calls-record-stop-btn');
   const recordCancel = byId('calls-record-cancel-btn');
@@ -712,10 +890,13 @@ function _domView(doc) {
   let uploadReady = false;
   let recordingReady = false;
   let recordingUiState = 'idle';
+  let saveBusy = false;
+  let saveReady = false;
+  let saveComplete = false;
 
   const captureBusy = () => ['permission', 'recording', 'processing'].includes(recordingUiState);
   const syncControls = () => {
-    const operationBusy = transcriptionBusy || captureBusy();
+    const operationBusy = transcriptionBusy || saveBusy || captureBusy();
     fileInput.disabled = operationBusy;
     submit.disabled = operationBusy || !uploadReady;
     reset.disabled = !uploadReady;
@@ -724,6 +905,20 @@ function _domView(doc) {
     recordCancel.hidden = !captureBusy();
     recordSubmit.disabled = operationBusy || !recordingReady;
     recordClear.disabled = !(recordingReady || captureBusy() || (transcriptionBusy && recordingReady));
+    saveTitle.disabled = saveBusy || saveComplete;
+    saveButton.disabled = operationBusy || !saveReady || saveComplete;
+  };
+
+  const clearSave = () => {
+    saveBusy = false;
+    saveReady = false;
+    saveComplete = false;
+    saveSection.hidden = true;
+    saveTitle.value = '';
+    saveButton.textContent = 'Save to Library';
+    setElementText(saveStatus, '');
+    saveStatus.dataset.state = 'idle';
+    syncControls();
   };
 
   const clearResult = () => {
@@ -733,6 +928,7 @@ function _domView(doc) {
     segmentsList.replaceChildren();
     segmentsWrap.hidden = true;
     empty.hidden = true;
+    clearSave();
   };
 
   return {
@@ -782,6 +978,32 @@ function _domView(doc) {
         segmentsList.appendChild(item);
       }
       segmentsWrap.hidden = value.segments.length === 0;
+    },
+    showSave(title) {
+      saveReady = true;
+      saveComplete = false;
+      saveSection.hidden = false;
+      saveTitle.disabled = false;
+      saveTitle.value = title;
+      setElementText(saveStatus, 'Review the title, then save explicitly when ready.');
+      saveStatus.dataset.state = 'idle';
+      syncControls();
+    },
+    clearSave,
+    setSaveBusy(busy) {
+      saveBusy = busy;
+      saveButton.textContent = busy ? 'Saving…' : 'Save to Library';
+      syncControls();
+    },
+    setSaved(value) {
+      saveComplete = value;
+      syncControls();
+    },
+    setSaveStatus(message, kind) {
+      setElementText(saveStatus, message);
+      saveStatus.dataset.state = kind;
+      saveStatus.setAttribute('role', kind === 'error' ? 'alert' : 'status');
+      saveStatus.setAttribute('aria-live', kind === 'error' ? 'assertive' : 'polite');
     },
     clearUpload() {
       fileInput.value = '';
@@ -870,6 +1092,7 @@ export function init(doc = globalThis.document) {
   const controller = createCallsController({ view, copyText: _copyText });
   const fileInput = doc.getElementById('calls-file-input');
   const recordStart = doc.getElementById('calls-record-start-btn');
+  const saveTitle = doc.getElementById('calls-save-title');
   const show = () => {
     modal.classList.remove('hidden');
     modal.setAttribute('aria-hidden', 'false');
@@ -905,6 +1128,7 @@ export function init(doc = globalThis.document) {
     fileInput.focus();
   });
   doc.getElementById('calls-copy-btn').addEventListener('click', () => controller.copyTranscript());
+  doc.getElementById('calls-save-btn').addEventListener('click', () => controller.saveToLibrary(saveTitle.value));
   modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
   doc.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !modal.classList.contains('hidden')) close();

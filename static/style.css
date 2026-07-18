@@ -40646,6 +40646,38 @@ body.theme-frosted .modal {
 
 .calls-segment-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; }
 
+.calls-save {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.calls-save-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.calls-save-title {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.calls-save-title:focus-visible {
+  outline: 2px solid var(--accent, var(--red));
+  outline-offset: 2px;
+}
+
+.calls-save-title:disabled { opacity: 0.7; }
+
 @media (max-width: 768px) {
   .calls-modal-content { width: 100%; max-height: 94dvh; border-radius: 12px 12px 0 0; }
   .calls-card { padding: 12px; }

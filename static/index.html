@@ -256,7 +256,7 @@
         <button type="button" class="close-btn" id="calls-close-btn" aria-label="Close Calls">✖</button>
       </div>
       <div class="modal-body calls-modal-body">
-        <p class="calls-intro">Transcribe one call locally. Audio and results stay in memory for this page only and are not saved.</p>
+        <p class="calls-intro">Transcribe one call locally. Audio stays in memory only; a transcript is saved to Library only when you explicitly choose to save it.</p>
 
         <section class="calls-card calls-recording-card" aria-labelledby="calls-recording-heading">
           <h2 id="calls-recording-heading">Microphone</h2>
@@ -307,6 +307,16 @@
           <div id="calls-segments-wrap" class="calls-segments-wrap" hidden>
             <h3>Segments</h3>
             <ol id="calls-segments" class="calls-segments"></ol>
+          </div>
+          <div id="calls-save" class="calls-save" hidden>
+            <h3>Save transcript</h3>
+            <p class="calls-requirements">Saving is optional. The transcript will be stored as an AI-generated document in your existing Library; audio is not saved.</p>
+            <label class="calls-save-label" for="calls-save-title">Document title</label>
+            <input id="calls-save-title" class="calls-save-title" type="text" autocomplete="off" aria-describedby="calls-save-status" disabled>
+            <div class="calls-actions">
+              <button type="button" id="calls-save-btn" class="calls-button calls-button-primary" disabled>Save to Library</button>
+            </div>
+            <p id="calls-save-status" class="calls-status" role="status" aria-live="polite"></p>
           </div>
         </section>
       </div>

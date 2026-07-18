@@ -44,8 +44,12 @@
 | `/solicitudes/inspecciones/<id>/firma-tecnica/` (POST) | `inspection_sign_off` | Records technical sign-off |
 | `/solicitudes/inspecciones/<id>/evidencia/` (POST) | `inspection_add_evidence` | Uploads a file as evidence |
 | `/solicitudes/aceptaciones/` | `acceptance_list` | Final acceptance history, scoped to accessible projects |
-| `/costos/` | `apps.cost.views.landed_cost_list` | Landed cost versions (provisional vs. final) |
-| `/costos/<id>/` | `landed_cost_detail` | Per-line cost breakdown |
+| `/costos/` | `apps.cost.views.landed_cost_list` | Landed cost versions (provisional vs. final), scoped to accessible organization |
+| `/costos/<id>/` | `landed_cost_detail` | Per-line cost breakdown, "finalizar" action |
+| `/costos/<id>/finalizar/` (POST) | `landed_cost_finalize` | Marks a landed-cost version final, once |
+| `/costos/embarque/<shipment_id>/` | `shipment_cost_dashboard` | Cost documents/charges, allocation runs, "ejecutar asignación" and "calcular nueva versión" actions — linked from the shipment detail page |
+| `/costos/embarque/<shipment_id>/asignar/` (POST) | `shipment_run_allocation` | Runs a cost allocation across the shipment's internal manifest lines |
+| `/costos/embarque/<shipment_id>/calcular/` (POST) | `shipment_calculate_version` | Calculates a new, immutable landed-cost version |
 | `/flujo/` | `apps.workflow.views.inbox` | **Role-aware handoff inbox** — tabs: para mí / enviadas por mí / devueltas / bloqueadas / completadas / todas; filterable by gate, status, overdue |
 | `/flujo/<id>/` | `handoff_detail` | Live gate readiness (why blocked/ready), evidence, comments, decision history, action buttons |
 | `/flujo/<id>/enviar/` (POST) | `handoff_submit` | Submit — blocked if the gate is not ready |

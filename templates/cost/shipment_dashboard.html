@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Costo de importación — {{ shipment.reference }}</h3>
+
+<div class="card mb-3">
+    <div class="card-header">Documentos y cargos de costo</div>
+    <div class="table-responsive">
+    <table class="table table-sm bg-white mb-0">
+        <thead><tr><th>Tipo</th><th>Monto</th><th>Cargos</th></tr></thead>
+        <tbody>
+        {% for doc in cost_documents %}
+            <tr>
+                <td>{{ doc.get_cost_type_display }}</td>
+                <td>{{ doc.amount }} {{ doc.currency }}</td>
+                <td>
+                    {% for charge in doc.charges.all %}
+                        {{ charge.description }}: {{ charge.amount }}<br>
+                    {% empty %}—{% endfor %}
+                </td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="3" class="text-muted">Sin documentos de costo registrados para este embarque.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Ejecutar asignación de costo</div>
+    <div class="card-body">
+        {% if allocation_form.fields.cost_charge.queryset.exists %}
+        <form method="post" action="{% url 'cost:shipment-run-allocation' shipment.pk %}">
+            {% csrf_token %}
+            {{ allocation_form.as_p }}
+            <button class="btn btn-primary btn-sm" type="submit">Ejecutar asignación</button>
+        </form>
+        <p class="small text-muted mt-2">
+            Los métodos manuales (porcentaje/monto manual por línea) están soportados en la capa de servicio
+            (<code>apps.cost.services.run_allocation</code>) pero aún no tienen un formulario de entrada por línea en esta pantalla.
+        </p>
+        {% else %}
+        <p class="text-muted">Sin cargos de costo registrados todavía para este embarque — regístrelos primero (documento + cargo) antes de ejecutar una asignación.</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Asignaciones ejecutadas</div>
+    <div class="table-responsive">
+    <table class="table table-sm bg-white mb-0">
+        <thead><tr><th>Cargo</th><th>Método</th><th>Total asignado</th><th>Ejecutado por</th><th>Fecha</th></tr></thead>
+        <tbody>
+        {% for run in allocation_runs %}
+            <tr>
+                <td>{{ run.cost_charge }}</td>
+                <td>{{ run.get_method_display }}</td>
+                <td>{{ run.total_allocated|default:"—" }}</td>
+                <td>{{ run.run_by|default:"—" }}</td>
+                <td>{{ run.run_at|date:"d/m/Y H:i" }}</td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="5" class="text-muted">Sin asignaciones ejecutadas todavía.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Versiones de costo de importación</div>
+    <div class="card-body">
+        <ul class="list-group list-group-flush mb-3">
+            {% for v in versions %}
+            <li class="list-group-item d-flex justify-content-between">
+                <a href="{% url 'cost:detail' v.pk %}">v{{ v.version_number }}</a>
+                {% if v.is_final %}<span class="badge bg-success">Final</span>{% else %}<span class="badge bg-warning text-dark">Provisional</span>{% endif %}
+            </li>
+            {% empty %}
+            <li class="list-group-item text-muted">Sin versiones calculadas todavía.</li>
+            {% endfor %}
+        </ul>
+        <form method="post" action="{% url 'cost:shipment-calculate-version' shipment.pk %}">
+            {% csrf_token %}
+            <button class="btn btn-primary btn-sm" type="submit">Calcular nueva versión de costo de importación</button>
+        </form>
+    </div>
+</div>
+
+<a class="btn btn-outline-secondary btn-sm" href="{% url 'shipments:detail' shipment.pk %}">Volver al embarque</a>
+{% endblock %}

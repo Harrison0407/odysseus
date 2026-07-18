@@ -147,9 +147,15 @@ independently tested with a simulated double-submit in this session —
 
 ## 16. Landed-cost reconciliation and rounding
 
-Modeled (`LandedCostVersion`/`LandedCostLine`); no allocation-run test
-was written in this session since the allocation-run UI itself is not
-yet built (`docs/KNOWN_LIMITATIONS.md` item 5) — **not yet exercised**.
+**Update (later session):** the allocation/calculation engine
+(`apps.cost.services`) was built from scratch — it did not exist before
+— and is now fully exercised: 14 automated tests, plus a live run
+against the real imported MEDUWY575021 fixture's actual USD 6,900
+ocean-freight charge, allocated by CBM across its 11 real manifest
+lines, calculated into a real `LandedCostVersion`, and finalized. The
+rounding invariant (allocated amounts always sum exactly to the original
+charge — the last line absorbs any remainder) is directly asserted by
+test.
 
 ## 17. CONFOTUR duplicate prevention
 

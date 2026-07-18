@@ -2,6 +2,26 @@
 
 Newest first.
 
+## ADR-026 — Landed-cost allocation: last-line-absorbs-rounding, never-fabricate-a-conversion-rate
+**Decision:** `apps.cost.services.run_allocation` computes every
+allocated amount by proportional share except the *last* eligible line,
+which instead gets `total_charge - sum_so_far` — guaranteeing the sum of
+allocated amounts always exactly equals the original charge, with no
+floating-point/rounding leftover silently dropped or invented.
+`_convert_to_base_currency` returns `None` (not the original amount
+treated as if already converted) when no `ExchangeRate` row exists for
+a currency pair, and `calculate_landed_cost` propagates that `None`
+through to `final_landed_cost_per_unit`/`total_landed_value` rather
+than fabricating a number.
+**Why:** Both are direct applications of core principle 4.3 (never
+silently confirm/assume) to a domain (money) where a silent rounding
+error or an invented exchange rate would be a real, hard-to-detect
+financial-accuracy bug. Every other data-quality gap in this project is
+handled the same way — recorded as `None`/unknown rather than guessed
+(see `DATA_QUALITY_AND_UNCERTAINTY.md`) — and this extends that
+convention to the landed-cost engine, the one place in the system that
+touches real money math.
+
 ## ADR-025 — Detailed receiving manifest reuses the snapshot/document persistence path, not a new report mechanism
 **Decision:** `apps.reports.views._save_html_snapshot` was factored out
 of `shipment_snapshot` (previously inlined there) and is now called by

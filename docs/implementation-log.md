@@ -392,3 +392,28 @@ working tree.
     rendered with the fixture's real 11 internal manifest lines and 11
     variances, and that a real `ReportVersion`/`Document` with a genuine
     SHA-256 was persisted.
+33. **Landed-cost allocation-run trigger UI — and the calculation engine
+    itself**, closing the last Priority 0 gap. Discovered that
+    `apps.cost` had no `services.py` at all before this session — the
+    calculation logic did not exist anywhere, only the
+    `CostAllocationRun`/`CostAllocationLine`/`LandedCostVersion`/
+    `LandedCostLine` data model did. Built `apps.cost.services`:
+    `run_allocation` (quantity/product-value/gross-weight/net-weight/
+    CBM/package/container/manual-percentage/manual-amount, last line
+    absorbs rounding so allocated amounts always sum exactly to the
+    charge), `calculate_landed_cost` (aggregates every allocation into
+    per-unit freight/local/other buckets, traces original unit price
+    through `ManifestLineSource → PurchaseOrderLine`, converts to base
+    currency via `ExchangeRate` only when one is on file — `None`,
+    never a fabricated rate, otherwise), `finalize_landed_cost` (ADR-026
+    for both design decisions). Built `/costos/embarque/<id>/` (linked
+    from the shipment detail page) with "ejecutar asignación"/"calcular
+    nueva versión" actions, and a "finalizar" action on the version
+    detail page; added missing organization-scoping to the two
+    pre-existing `cost` views while in the same file. 14 new tests
+    (`tests/test_cost_allocation.py`) — 128/128 passing (114
+    pre-existing + 14 new). Verified live against the real imported
+    MEDUWY575021 fixture: allocated its actual USD 6,900 ocean-freight
+    charge by CBM across its 11 real manifest lines through the actual
+    UI buttons, calculated a real `LandedCostVersion` with genuine
+    per-unit freight costs, and finalized it.

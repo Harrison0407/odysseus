@@ -52,9 +52,35 @@ is silently claimed to be done when it isn't.
    accept, all through the same reused `apps.workflow.gates`/
    `apps.workflow.services` engine — see the dedicated section in
    `REQUIREMENTS_TRACEABILITY.md`.
-5. **Landed-cost allocation-run trigger UI.** The calculation models
-   (`CostAllocationRun`, `LandedCostVersion`) exist; running an allocation
-   currently requires the ORM/a script, not a button.
+5. ~~Landed-cost allocation-run trigger UI~~ — **Done, and more than a
+   trigger.** The calculation engine itself did not exist anywhere in the
+   codebase before this session (only the `CostAllocationRun`/
+   `CostAllocationLine`/`LandedCostVersion`/`LandedCostLine` data model
+   did) — `apps.cost.services` now implements it:
+   `run_allocation` splits a `CostCharge` across a shipment's internal
+   manifest lines by quantity/product-value/gross-weight/net-weight/
+   CBM/package/container, or manual percentage/amount (the last line
+   always absorbs any rounding remainder, so allocated amounts sum
+   exactly to the original charge); `calculate_landed_cost` aggregates
+   every allocation into per-unit freight/local/other cost buckets plus
+   each line's own unit price (traced through
+   `ManifestLineSource → PurchaseOrderLine`, converted to the
+   organization's base currency via `ExchangeRate` when one is on file
+   — never silently assumed 1:1), creating a new, immutable
+   `LandedCostVersion` every time; `finalize_landed_cost` marks a
+   version final, once. `/costos/embarque/<id>/` (linked from the
+   shipment detail page) exposes "ejecutar asignación" and "calcular
+   nueva versión" buttons; `/costos/<id>/finalizar/` finalizes. 14 new
+   tests, and verified live against the real imported MEDUWY575021
+   fixture's actual USD 6,900 ocean-freight charge, allocated by CBM
+   across its 11 real manifest lines, calculated, and finalized.
+   **Known simplification** (see `ASSUMPTIONS.md` A18): the UI currently
+   only exposes the automatic (basis-driven) allocation methods, not a
+   per-line entry form for the manual-percentage/manual-amount methods
+   — those are fully implemented and tested at the service layer.
+   Uploading `CostDocument`/`CostCharge` records themselves still has no
+   dedicated UI (out of scope for this gap, which was specifically
+   about *running* an allocation, not creating the charges to allocate).
 6. **Priority 1 UI entirely:** CONFOTUR reconciliation screens, tool
    custody screens, cycle-count screens, storage capacity/suitability
    warnings, external-storage comparison calculator, supplier claim

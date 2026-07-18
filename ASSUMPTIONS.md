@@ -125,3 +125,17 @@ instead, exactly as required, and is **not** listed here as a resolved assumptio
   this pilot's scale (a single small server, ~8 named users); a real
   multi-worker rollout wanting a global limit would need a shared cache
   backend (e.g. Redis) — deliberately not added here per A3.
+- **A18. Landed-cost bucket mapping and net-weight basis are
+  conservative simplifications.** `CostDocument.CostType` has 11 values
+  (freight, insurance, customs duties, port/terminal, brokerage, local
+  transport, handling, storage, demurrage, inspection, other) but
+  `LandedCostLine` only has 3 per-unit buckets (freight/local/other).
+  `apps.cost.services` maps FREIGHT to the freight bucket; customs
+  duties/port/brokerage/local transport/handling/storage/demurrage to
+  the local bucket; insurance/inspection/other to the other bucket —
+  a defensible grouping, not a spec-mandated one, since no single
+  correct mapping is stated anywhere available to this session. Net
+  weight is not separately modeled on `ManifestLine` (only
+  `gross_weight_kg` is), so the `NET_WEIGHT` allocation method currently
+  uses gross weight as its basis — recorded here rather than silently
+  treated as identical without comment.

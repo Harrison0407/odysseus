@@ -78,12 +78,37 @@
     `docs/architecture-decisions.md` ADR-018/ADR-021 and
     `docs/KNOWN_LIMITATIONS.md`.
 
-## Next increment (Priority 0 completion)
+## Delivered in this pass (Priority 0 completion — continuing autonomous session)
 
-- Detailed internal receiving manifest print view matching the exact 10-section layout in spec 13A.8 (today the data is all present on the shipment detail page, but not in that specific document layout).
-- Landed-cost allocation-run trigger UI (`apps.cost`) — models complete, calculation must currently be run via the ORM/a management command.
+17. Evidence/photo upload (`apps.audit.services.attach_evidence`), wired
+    into the Delivery/InstallationRecord/InspectionRecord detail pages.
+18. Multi-lot/split dispatch UI, with a real concurrency/correctness
+    bug found and fixed live (`DispatchLine.reservation`, ADR-023).
+19. Department/project-scoped installer assignment
+    (`apps.requests.views._assignable_users`, ADR-024).
+20. Structural mobile-responsive audit — 19 pre-existing tables across
+    9 templates wrapped in a horizontally-scrolling container.
+21. `purchasing_to_finance`/`finance_to_logistics` create-handoff
+    buttons on the Purchase Order detail page — all 8 required gates
+    now have one.
+22. Rate limiting on login (10 attempts/5 min per IP) and the public
+    share-link view (30 requests/min per IP) — `apps.core.ratelimit`.
+23. Detailed internal receiving manifest print view (spec 13A.8,
+    10 sections) — `apps.reports.views.receiving_manifest_snapshot`.
+24. Landed-cost allocation-run trigger UI — and the calculation engine
+    itself, which did not exist anywhere before this pass
+    (`apps.cost.services`, ADR-026).
+
+Every item above was verified by automated tests and, where the
+underlying data supports it, against the actual imported MEDUWY575021
+fixture through real HTTP requests against a running dev server — see
+`docs/implementation-log.md` for the full account of each.
+
+## Next increment
+
 - A literal "cannot advance" UI message tied directly to gate-blocked transitions outside the handoff detail page itself (today the handoff detail page IS that message; a shipment/request detail page doesn't yet independently repeat it).
-- Multi-lot split dispatch UI, evidence/photo upload on the new delivery/installation/inspection screens, and department-scoped installer/inspector assignment dropdowns (see `KNOWN_LIMITATIONS.md`).
+- A per-line entry UI for the manual-percentage/manual-amount landed-cost allocation methods (fully implemented and tested at the service layer; only the automatic/basis-driven methods have a form today).
+- A `CostDocument`/`CostCharge` upload UI (currently created via the ORM/fixture — this pass added the calculation engine and its trigger UI, not a document-upload flow, which is a distinct, larger feature).
 
 ## Priority 1 (deferred, tracked in `KNOWN_LIMITATIONS.md`)
 

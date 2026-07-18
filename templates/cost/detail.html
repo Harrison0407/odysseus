@@ -20,4 +20,13 @@
     </tbody>
 </table>
 </div>
+
+{% if not version.is_final %}
+<form method="post" action="{% url 'cost:finalize' version.pk %}" class="mb-3">
+    {% csrf_token %}
+    <button class="btn btn-success btn-sm" type="submit">Finalizar esta versión</button>
+</form>
+{% endif %}
+
+<a class="btn btn-outline-secondary btn-sm" href="{% url 'cost:shipment-dashboard' version.shipment.pk %}">Ver panel de costo del embarque</a>
 {% endblock %}

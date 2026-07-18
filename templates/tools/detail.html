@@ -5,6 +5,7 @@
     Marca: {{ tool.brand|default:"—" }} · Serie: {{ tool.serial_number|default:"—" }} ·
     Condición: {{ tool.condition|default:"—" }} · Ubicación: {{ tool.current_location|default:"—" }}
 </p>
+<a class="btn btn-outline-secondary btn-sm mb-2" href="{% url 'labels:print' 'tools' 'tool' tool.pk %}">Imprimir etiqueta QR</a>
 
 {% if current_checkout %}
 <div class="card mb-3 border-warning">

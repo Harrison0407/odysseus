@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <h3>Instalación — {{ installation.project_receipt.delivery.dispatch.pick_list.request.project }}</h3>
+<a class="btn btn-outline-secondary btn-sm mb-2" href="{% url 'labels:print' 'requests' 'installationrecord' installation.pk %}">Imprimir etiqueta QR</a>
 <p>
     Artículo: {{ installation.delivery_line.dispatch_line.request_line.item|default:"—" }}
     — Entregado (válido): {{ installation.delivery_line.quantity_accepted|default:"—" }}

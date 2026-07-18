@@ -222,8 +222,42 @@ is silently claimed to be done when it isn't.
      the main nav. No email is ever sent automatically — "submitted"
      only records that a human sent the package by some other channel.
      21 new tests (`tests/test_supplier_claims.py`).
-   - QR label printing remains **not yet built**. See
-     `docs/implementation-roadmap.md` for build order.
+   - ~~QR label printing and controlled scanning~~ — **Done.** New
+     `apps.labels` app: `QRLabel` (opaque, unguessable `token` — same
+     `secrets.token_urlsafe` pattern as `SecureShareLink`, never the
+     underlying object's real UUID), `QRLabelPrintEvent` (reprint
+     history), `QRScanEvent` (scan audit history, including denied
+     cross-organization attempts). Supports inventory lots, warehouse
+     locations, receiving units (`Receipt`), dispatches, deliveries,
+     installation material records, tools, and containers — all 8
+     entity types named in the spec, registered in one small table
+     (`apps.labels.services._ENTITY_REGISTRY`) rather than 8 separate
+     bespoke implementations (ADR-032). The QR image itself is a
+     self-contained base64 PNG data URI (via the `qrcode` package,
+     added to `requirements.txt`) encoding only the opaque scan URL —
+     never the object's ID, never any secret or PII. A scan
+     (`/qr/<token>/`) is `login_required`, so an unauthenticated scan
+     is sent to log in *before* anything about the label is resolved;
+     once authenticated, the view re-checks organization membership
+     and then simply redirects into the entity's own existing,
+     already-permission-checked detail page — the scan itself performs
+     no consequential action and introduces no parallel authorization
+     path. Individual print (with a "cantidad" field, logged as a
+     `QRLabelPrintEvent` on each explicit print action, never on a
+     bare page view) and batch print (checkbox selection, demonstrated
+     on the location detail screen's assigned-inventory table) are
+     both supported; an invalidated label is never deleted, only
+     flagged and linked to its replacement (`replaced_by`), and a scan
+     of an invalidated label is denied. Print-link UI coverage: 7 of
+     the 8 entity types have a visible "Imprimir etiqueta QR" link on
+     their existing detail page (lot, location, tool, receipt,
+     container, delivery, installation); `Dispatch` has no own detail
+     page in this system (it's summarized inline on the parent
+     Material Request's page, not shown as an individually browsable
+     row) — its labels are fully supported and tested via the generic
+     `labels:print` URL/service layer, just not yet linked from a
+     template, since there's no natural per-dispatch row to attach the
+     link to today. 22 new tests (`tests/test_qr_labels.py`).
 7. ~~`purchasing_to_finance`/`finance_to_logistics` have no "create
    handoff" button" on the Purchase Order detail page~~ — **Done.** All
    8 required gates now have a "create handoff" entry point on their

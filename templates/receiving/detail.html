@@ -9,6 +9,9 @@
 <a class="btn btn-outline-secondary btn-sm mb-3" href="{% url 'reports:receiving-manifest-snapshot' receipt.pk %}">
     Descargar manifiesto detallado de recepción (HTML)
 </a>
+<a class="btn btn-outline-secondary btn-sm mb-3" href="{% url 'labels:print' 'receiving' 'receipt' receipt.pk %}">
+    Imprimir etiqueta QR
+</a>
 
 {% for line, form in lines_with_forms %}
 <div class="card mb-2">

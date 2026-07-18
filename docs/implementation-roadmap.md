@@ -140,8 +140,15 @@ fixture through real HTTP requests against a running dev server — see
     `apps.claims.services`, evidence via the existing
     `attach_evidence` mechanism, printable claim package via the
     existing `_save_html_snapshot` mechanism; `/reclamos/` screens.
+31. ~~QR labels and controlled scanning~~ — **Done.** New
+    `apps.labels` app: `QRLabel`/`QRLabelPrintEvent`/`QRScanEvent`
+    (ADR-032), one entity registry covering all 8 required entity
+    types, opaque-token scan payloads, `login_required` scan landing
+    forwarding into each entity's existing detail page, individual +
+    batch printing, reprint history, invalidate-and-replace.
 
-Remaining, in documented order: QR label printing.
+All four Priority 1 features are now complete. See
+`docs/FINAL_VALIDATION_REPORT.md` for the consolidated system status.
 
 ## Explicitly out of scope for any near-term increment
 

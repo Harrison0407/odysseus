@@ -259,3 +259,26 @@ instead, exactly as required, and is **not** listed here as a resolved assumptio
   an acceptable, consistent trade-off rather than a bespoke
   distributed-lock mechanism for one sequence generator when none of
   the system's other sequence generators have one either.
+- **A29. A QR "print" is logged the moment the print page is loaded
+  and an explicit "Registrar impresión" action is submitted — the
+  system has no way to know whether a browser print dialog was
+  actually confirmed or cancelled.** This is a standard, accepted
+  simplification for internal operational tools: reprint *history* is
+  a record of "this label was prepared/printed by this user at this
+  time," not cryptographic proof a physical label left a printer. If
+  Harrison needs stricter proof-of-print (e.g. for a compliance
+  audit), that would require printer-integration hardware/APIs well
+  beyond this session's scope.
+- **A30. QR label print-link UI coverage is 7 of 8 entity types;
+  `Dispatch` is supported at the service/URL layer but has no detail
+  page to attach a visible link to.** `Dispatch` objects are
+  summarized inline on their parent `MaterialRequest`'s detail page,
+  never rendered as an individually browsable row — there was no
+  existing per-dispatch template location to add a print link without
+  first building a new "dispatch detail" screen, which is out of this
+  feature's scope. `apps.labels.services.get_or_create_active_label`/
+  `record_print`/the `labels:print` URL all work identically for a
+  `Dispatch` as for any other registered entity (confirmed by the
+  entity registry in `apps.labels.services` including it), and a
+  physical dispatch label could be generated today via a direct link
+  if one were added to a future dispatch-specific screen.

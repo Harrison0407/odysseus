@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <h3>Entrega — {{ delivery.dispatch.pick_list.request.project }}</h3>
+<a class="btn btn-outline-secondary btn-sm mb-2" href="{% url 'labels:print' 'requests' 'delivery' delivery.pk %}">Imprimir etiqueta QR</a>
 <p>
     {% if delivery.accepted == True %}<span class="badge bg-success">Aceptada</span>
     {% elif delivery.accepted == False %}<span class="badge bg-danger">Rechazada/fallida</span>

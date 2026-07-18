@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <h3>Ubicación {{ location.code }} — {{ location.zone.site }}</h3>
+<a class="btn btn-outline-secondary btn-sm mb-2" href="{% url 'labels:print' 'inventory' 'warehouselocation' location.pk %}">Imprimir etiqueta QR</a>
 <p class="text-muted">
     Zona: {{ location.zone.name }} ·
     Responsable del sitio: {{ responsible|default:"—" }}
@@ -75,22 +76,31 @@
 
 <div class="card mb-3">
     <div class="card-header">Inventario asignado (según la bitácora de movimientos)</div>
-    <div class="table-responsive">
-    <table class="table table-sm bg-white mb-0">
-        <thead><tr><th>Lote</th><th>Artículo</th><th>Cantidad</th></tr></thead>
-        <tbody>
-        {% for row in assigned_lots %}
-            <tr>
-                <td><a href="{% url 'inventory:lot-detail' row.lot.pk %}">{{ row.lot.lot_code|default:row.lot.id }}</a></td>
-                <td>{{ row.lot.item }}</td>
-                <td>{{ row.quantity }}</td>
-            </tr>
-        {% empty %}
-            <tr><td colspan="3" class="text-muted">Sin inventario asignado actualmente.</td></tr>
-        {% endfor %}
-        </tbody>
-    </table>
-    </div>
+    <form method="post" action="{% url 'labels:batch-print' %}" target="_blank">
+        {% csrf_token %}
+        <input type="hidden" name="app_label" value="inventory">
+        <input type="hidden" name="model" value="inventorylot">
+        <div class="table-responsive">
+        <table class="table table-sm bg-white mb-0">
+            <thead><tr><th></th><th>Lote</th><th>Artículo</th><th>Cantidad</th></tr></thead>
+            <tbody>
+            {% for row in assigned_lots %}
+                <tr>
+                    <td><input type="checkbox" name="object_id" value="{{ row.lot.pk }}"></td>
+                    <td><a href="{% url 'inventory:lot-detail' row.lot.pk %}">{{ row.lot.lot_code|default:row.lot.id }}</a></td>
+                    <td>{{ row.lot.item }}</td>
+                    <td>{{ row.quantity }}</td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="4" class="text-muted">Sin inventario asignado actualmente.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% if assigned_lots %}
+        <button class="btn btn-outline-secondary btn-sm m-2" type="submit">Imprimir etiquetas QR de los lotes seleccionados</button>
+        {% endif %}
+    </form>
 </div>
 
 <div class="card mb-3">

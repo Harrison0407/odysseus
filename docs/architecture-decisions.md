@@ -2,6 +2,34 @@
 
 Newest first.
 
+## ADR-032 — QR labels use one small entity registry instead of eight bespoke implementations; a scan only ever forwards into an existing, already-permission-checked page
+**Decision:** `apps.labels.services._ENTITY_REGISTRY` maps each
+supported entity type's model name to three pure functions: how to
+find its organization (for isolation), what human-readable label/
+context to print, and which existing URL a scan should redirect to.
+`QRLabel.token` is an opaque, random value (same
+`secrets.token_urlsafe` pattern as `apps.reports.models
+.SecureShareLink.token`) — the QR image encodes only
+`/qr/<token>/`, never the entity's real UUID. The scan-landing view
+(`qr_scan_landing`) is `login_required` and, once authenticated,
+re-checks organization membership before resolving the label, then
+performs a plain HTTP redirect into the entity's own existing detail
+view — that view's own `login_required`/organization-scoped
+`get_object_or_404` runs again, independently. The scan endpoint
+itself never mutates any state.
+**Why:** Eight entity types (inventory lot, warehouse location,
+receiving unit, dispatch, delivery, installation material record,
+tool, container) named individually in the spec would otherwise
+tempt eight near-identical view/service pairs. A small registry keeps
+"how do I find this entity's organization" and "where does a scan of
+this entity land" each defined exactly once, in one place, and makes
+adding a ninth entity type later a one-entry addition, not a new
+module. Reusing each entity's own existing detail view (rather than
+building a parallel "QR-safe" view per entity) means a scan can never
+accidentally expose more, or check less, than a normal logged-in visit
+to that same page already does — there is exactly one permission
+check per entity type, not two that could drift apart.
+
 ## ADR-031 — Supplier claims are a new `apps.claims` app; evidence and package generation reuse existing generic mechanisms rather than new per-claim models
 **Decision:** `SupplierClaim` (new model, new `apps.claims` app) links
 via optional FKs to every real record that can justify a claim

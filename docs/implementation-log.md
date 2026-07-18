@@ -619,3 +619,51 @@ documented order.
     223/223 passing (202 pre-existing + 21 new). Verified migrations
     apply cleanly from an empty test database; `manage.py check` and
     `makemigrations --check` both clean.
+40. **QR labels and controlled scanning** — the fourth and final
+    Priority 1 feature. New `apps.labels` app: `QRLabel` (opaque,
+    unguessable `token` via `secrets.token_urlsafe`, same pattern as
+    `apps.reports.models.SecureShareLink` — never the underlying
+    object's real UUID), `QRLabelPrintEvent` (reprint history),
+    `QRScanEvent` (scan audit history, including denied
+    cross-organization attempts). One small entity registry
+    (`apps.labels.services._ENTITY_REGISTRY`, ADR-032) covers all 8
+    required entity types (inventory lot, warehouse location, receipt,
+    dispatch, delivery, installation record, tool, container) with
+    three pure functions each (organization resolver, human-label/
+    context resolver, target-URL resolver) rather than 8 separate
+    bespoke view/service implementations. The QR image is a
+    self-contained base64 PNG data URI (via the `qrcode` package,
+    added to `requirements.txt`) encoding only `/qr/<token>/` — never
+    the raw ID, never a secret. `qr_scan_landing`
+    (`/qr/<token>/`) is `login_required`, so an unauthenticated scan
+    is sent to log in before anything about the label resolves; once
+    authenticated it re-checks organization membership (logging a
+    denied cross-organization attempt rather than silently allowing
+    or silently dropping it) and then simply redirects into the
+    entity's own existing, already-permission-checked detail page —
+    the scan performs no consequential action of its own and
+    introduces no second, parallel permission system. Individual print
+    (with a "cantidad" field, logged only on an explicit POST, never
+    on a bare page view — A29) and batch print (checkbox selection,
+    wired into the location detail screen's assigned-inventory table)
+    are both supported; invalidating a label never deletes it, only
+    flags it and links it to a new, incremented-version replacement.
+    Print-link UI coverage: 7 of 8 entity types got a visible
+    "Imprimir etiqueta QR" link on their existing detail page; `Dispatch`
+    has no own detail screen in this system (summarized inline on its
+    parent Material Request, not individually browsable) so its label
+    support is fully implemented and tested at the service/URL layer
+    but not yet linked from a template (A30). 22 new tests
+    (`tests/test_qr_labels.py`), covering repeated-call idempotency,
+    opaque-payload verification (the raw object UUID never appears in
+    the QR data URI), batch generation (including silent exclusion of
+    another organization's entities from a batch), reprint history
+    accumulation, the full invalidate-and-replace lifecycle,
+    authenticated/unauthenticated/cross-organization/invalidated-token
+    scan handling, direct-object-access prevention for both the print
+    page and an unsupported entity type, and a full HTTP
+    print→invalidate→reprint lifecycle — 245/245 passing (223
+    pre-existing + 22 new). Verified migrations apply cleanly from an
+    empty test database; `manage.py check` and `makemigrations --check`
+    both clean. This closes the last of the four Priority 1 features
+    from the one-shot completion run.

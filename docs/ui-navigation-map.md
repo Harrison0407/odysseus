@@ -95,6 +95,10 @@
 | `/reclamos/<id>/resolver/` (POST) | `claim_resolve` | Records replacement/credit-note/settlement resolution |
 | `/reclamos/<id>/cerrar/` (POST) | `claim_close` | RESOLVED → CLOSED |
 | `/reclamos/<id>/paquete/` | `claim_generate_package` | Downloads the self-contained HTML claim package |
+| `/etiquetas/<app_label>/<model>/<id>/` | `apps.labels.views.label_print` | QR label view/print page for any registered entity (lot, location, receipt, tool, container, delivery, installation record); GET previews, POST logs a print event |
+| `/etiquetas/lote/imprimir/` (POST) | `label_batch_print` | Batch-prints QR labels for a checkbox-selected set of same-type entities (e.g. every lot at a location) |
+| `/etiquetas/<label_id>/invalidar/` (POST) | `label_invalidate` | Invalidates a label and generates its numbered replacement |
+| `/qr/<token>/` | `apps.labels.views.qr_scan_landing` | Controlled scan landing page — `login_required`; forwards into the entity's own existing detail page after an organization check |
 | `/api/v1/...` | DRF router | `shipments`, `purchase-orders`, `manifest-lines`, `manifest-variances`, `discrepancies` (read-only, org-scoped) |
 | `/admin/` | Django admin | Back-office/debug only — every model auto-registered; never the intended business-user interface (spec requirement) |
 

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+    @media print {
+        .no-print { display: none !important; }
+        .label-card { box-shadow: none !important; border: 1px solid #000 !important; page-break-inside: avoid; }
+    }
+    .label-grid { display: flex; flex-wrap: wrap; gap: 1rem; }
+    .label-card {
+        width: 260px; border: 2px solid #333; border-radius: 6px; padding: .75rem;
+        text-align: center;
+    }
+    .label-card img { width: 180px; height: 180px; }
+</style>
+
+<div class="no-print d-flex justify-content-between align-items-center mb-3">
+    <h3>Lote de etiquetas QR ({{ labels_and_qr|length }})</h3>
+    <button class="btn btn-primary btn-sm" onclick="window.print()">Imprimir todo</button>
+</div>
+
+<div class="label-grid">
+    {% for label, qr_data_uri in labels_and_qr %}
+    <div class="label-card">
+        <img src="{{ qr_data_uri }}" alt="Código QR">
+        <div class="fw-bold mt-1">{{ label.human_label }}</div>
+        <div class="small text-muted">{{ label.entity_type_label }}</div>
+        {% if label.context_label %}<div class="small">{{ label.context_label }}</div>{% endif %}
+        <div class="small text-muted">v{{ label.version }}</div>
+    </div>
+    {% empty %}
+    <p class="text-muted">Sin etiquetas seleccionadas.</p>
+    {% endfor %}
+</div>
+{% endblock %}

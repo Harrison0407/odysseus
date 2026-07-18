@@ -5,11 +5,13 @@ from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
 from apps.accounts.views import RateLimitedLoginView
+from apps.labels.views import qr_scan_landing
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("accounts/login/", RateLimitedLoginView.as_view(template_name="registration/login.html"), name="login"),
     path("accounts/logout/", auth_views.LogoutView.as_view(), name="logout"),
+    path("qr/<str:token>/", qr_scan_landing, name="qr-scan"),
     path("", include("apps.core.urls")),
     path("documentos/", include("apps.documents.urls")),
     path("compras/", include("apps.procurement.urls")),
@@ -21,6 +23,7 @@ urlpatterns = [
     path("aduanas/", include("apps.customs.urls")),
     path("herramientas/", include("apps.tools.urls")),
     path("reclamos/", include("apps.claims.urls")),
+    path("etiquetas/", include("apps.labels.urls")),
     path("flujo/", include("apps.workflow.urls")),
     path("reportes/", include("apps.reports.urls")),
     path("api/v1/", include("apps.api.urls")),

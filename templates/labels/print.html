@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+    @media print {
+        .no-print { display: none !important; }
+        .label-card { box-shadow: none !important; border: 1px solid #000 !important; }
+    }
+    .label-card {
+        width: 320px; border: 2px solid #333; border-radius: 6px; padding: 1rem;
+        text-align: center; margin: 0 auto;
+    }
+    .label-card img { width: 220px; height: 220px; }
+</style>
+
+<div class="d-flex justify-content-between align-items-start no-print">
+    <h3>Etiqueta QR — {{ label.human_label }}</h3>
+</div>
+
+<div class="label-card mb-3">
+    <img src="{{ qr_data_uri }}" alt="Código QR">
+    <div class="fw-bold mt-2">{{ label.human_label }}</div>
+    <div class="small text-muted">{{ label.entity_type_label }}</div>
+    {% if label.context_label %}<div class="small">{{ label.context_label }}</div>{% endif %}
+    <div class="small text-muted">v{{ label.version }} · {{ label.created_at|date:"d/m/Y H:i" }}</div>
+</div>
+
+<div class="no-print">
+    <div class="d-flex gap-2 justify-content-center mb-3">
+        <button class="btn btn-primary btn-sm" onclick="window.print()">Imprimir</button>
+    </div>
+
+    <form method="post" class="row g-2 justify-content-center mb-4">
+        {% csrf_token %}
+        <div class="col-auto">
+            <input type="number" name="cantidad" class="form-control form-control-sm" value="1" min="1" style="width:6rem">
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-outline-secondary btn-sm" type="submit">Registrar impresión</button>
+        </div>
+    </form>
+
+    <div class="card mb-3">
+        <div class="card-header">Historial de impresión</div>
+        <div class="table-responsive">
+        <table class="table table-sm bg-white mb-0">
+            <thead><tr><th>Fecha</th><th>Por</th><th>Cantidad</th><th>Lote</th></tr></thead>
+            <tbody>
+            {% for h in history %}
+                <tr><td>{{ h.printed_at|date:"d/m/Y H:i" }}</td><td>{{ h.printed_by }}</td><td>{{ h.quantity }}</td><td>{{ h.is_batch|yesno:"Sí,No" }}</td></tr>
+            {% empty %}
+                <tr><td colspan="4" class="text-muted">Sin impresiones registradas.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header">Historial de escaneo</div>
+        <div class="table-responsive">
+        <table class="table table-sm bg-white mb-0">
+            <thead><tr><th>Fecha</th><th>Por</th><th>IP</th><th>Denegado (org.)</th></tr></thead>
+            <tbody>
+            {% for s in scans %}
+                <tr><td>{{ s.scanned_at|date:"d/m/Y H:i" }}</td><td>{{ s.scanned_by|default:"—" }}</td><td>{{ s.ip_address|default:"—" }}</td><td>{{ s.was_cross_organization_denied|yesno:"Sí,No" }}</td></tr>
+            {% empty %}
+                <tr><td colspan="4" class="text-muted">Sin escaneos registrados.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+
+    {% if not label.is_invalidated %}
+    <div class="card mb-3">
+        <div class="card-header">Invalidar y reemplazar etiqueta</div>
+        <div class="card-body">
+            <form method="post" action="{% url 'labels:invalidate' label.pk %}">
+                {% csrf_token %}
+                <div class="mb-2">
+                    <textarea name="reason" class="form-control form-control-sm" rows="2" placeholder="Motivo (etiqueta dañada, perdida, ilegible, etc.)"></textarea>
+                </div>
+                <button class="btn btn-warning btn-sm" type="submit">Invalidar y generar nueva etiqueta</button>
+            </form>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-warning">Esta etiqueta fue invalidada el {{ label.invalidated_at|date:"d/m/Y H:i" }} — {{ label.invalidated_reason }}</div>
+    {% endif %}
+</div>
+{% endblock %}

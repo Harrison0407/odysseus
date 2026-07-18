@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>{{ tool.code }} — {{ tool.description }}</h3>
+<p class="text-muted">
+    Marca: {{ tool.brand|default:"—" }} · Serie: {{ tool.serial_number|default:"—" }} ·
+    Condición: {{ tool.condition|default:"—" }} · Ubicación: {{ tool.current_location|default:"—" }}
+</p>
+
+{% if current_checkout %}
+<div class="card mb-3 border-warning">
+    <div class="card-header">Entregada actualmente a {{ current_checkout.assignment.assigned_to }}</div>
+    <div class="card-body">
+        <p class="small text-muted">
+            Entregada: {{ current_checkout.checkout_date }} ·
+            Devolución esperada: {{ current_checkout.expected_return_date|default:"—" }}
+        </p>
+        <form method="post" action="{% url 'tools:return' tool.pk current_checkout.pk %}">
+            {% csrf_token %}
+            {{ return_form.as_p }}
+            <button class="btn btn-success btn-sm" type="submit">Registrar devolución</button>
+        </form>
+    </div>
+</div>
+{% else %}
+<div class="card mb-3">
+    <div class="card-header">Entregar herramienta</div>
+    <div class="card-body">
+        <form method="post" action="{% url 'tools:checkout' tool.pk %}">
+            {% csrf_token %}
+            {{ checkout_form.as_p }}
+            <button class="btn btn-primary btn-sm" type="submit">Entregar</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<div class="card mb-3">
+    <div class="card-header">Historial de entregas</div>
+    <div class="table-responsive">
+    <table class="table table-sm bg-white mb-0">
+        <thead><tr><th>Asignado a</th><th>Entregada</th><th>Devolución esperada</th><th>Devuelta</th><th>Daño</th></tr></thead>
+        <tbody>
+        {% for checkout in history %}
+            <tr>
+                <td>{{ checkout.assignment.assigned_to }}</td>
+                <td>{{ checkout.checkout_date }}</td>
+                <td>{{ checkout.expected_return_date|default:"—" }}</td>
+                <td>{{ checkout.tool_return.actual_return_date|default:"Pendiente" }}</td>
+                <td>{% if checkout.tool_return.damage_noted %}<span class="badge bg-danger">Sí</span>{% else %}—{% endif %}</td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="5" class="text-muted">Sin historial de entregas.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Reparaciones</div>
+    <div class="table-responsive">
+    <table class="table table-sm bg-white mb-0">
+        <thead><tr><th>Fecha</th><th>Descripción</th><th>Costo</th><th>Baja</th></tr></thead>
+        <tbody>
+        {% for repair in repairs %}
+            <tr>
+                <td>{{ repair.repaired_at|default:"—" }}</td>
+                <td>{{ repair.description }}</td>
+                <td>{{ repair.cost|default:"—" }}</td>
+                <td>{% if repair.resulted_in_write_off %}<span class="badge bg-danger">Sí</span>{% else %}No{% endif %}</td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="4" class="text-muted">Sin reparaciones registradas.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    <div class="card-body">
+        <form method="post" action="{% url 'tools:repair' tool.pk %}">
+            {% csrf_token %}
+            {{ repair_form.as_p }}
+            <button class="btn btn-outline-secondary btn-sm" type="submit">Registrar reparación</button>
+        </form>
+    </div>
+</div>
+
+<a class="btn btn-outline-secondary btn-sm" href="{% url 'tools:list' %}">Volver a herramientas</a>
+{% endblock %}

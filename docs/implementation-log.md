@@ -439,3 +439,24 @@ documented order.
     cross-organization isolation and an HTTP round-trip confirming a
     resolved pair drops out of the candidate list — 138/138 passing (128
     pre-existing + 10 new).
+35. **Tool custody UI.** `apps.tools` had no `views.py`/`urls.py` wired
+    in either — built `apps.tools.services` (`checkout_tool`/
+    `return_tool`/`record_repair`, ADR-028): the one invariant the data
+    model implied but no code ever checked (a tool cannot be checked
+    out twice at once) is now enforced. `/herramientas/` list/detail
+    screens, linked from the main nav and the Almacén dashboard.
+    **While building this, found and fixed a real, previously
+    undetected production bug:** `apps.core.views.dashboard_home`
+    crashed with `FieldError: Cannot resolve keyword
+    'actual_return_date'` for any almacen/recepcion-role user, ever
+    since it was written in the Priority 0 pass — confirmed by directly
+    reproducing it in a shell before touching anything. It filtered
+    `ToolCheckout` by a field that only exists on the related
+    `ToolReturn` model. No test had ever rendered an authenticated
+    almacen-role dashboard before now (the one existing dashboard-home
+    test only checks the anonymous-redirect case). Fixed
+    (`tool_return__isnull=True, expected_return_date__lt=today`, which
+    also corrects the semantics to genuinely "overdue," not just
+    "still checked out") and covered by a dedicated regression test. 11
+    new tests (`tests/test_tool_custody.py`) — 149/149 passing (138
+    pre-existing + 11 new).

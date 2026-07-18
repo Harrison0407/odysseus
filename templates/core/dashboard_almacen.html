@@ -15,12 +15,13 @@
     </div>
     <div class="col-md-6">
         <div class="card">
-            <div class="card-header">Herramientas no devueltas</div>
+            <div class="card-header">Herramientas no devueltas (vencidas)</div>
             <ul class="list-group list-group-flush">
                 {% for t in tools_overdue %}
-                <li class="list-group-item">{{ t.assignment.tool }} — {{ t.assignment.assigned_to }}</li>
+                <li class="list-group-item"><a href="{% url 'tools:detail' t.assignment.tool.pk %}">{{ t.assignment.tool }}</a> — {{ t.assignment.assigned_to }}</li>
                 {% empty %}<li class="list-group-item text-muted">Sin herramientas vencidas.</li>{% endfor %}
             </ul>
+            <a class="btn btn-outline-secondary btn-sm m-2" href="{% url 'tools:list' %}">Ver todas las herramientas</a>
         </div>
     </div>
 </div>

@@ -92,11 +92,26 @@ is silently claimed to be done when it isn't.
      never auto-resolves a candidate, only a human confirmation does
      (matches the project-wide "a discrepancy stays visible until
      genuinely resolved" rule). 10 new tests.
-   - Tool custody screens, cycle-count screens, storage
-     capacity/suitability warnings, external-storage comparison
-     calculator, supplier claim package generation, QR label printing
-     remain **not yet built**. Data models exist for all of these
-     (`apps.tools`, `apps.inventory.CycleCount`,
+   - ~~Tool custody screens~~ — **Done.** `apps.tools.services`
+     (`checkout_tool`/`return_tool`/`record_repair`) enforces the one
+     invariant the data model implied but no code ever checked: a tool
+     cannot be checked out twice at once. `/herramientas/` list/detail
+     screens, linked from the main nav and from the Almacén dashboard's
+     "herramientas vencidas" card. 11 new tests. **A real,
+     previously-undetected bug was found and fixed while building
+     this:** the Almacén persona dashboard
+     (`apps.core.views.dashboard_home`) crashed with a `FieldError` for
+     *any* almacen/recepcion-role user, ever since it was written in
+     the Priority 0 pass — it filtered `ToolCheckout` by
+     `actual_return_date`, a field that only exists on the related
+     `ToolReturn` model, not `ToolCheckout` itself. No test had ever
+     exercised an authenticated almacen-role dashboard render before
+     now. Fixed and covered by a regression test
+     (`tests/test_tool_custody.py::TestAlmacenDashboardRegression`).
+   - Cycle-count screens, storage capacity/suitability warnings,
+     external-storage comparison calculator, supplier claim package
+     generation, QR label printing remain **not yet built**. Data
+     models exist for all of these (`apps.inventory.CycleCount`,
      `apps.receiving.AlternativeStorageOption`); none has a UI yet —
      see `docs/implementation-roadmap.md` for which, if any, are
      picked up next.

@@ -115,8 +115,12 @@ fixture through real HTTP requests against a running dev server — see
 25. ~~CONFOTUR reconciliation UI~~ — **Done** (continuing autonomous
     session). `apps.customs.services`/`/aduanas/confotur/` — see
     `docs/implementation-log.md` for the full account.
+26. ~~Tool custody UI~~ — **Done.** `apps.tools.services`/
+    `/herramientas/` (ADR-028); also fixed a real pre-existing
+    `FieldError` crash in the Almacén dashboard found while building
+    this.
 
-Remaining, in documented order: tool custody UI, cycle-count UI, storage
+Remaining, in documented order: cycle-count UI, storage
 capacity/suitability UI, external storage comparison calculator, supplier
 claim package generation, QR label printing.
 

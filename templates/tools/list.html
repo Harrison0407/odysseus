@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Herramientas</h3>
+<div class="table-responsive">
+<table class="table table-striped bg-white">
+    <thead><tr><th>Código</th><th>Descripción</th><th>Condición</th><th>Estado</th><th>Asignado a</th></tr></thead>
+    <tbody>
+    {% for row in rows %}
+        <tr>
+            <td><a href="{% url 'tools:detail' row.tool.pk %}">{{ row.tool.code }}</a></td>
+            <td>{{ row.tool.description }}</td>
+            <td>{{ row.tool.condition|default:"—" }}</td>
+            <td>
+                {% if row.checkout %}<span class="badge bg-warning text-dark">Entregada</span>
+                {% else %}<span class="badge bg-success">Disponible</span>{% endif %}
+            </td>
+            <td>{{ row.checkout.assignment.assigned_to|default:"—" }}</td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="5" class="text-muted">Sin herramientas registradas.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

@@ -1,6 +1,7 @@
 from django.contrib.auth.decorators import login_required
 from django.contrib.contenttypes.models import ContentType
 from django.shortcuts import render
+from django.utils import timezone
 
 from apps.matching.models import Discrepancy
 from apps.procurement.models import PaymentMilestone, PurchaseOrder
@@ -67,7 +68,7 @@ def dashboard_home(request):
                 status=Receipt.Status.MATCHED
             ).select_related("container")[:20],
             tools_overdue=ToolCheckout.objects.filter(
-                actual_return_date__isnull=True
+                tool_return__isnull=True, expected_return_date__lt=timezone.now().date()
             ).select_related("assignment__tool")[:20],
         )
         template = "core/dashboard_almacen.html"

@@ -67,6 +67,11 @@
 | `/aduanas/confotur/<id>/` | `confotur_list_detail` | Lines, exemption amounts, duplicate status |
 | `/aduanas/confotur/reconciliacion/` | `confotur_reconciliation` | Duplicate-exemption candidates (spec section 25), grouped by shared quotation/manifest line |
 | `/aduanas/confotur/lineas/<id>/confirmar-duplicado/` (POST) | `confotur_confirm_duplicate` | Confirms one line as a duplicate of another |
+| `/herramientas/` | `apps.tools.views.tool_list` | Tools, scoped to organization, with current custody status |
+| `/herramientas/<id>/` | `tool_detail` | Custody history, repairs, checkout/return/repair actions |
+| `/herramientas/<id>/entregar/` (POST) | `tool_checkout` | Checks out a tool — blocked if already checked out |
+| `/herramientas/<id>/entrega/<checkout_id>/devolver/` (POST) | `tool_return` | Records a return, optionally with damage noted |
+| `/herramientas/<id>/reparacion/` (POST) | `tool_repair` | Records a repair, optionally resulting in write-off |
 | `/api/v1/...` | DRF router | `shipments`, `purchase-orders`, `manifest-lines`, `manifest-variances`, `discrepancies` (read-only, org-scoped) |
 | `/admin/` | Django admin | Back-office/debug only — every model auto-registered; never the intended business-user interface (spec requirement) |
 

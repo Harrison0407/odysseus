@@ -2,6 +2,22 @@
 
 Newest first.
 
+## ADR-028 — Tool checkout uniqueness is enforced by query, not a database constraint
+**Decision:** `apps.tools.services.is_checked_out`/`checkout_tool`
+enforce "a tool cannot be checked out twice at once" by querying for an
+existing `ToolCheckout` with an active assignment and no `ToolReturn`,
+inside a `transaction.atomic` block — not a `UniqueConstraint` on the
+model.
+**Why:** The invariant is inherently about the *absence* of a related
+row (no `ToolReturn` yet), which Django/PostgreSQL partial unique
+constraints can't directly express against a reverse OneToOne without
+a denormalized "is_active" flag duplicating state already derivable
+from the data. `ToolAssignment.is_active` already exists for this
+exact purpose (Priority 0) — reusing it as the query predicate, guarded
+by the atomic block, is consistent with the `Handoff`
+create-idempotency pattern (ADR from the Gate Controls milestone): an
+app-level check inside a transaction, not a novel constraint shape.
+
 ## ADR-027 — CONFOTUR duplicate candidates are grouped live at read time, never a persisted "dismissed" state
 **Decision:** `apps.customs.services.detect_duplicate_candidates`
 recomputes the candidate list on every call by grouping still-live

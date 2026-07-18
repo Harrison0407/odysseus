@@ -258,6 +258,19 @@
       <div class="modal-body calls-modal-body">
         <p class="calls-intro">Transcribe one call locally. Audio stays in memory only; a transcript is saved to Library only when you explicitly choose to save it.</p>
 
+        <section class="calls-card calls-history-card" aria-labelledby="calls-history-heading">
+          <div class="calls-history-header">
+            <div>
+              <h2 id="calls-history-heading">Saved transcripts</h2>
+              <p class="calls-requirements">A read-only view of your MarketMatch Calls transcripts in Library.</p>
+            </div>
+            <button type="button" id="calls-history-refresh-btn" class="calls-button">Refresh history</button>
+          </div>
+          <p id="calls-history-status" class="calls-status" role="status" aria-live="polite">Open Calls to load saved transcripts.</p>
+          <p id="calls-history-empty" class="calls-empty-result" hidden>No saved Calls transcripts were found.</p>
+          <ul id="calls-history-list" class="calls-history-list" aria-label="Saved Calls transcripts" hidden></ul>
+        </section>
+
         <section class="calls-card calls-recording-card" aria-labelledby="calls-recording-heading">
           <h2 id="calls-recording-heading">Microphone</h2>
           <p id="calls-recording-requirements" class="calls-requirements">Record in this browser, then review the generated canonical mono 16 kHz PCM WAV before transcription. Microphone access starts only when you choose Start recording.</p>

@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MODULE = (ROOT / "static" / "js" / "calls.js").as_uri()
 SOURCE = (ROOT / "static" / "js" / "calls.js").read_text(encoding="utf-8")
 INDEX = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
+APP_SOURCE = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
 HAS_NODE = shutil.which("node") is not None
 
 
@@ -838,3 +839,267 @@ def test_clear_and_panel_close_abort_pending_save_and_clear_save_state():
     assert "reset" in result["events"]
     assert "clear-save" in result["events"]
     assert any(event[:2] == ["status", "cancelled"] for event in result["events"] if isinstance(event, list))
+
+
+def test_saved_history_request_is_owner_implicit_bounded_and_marker_filtered():
+    result = _run_node(
+        """
+        import {
+          buildCallsDocumentContent, filterCallsHistoryDocuments,
+          isCallsTranscriptDocument, requestCallsHistory,
+        } from 'CALLS_MODULE';
+        const transcription = {
+          duration_ms: 1000,
+          transcript_text: 'History test',
+          segments: [{ start_ms: 0, end_ms: 1000, text: 'History test' }],
+        };
+        const preview = buildCallsDocumentContent(transcription, new Date(0)).slice(0, 500);
+        const callsDoc = (id, title) => ({
+          id, title, language: 'markdown', preview,
+          created_at: '2026-07-18T12:00:00Z', updated_at: '2026-07-18T13:00:00Z',
+        });
+        const documents = [
+          callsDoc('doc-a', 'Site Coordination July 18'),
+          callsDoc('doc-a', 'Duplicate identity'),
+          { id: 'normal-call', title: 'Call notes', language: 'markdown', preview: '# Ordinary notes' },
+          { id: 'almost', title: 'MarketMatch Calls Transcript', language: 'markdown', preview: '# MarketMatch Calls Transcript' },
+          null,
+          ...Array.from({ length: 22 }, (_, index) => callsDoc(`doc-${index}`, `Custom ${index}`)),
+        ];
+        let captured;
+        const fetchImpl = async (url, options) => {
+          captured = { url, options };
+          return { ok: true, status: 200, json: async () => ({ documents, total: documents.length }) };
+        };
+        const history = await requestCallsHistory({ fetchImpl });
+        const direct = filterCallsHistoryDocuments({ documents });
+        console.log(JSON.stringify({
+          history, direct,
+          markerRecognized: isCallsTranscriptDocument(callsDoc('marker', 'Arbitrary title')),
+          unrelatedRecognized: isCallsTranscriptDocument(documents[2]),
+          request: {
+            url: captured.url,
+            method: captured.options.method,
+            credentials: captured.options.credentials,
+            keys: Object.keys(captured.options).sort(),
+            hasHeaders: Object.hasOwn(captured.options, 'headers'),
+            hasBody: Object.hasOwn(captured.options, 'body'),
+          },
+        }));
+        """
+    )
+    request = result["request"]
+    assert request["url"] == "/api/documents/library?search=MarketMatch+Calls+Transcript&sort=recent&offset=0&limit=20"
+    assert request["method"] == "GET"
+    assert request["credentials"] == "same-origin"
+    assert request["hasHeaders"] is False
+    assert request["hasBody"] is False
+    assert result["markerRecognized"] is True
+    assert result["unrelatedRecognized"] is False
+    assert result["history"] == result["direct"]
+    assert len(result["history"]) <= 20
+    assert result["history"][0]["title"] == "Site Coordination July 18"
+    assert len({item["id"] for item in result["history"]}) == len(result["history"])
+    assert "normal-call" not in {item["id"] for item in result["history"]}
+    assert "almost" not in {item["id"] for item in result["history"]}
+    assert all(key not in request["url"].lower() for key in ("owner", "username", "session_id", "impersonat"))
+    assert "History test" not in request["url"]
+
+
+def test_history_lifecycle_prevents_overlap_aborts_stale_and_reloads_after_reopen():
+    result = _run_node(
+        """
+        import { buildCallsDocumentContent, createCallsController } from 'CALLS_MODULE';
+        const preview = buildCallsDocumentContent({
+          duration_ms: 1000, transcript_text: '', segments: [],
+        }, new Date(0)).slice(0, 500);
+        const renders = [];
+        const states = [];
+        let requests = 0;
+        const fetchImpl = (_url, options) => {
+          requests += 1;
+          if (requests === 1) {
+            return new Promise((_resolve, reject) => options.signal.addEventListener('abort', () => {
+              reject(new DOMException('PRIVATE_STALE_RESPONSE', 'AbortError'));
+            }, { once: true }));
+          }
+          return Promise.resolve({ ok: true, status: 200, json: async () => ({ documents: requests === 2 ? [] : [{
+            id: 'doc-reopen', title: 'Window Installation Review', preview,
+            created_at: '2026-07-18T12:00:00Z', updated_at: null,
+          }] }) });
+        };
+        const view = {
+          setHistoryLoading(busy, refreshing) { states.push(['loading', busy, refreshing]); },
+          renderHistory(items) { renders.push(items.map((item) => item.title)); },
+          setHistoryError(message) { states.push(['error', message]); },
+        };
+        const controller = createCallsController({ view, fetchImpl });
+        const first = controller.onPanelOpened();
+        const duplicate = await controller.loadHistory({ refreshing: true });
+        controller.onPanelHidden();
+        const stale = await first;
+        const empty = await controller.onPanelOpened();
+        const refreshed = await controller.loadHistory({ refreshing: true });
+        console.log(JSON.stringify({
+          duplicate, stale, empty, refreshed, requests, renders, states,
+          active: controller.isHistoryActive(),
+        }));
+        """
+    )
+    assert result["duplicate"] is False
+    assert result["stale"] is False
+    assert result["empty"] is True
+    assert result["refreshed"] is True
+    assert result["requests"] == 3
+    assert result["renders"] == [[], ["Window Installation Review"]]
+    assert result["active"] is False
+    assert not any("PRIVATE" in str(state) for state in result["states"])
+    assert ["loading", True, False] in result["states"]
+    assert ["loading", True, True] in result["states"]
+
+
+def test_history_failures_are_fixed_safe_and_do_not_break_calls_features():
+    result = _run_node(
+        """
+        import { createCallsController, requestCallsHistory } from 'CALLS_MODULE';
+        const errors = [];
+        for (const response of [
+          { ok: false, status: 401 },
+          { ok: false, status: 403 },
+          { ok: false, status: 500, json: async () => ({ detail: 'PRIVATE_BACKEND' }) },
+          { ok: true, status: 200, json: async () => { throw new Error('PRIVATE_HTML'); } },
+          { ok: true, status: 200, json: async () => ({ documents: 'PRIVATE_BAD_SHAPE' }) },
+        ]) {
+          try { await requestCallsHistory({ fetchImpl: async () => response }); }
+          catch (error) { errors.push([error.code, error.message]); }
+        }
+        const statuses = [];
+        let copied = '';
+        const fetchImpl = async (url) => {
+          if (url.includes('/api/documents/library')) return { ok: false, status: 500 };
+          if (url === '/api/document') return { ok: true, status: 200, json: async () => ({ id: 'saved-doc' }) };
+          return { ok: true, status: 200, json: async () => ({
+            duration_ms: 1000, transcript_text: 'Still works',
+            segments: [{ start_ms: 0, end_ms: 1000, text: 'Still works' }],
+          }) };
+        };
+        const view = {
+          setHistoryLoading() {}, setHistoryError(message) { statuses.push(message); },
+          clearResult() {}, clearSave() {}, showSelected() {}, setReady() {}, setBusy() {},
+          setStatus() {}, renderResult() {}, showSave() {}, setSaveBusy() {}, reset() {},
+        };
+        const controller = createCallsController({ view, fetchImpl, copyText: async (text) => { copied = text; } });
+        const history = await controller.onPanelOpened();
+        controller.selectFile({ name: 'call.wav', size: 46 });
+        const transcribed = await controller.submit();
+        const copy = await controller.copyTranscript();
+        const saved = await controller.saveToLibrary('History failure still saves');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        console.log(JSON.stringify({ errors, statuses, history, transcribed, copy, copied, saved }));
+        """
+    )
+    assert [code for code, _ in result["errors"]] == [
+        "HISTORY_HTTP_401", "HISTORY_HTTP_403", "HISTORY_HTTP_500",
+        "HISTORY_MALFORMED_RESPONSE", "HISTORY_MALFORMED_RESPONSE",
+    ]
+    assert "PRIVATE" not in json.dumps(result)
+    assert result["history"] is False
+    assert result["transcribed"] is True
+    assert result["copy"] is True
+    assert result["copied"] == "Still works"
+    assert result["saved"] is True
+    assert result["statuses"] == [
+        "Saved transcripts could not be loaded. Please try again.",
+        "Saved transcripts could not be loaded. Please try again.",
+    ]
+
+
+def test_successful_save_refreshes_history_once_failed_save_does_not_and_clear_never_deletes():
+    result = _run_node(
+        """
+        import { buildCallsDocumentContent, createCallsController } from 'CALLS_MODULE';
+        const preview = buildCallsDocumentContent({
+          duration_ms: 1000, transcript_text: 'Saved result',
+          segments: [{ start_ms: 0, end_ms: 1000, text: 'Saved result' }],
+        }, new Date(0)).slice(0, 500);
+        const renders = [];
+        const requests = [];
+        let historyRequests = 0;
+        let saveShouldFail = false;
+        const fetchImpl = async (url, options) => {
+          requests.push([url, options.method]);
+          if (url.includes('/api/documents/library')) {
+            historyRequests += 1;
+            const docs = historyRequests === 1 ? [] : [
+              { id: 'new-doc', title: 'New history item', preview },
+              { id: 'new-doc', title: 'Duplicate result', preview },
+            ];
+            return { ok: true, status: 200, json: async () => ({ documents: docs }) };
+          }
+          if (url === '/api/document') {
+            return saveShouldFail
+              ? { ok: false, status: 500 }
+              : { ok: true, status: 200, json: async () => ({ id: 'new-doc' }) };
+          }
+          return { ok: true, status: 200, json: async () => ({
+            duration_ms: 1000, transcript_text: 'Saved result',
+            segments: [{ start_ms: 0, end_ms: 1000, text: 'Saved result' }],
+          }) };
+        };
+        const view = {
+          setHistoryLoading() {}, setHistoryError() {}, renderHistory(items) { renders.push(items.map((item) => item.id)); },
+          clearResult() {}, clearSave() {}, showSelected() {}, setReady() {}, setBusy() {}, setStatus() {},
+          renderResult() {}, showSave() {}, setSaveBusy() {}, setSaved() {}, setSaveStatus() {}, reset() {},
+        };
+        const controller = createCallsController({ view, fetchImpl });
+        await controller.onPanelOpened();
+        controller.selectFile({ name: 'call.wav', size: 46 });
+        await controller.submit();
+        const saved = await controller.saveToLibrary('Saved transcript');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        controller.reset();
+        saveShouldFail = true;
+        controller.selectFile({ name: 'call.wav', size: 46 });
+        await controller.submit();
+        const failed = await controller.saveToLibrary('Failed transcript');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        console.log(JSON.stringify({ saved, failed, historyRequests, renders, requests }));
+        """
+    )
+    assert result["saved"] is True
+    assert result["failed"] is False
+    assert result["historyRequests"] == 2
+    assert result["renders"] == [[], ["new-doc"]]
+    assert not any(method in {"DELETE", "PUT", "PATCH"} for _, method in result["requests"])
+
+
+def test_history_open_uses_existing_document_module_and_accessible_safe_ui():
+    result = _run_node(
+        """
+        import { createCallsController } from 'CALLS_MODULE';
+        const opened = [];
+        const errors = [];
+        const controller = createCallsController({
+          view: { setHistoryError(message) { errors.push(message); } },
+          openDocument: async (id) => { opened.push(id); },
+        });
+        const valid = await controller.openHistoryDocument('internal-doc-id');
+        const invalid = await controller.openHistoryDocument('');
+        console.log(JSON.stringify({ valid, invalid, opened, errors }));
+        """
+    )
+    assert result == {"valid": True, "invalid": False, "opened": ["internal-doc-id"], "errors": []}
+    required = (
+        'id="calls-history-heading"',
+        'id="calls-history-refresh-btn"',
+        'id="calls-history-status"',
+        'id="calls-history-empty"',
+        'id="calls-history-list"',
+        'aria-label="Saved Calls transcripts"',
+        'aria-live="polite"',
+    )
+    assert all(marker in INDEX for marker in required)
+    assert "open.setAttribute('aria-label', `Open ${documentValue.title} from Library`)" in SOURCE
+    assert "setElementText(title, documentValue.title)" in SOURCE
+    assert "documentModule.loadDocument(documentId)" in APP_SOURCE
+    assert "callsModule.init(document" in APP_SOURCE

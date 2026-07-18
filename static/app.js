@@ -3624,7 +3624,9 @@ function startOdysseusApp() {
   chatModule.init(API_BASE);
   chatModule.initListeners();
   groupModule.init(API_BASE);
-  callsModule.init();
+  callsModule.init(document, {
+    openDocument: (documentId) => documentModule.loadDocument(documentId),
+  });
   // Initialize compare module
   if (compareModule) {
     compareModule.init(API_BASE);

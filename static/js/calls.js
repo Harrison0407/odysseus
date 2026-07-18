@@ -1,5 +1,14 @@
 const ENDPOINT = '/api/marketmatch/stt/transcribe';
 const DOCUMENT_ENDPOINT = '/api/document';
+const DOCUMENT_HISTORY_ENDPOINT = '/api/documents/library?search=MarketMatch+Calls+Transcript&sort=recent&offset=0&limit=20';
+const CALLS_DOCUMENT_MARKER = [
+  '# MarketMatch Calls Transcript',
+  '',
+  '**AI-generated transcript. Review before relying on it for operational decisions.**',
+  '',
+  'Source: MarketMatch Calls',
+].join('\n');
+const MAX_CALLS_HISTORY_ITEMS = 20;
 export const MAX_CALLS_WAV_BYTES = 20 * 1024 * 1024;
 export const CALLS_WAV_SAMPLE_RATE = 16000;
 const WAV_HEADER_BYTES = 44;
@@ -23,6 +32,7 @@ const STATUS_MESSAGES = Object.freeze({
 const GENERIC_FAILURE = 'Transcription could not be completed. Please try again.';
 const RECORDING_FAILURE = 'The recording could not be prepared safely. Please try again.';
 const DOCUMENT_SAVE_FAILURE = 'The transcript could not be saved. Please try again.';
+const HISTORY_FAILURE = 'Saved transcripts could not be loaded. Please try again.';
 
 const DOCUMENT_STATUS_MESSAGES = Object.freeze({
   400: 'Check the document title and try again.',
@@ -284,6 +294,49 @@ export function buildCallsDocumentContent(result, createdAt = new Date()) {
   ].join('\n');
 }
 
+export function isCallsTranscriptDocument(documentValue) {
+  return Boolean(
+    documentValue
+    && typeof documentValue === 'object'
+    && !Array.isArray(documentValue)
+    && typeof documentValue.id === 'string'
+    && documentValue.id.trim()
+    && typeof documentValue.title === 'string'
+    && documentValue.title.trim()
+    && typeof documentValue.preview === 'string'
+    && documentValue.preview.startsWith(CALLS_DOCUMENT_MARKER),
+  );
+}
+
+export function filterCallsHistoryDocuments(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)
+      || !Array.isArray(payload.documents)) {
+    throw new CallsUiError('HISTORY_MALFORMED_RESPONSE', HISTORY_FAILURE);
+  }
+  const seen = new Set();
+  const history = [];
+  for (const documentValue of payload.documents.slice(0, MAX_CALLS_HISTORY_ITEMS)) {
+    if (!isCallsTranscriptDocument(documentValue)) continue;
+    const documentId = documentValue.id.trim();
+    if (seen.has(documentId)) continue;
+    seen.add(documentId);
+    history.push({
+      id: documentId,
+      title: documentValue.title.trim(),
+      created_at: typeof documentValue.created_at === 'string' ? documentValue.created_at : null,
+      updated_at: typeof documentValue.updated_at === 'string' ? documentValue.updated_at : null,
+    });
+  }
+  return history;
+}
+
+export function formatCallsHistoryDate(value) {
+  if (typeof value !== 'string' || !value) return 'Date unavailable';
+  const parsed = new Date(value);
+  if (!Number.isFinite(parsed.getTime())) return 'Date unavailable';
+  return parsed.toLocaleString();
+}
+
 export function fixedCallsError(status) {
   return STATUS_MESSAGES[status] || GENERIC_FAILURE;
 }
@@ -389,6 +442,38 @@ export async function requestCallsDocumentSave(
   return { id: payload.id };
 }
 
+export async function requestCallsHistory({ fetchImpl = globalThis.fetch, signal } = {}) {
+  let response;
+  try {
+    response = await fetchImpl(DOCUMENT_HISTORY_ENDPOINT, {
+      method: 'GET',
+      credentials: 'same-origin',
+      signal,
+    });
+  } catch (error) {
+    if (error && error.name === 'AbortError') {
+      throw new CallsUiError('HISTORY_CANCELLED', 'History loading cancelled.');
+    }
+    throw new CallsUiError('HISTORY_REQUEST_FAILED', HISTORY_FAILURE);
+  }
+  if (!response || response.ok !== true) {
+    const status = response && Number.isInteger(response.status) ? response.status : 0;
+    const message = status === 401
+      ? 'Your browser session has expired. Sign in again, then retry.'
+      : status === 403
+        ? 'Your account is not allowed to view saved documents.'
+        : HISTORY_FAILURE;
+    throw new CallsUiError(`HISTORY_HTTP_${status || 'ERROR'}`, message, status);
+  }
+  let payload;
+  try {
+    payload = await response.json();
+  } catch (_) {
+    throw new CallsUiError('HISTORY_MALFORMED_RESPONSE', HISTORY_FAILURE);
+  }
+  return filterCallsHistoryDocuments(payload);
+}
+
 export function setElementText(element, value) {
   if (element) element.textContent = String(value ?? '');
 }
@@ -418,6 +503,7 @@ export function createCallsController({
   clearIntervalFn = globalThis.clearInterval,
   now = () => Date.now(),
   isSecureContext = globalThis.isSecureContext !== false,
+  openDocument,
 } = {}) {
   let selectedFile = null;
   let selectedSource = null;
@@ -438,6 +524,12 @@ export function createCallsController({
   let saveController = null;
   let saveGeneration = 0;
   let saved = false;
+  let historyActive = false;
+  let historyController = null;
+  let historyGeneration = 0;
+  let panelVisible = false;
+  let historyHasLoaded = false;
+  let historyRefreshPending = false;
 
   const callView = (method, ...args) => {
     if (view && typeof view[method] === 'function') view[method](...args);
@@ -515,6 +607,60 @@ export function createCallsController({
     resultCreatedAt = null;
     callView('setSaveBusy', false);
     if (clearView) callView('clearSave');
+  }
+
+  function abortHistory() {
+    historyGeneration += 1;
+    if (historyController) historyController.abort();
+    historyController = null;
+    historyActive = false;
+    historyRefreshPending = false;
+    callView('setHistoryLoading', false, false);
+  }
+
+  async function loadHistory({ refreshing = false } = {}) {
+    if (!panelVisible || historyActive) return false;
+    historyActive = true;
+    const run = ++historyGeneration;
+    historyController = createAbortController();
+    callView('setHistoryLoading', true, refreshing || historyHasLoaded);
+    try {
+      const documents = await requestCallsHistory({
+        fetchImpl,
+        signal: historyController.signal,
+      });
+      if (run !== historyGeneration || !panelVisible) return false;
+      historyHasLoaded = true;
+      callView('renderHistory', documents, openHistoryDocument);
+      return true;
+    } catch (error) {
+      if (run !== historyGeneration || !panelVisible) return false;
+      const safe = error instanceof CallsUiError
+        ? error : new CallsUiError('HISTORY_REQUEST_FAILED', HISTORY_FAILURE);
+      if (safe.code !== 'HISTORY_CANCELLED') callView('setHistoryError', safe.message);
+      return false;
+    } finally {
+      if (run === historyGeneration) {
+        historyActive = false;
+        historyController = null;
+        callView('setHistoryLoading', false, false);
+        if (historyRefreshPending && panelVisible) {
+          historyRefreshPending = false;
+          void loadHistory({ refreshing: true });
+        }
+      }
+    }
+  }
+
+  async function openHistoryDocument(documentId) {
+    if (typeof documentId !== 'string' || !documentId || typeof openDocument !== 'function') return false;
+    try {
+      await openDocument(documentId);
+      return true;
+    } catch (_) {
+      callView('setHistoryError', 'The saved transcript could not be opened. Please try again.');
+      return false;
+    }
   }
 
   function selectFile(file) {
@@ -764,6 +910,10 @@ export function createCallsController({
       saved = true;
       callView('setSaved', true);
       callView('setSaveStatus', 'Saved to Library.', 'success');
+      if (panelVisible) {
+        if (historyActive) historyRefreshPending = true;
+        else void loadHistory({ refreshing: true });
+      }
       return true;
     } catch (error) {
       if (run !== saveGeneration) return false;
@@ -798,6 +948,8 @@ export function createCallsController({
   }
 
   function onPanelHidden() {
+    panelVisible = false;
+    if (historyActive) abortHistory();
     if (active) cancel();
     if (saveActive) {
       clearSaveState({ clearView: false });
@@ -809,12 +961,19 @@ export function createCallsController({
     return true;
   }
 
+  function onPanelOpened() {
+    panelVisible = true;
+    return loadHistory({ refreshing: historyHasLoaded });
+  }
+
   function destroy() {
     generation += 1;
     if (controller) controller.abort();
     controller = null;
     active = false;
     clearSaveState({ clearView: false });
+    panelVisible = false;
+    abortHistory();
     recordingGeneration += 1;
     discardCapture();
     revokePreview();
@@ -845,13 +1004,17 @@ export function createCallsController({
     reset,
     copyTranscript,
     saveToLibrary,
+    loadHistory,
+    openHistoryDocument,
     startRecording,
     stopRecording,
     cancelRecording,
+    onPanelOpened,
     onPanelHidden,
     destroy,
     isActive: () => active,
     isSaveActive: () => saveActive,
+    isHistoryActive: () => historyActive,
     getRecordingState: () => recordingState,
   };
 }
@@ -876,6 +1039,10 @@ function _domView(doc) {
   const saveTitle = byId('calls-save-title');
   const saveButton = byId('calls-save-btn');
   const saveStatus = byId('calls-save-status');
+  const historyRefresh = byId('calls-history-refresh-btn');
+  const historyStatus = byId('calls-history-status');
+  const historyEmpty = byId('calls-history-empty');
+  const historyList = byId('calls-history-list');
   const recordStart = byId('calls-record-start-btn');
   const recordStop = byId('calls-record-stop-btn');
   const recordCancel = byId('calls-record-cancel-btn');
@@ -1005,6 +1172,61 @@ function _domView(doc) {
       saveStatus.setAttribute('role', kind === 'error' ? 'alert' : 'status');
       saveStatus.setAttribute('aria-live', kind === 'error' ? 'assertive' : 'polite');
     },
+    setHistoryLoading(busy, refreshing) {
+      historyRefresh.disabled = busy;
+      historyRefresh.textContent = busy ? (refreshing ? 'Refreshing…' : 'Loading…') : 'Refresh history';
+      if (busy) {
+        setElementText(historyStatus, refreshing ? 'Refreshing saved transcripts…' : 'Loading saved transcripts…');
+        historyStatus.dataset.state = 'loading';
+        historyStatus.setAttribute('role', 'status');
+        historyStatus.setAttribute('aria-live', 'polite');
+      }
+    },
+    renderHistory(documents, onOpen) {
+      historyList.replaceChildren();
+      for (const documentValue of documents) {
+        const item = doc.createElement('li');
+        const details = doc.createElement('div');
+        const title = doc.createElement('strong');
+        const meta = doc.createElement('span');
+        const open = doc.createElement('button');
+        item.className = 'calls-history-item';
+        details.className = 'calls-history-details';
+        title.className = 'calls-history-title';
+        meta.className = 'calls-history-meta';
+        open.type = 'button';
+        open.className = 'calls-button calls-history-open';
+        setElementText(title, documentValue.title);
+        setElementText(
+          meta,
+          `MarketMatch Calls · ${formatCallsHistoryDate(documentValue.updated_at || documentValue.created_at)}`,
+        );
+        setElementText(open, 'Open');
+        open.setAttribute('aria-label', `Open ${documentValue.title} from Library`);
+        open.addEventListener('click', () => onOpen(documentValue.id));
+        details.append(title, meta);
+        item.append(details, open);
+        historyList.appendChild(item);
+      }
+      const empty = documents.length === 0;
+      historyList.hidden = empty;
+      historyEmpty.hidden = !empty;
+      setElementText(
+        historyStatus,
+        empty
+          ? 'Saved transcripts loaded. No Calls transcripts were found.'
+          : `${documents.length} saved ${documents.length === 1 ? 'transcript' : 'transcripts'} loaded.`,
+      );
+      historyStatus.dataset.state = 'success';
+      historyStatus.setAttribute('role', 'status');
+      historyStatus.setAttribute('aria-live', 'polite');
+    },
+    setHistoryError(message) {
+      setElementText(historyStatus, message);
+      historyStatus.dataset.state = 'error';
+      historyStatus.setAttribute('role', 'alert');
+      historyStatus.setAttribute('aria-live', 'assertive');
+    },
     clearUpload() {
       fileInput.value = '';
       selected.hidden = true;
@@ -1082,20 +1304,29 @@ async function _copyText(text) {
   await navigator.clipboard.writeText(text);
 }
 
-export function init(doc = globalThis.document) {
+export function init(doc = globalThis.document, { openDocument } = {}) {
   if (!doc) return null;
   const modal = doc.getElementById('calls-modal');
   const openButton = doc.getElementById('tool-calls-btn');
   if (!modal || !openButton || modal.dataset.callsWired === 'true') return null;
   modal.dataset.callsWired = 'true';
   const view = _domView(doc);
-  const controller = createCallsController({ view, copyText: _copyText });
+  let closePanel = () => {};
+  const controller = createCallsController({
+    view,
+    copyText: _copyText,
+    openDocument: async (documentId) => {
+      closePanel();
+      if (typeof openDocument === 'function') await openDocument(documentId);
+    },
+  });
   const fileInput = doc.getElementById('calls-file-input');
   const recordStart = doc.getElementById('calls-record-start-btn');
   const saveTitle = doc.getElementById('calls-save-title');
   const show = () => {
     modal.classList.remove('hidden');
     modal.setAttribute('aria-hidden', 'false');
+    void controller.onPanelOpened();
     recordStart.focus();
   };
   const close = () => {
@@ -1104,6 +1335,7 @@ export function init(doc = globalThis.document) {
     modal.setAttribute('aria-hidden', 'true');
     openButton.focus();
   };
+  closePanel = close;
   openButton.addEventListener('click', show);
   openButton.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -1129,6 +1361,7 @@ export function init(doc = globalThis.document) {
   });
   doc.getElementById('calls-copy-btn').addEventListener('click', () => controller.copyTranscript());
   doc.getElementById('calls-save-btn').addEventListener('click', () => controller.saveToLibrary(saveTitle.value));
+  doc.getElementById('calls-history-refresh-btn').addEventListener('click', () => controller.loadHistory({ refreshing: true }));
   modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
   doc.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !modal.classList.contains('hidden')) close();

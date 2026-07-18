@@ -110,9 +110,13 @@ fixture through real HTTP requests against a running dev server — see
 - A per-line entry UI for the manual-percentage/manual-amount landed-cost allocation methods (fully implemented and tested at the service layer; only the automatic/basis-driven methods have a form today).
 - A `CostDocument`/`CostCharge` upload UI (currently created via the ORM/fixture — this pass added the calculation engine and its trigger UI, not a document-upload flow, which is a distinct, larger feature).
 
-## Priority 1 (deferred, tracked in `KNOWN_LIMITATIONS.md`)
+## Priority 1 (tracked in `KNOWN_LIMITATIONS.md`)
 
-CONFOTUR reconciliation UI, tool custody UI, cycle-count UI, storage
+25. ~~CONFOTUR reconciliation UI~~ — **Done** (continuing autonomous
+    session). `apps.customs.services`/`/aduanas/confotur/` — see
+    `docs/implementation-log.md` for the full account.
+
+Remaining, in documented order: tool custody UI, cycle-count UI, storage
 capacity/suitability UI, external storage comparison calculator, supplier
 claim package generation, QR label printing.
 

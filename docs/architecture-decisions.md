@@ -2,6 +2,22 @@
 
 Newest first.
 
+## ADR-027 — CONFOTUR duplicate candidates are grouped live at read time, never a persisted "dismissed" state
+**Decision:** `apps.customs.services.detect_duplicate_candidates`
+recomputes the candidate list on every call by grouping still-live
+(`is_duplicate_of__isnull=True`) `ConfoturLine` rows by shared
+`quotation`/`manifest_line`; there is no "confirmed not a duplicate,
+stop warning me" action or field.
+**Why:** The project-wide convention (already established for
+`Discrepancy`/`ManifestVariance`) is that a flagged risk stays visible
+until genuinely resolved, never silently dismissed — "nothing in this
+system closes a discrepancy by deleting it"
+(`BUSINESS_REQUIREMENTS.md` §3). A permanent per-pair dismiss would
+need a new model/field for something that isn't otherwise tracked, for
+the sole purpose of making a real duplicate-exemption risk stop being
+shown — the wrong trade-off for a control specifically about preventing
+silent double-claimed exemptions (spec section 25).
+
 ## ADR-026 — Landed-cost allocation: last-line-absorbs-rounding, never-fabricate-a-conversion-rate
 **Decision:** `apps.cost.services.run_allocation` computes every
 allocated amount by proportional share except the *last* eligible line,

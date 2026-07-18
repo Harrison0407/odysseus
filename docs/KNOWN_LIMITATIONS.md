@@ -81,12 +81,25 @@ is silently claimed to be done when it isn't.
    Uploading `CostDocument`/`CostCharge` records themselves still has no
    dedicated UI (out of scope for this gap, which was specifically
    about *running* an allocation, not creating the charges to allocate).
-6. **Priority 1 UI entirely:** CONFOTUR reconciliation screens, tool
-   custody screens, cycle-count screens, storage capacity/suitability
-   warnings, external-storage comparison calculator, supplier claim
-   package generation, QR label printing. Data models exist for all of
-   these (`apps.customs`, `apps.tools`, `apps.inventory.CycleCount`,
-   `apps.receiving.AlternativeStorageOption`); none has a UI yet.
+6. **Priority 1 UI, in progress:**
+   - ~~CONFOTUR reconciliation screens~~ — **Done.**
+     `apps.customs.services.detect_duplicate_candidates`/
+     `confirm_duplicate` (the duplicate-exemption detection/confirmation
+     logic did not exist anywhere before this session, only
+     `ConfoturLine.is_duplicate_of` did) + `/aduanas/confotur/` list/
+     detail/reconciliation screens. Groups still-unresolved
+     `ConfoturLine` rows by shared `quotation` or `manifest_line`;
+     never auto-resolves a candidate, only a human confirmation does
+     (matches the project-wide "a discrepancy stays visible until
+     genuinely resolved" rule). 10 new tests.
+   - Tool custody screens, cycle-count screens, storage
+     capacity/suitability warnings, external-storage comparison
+     calculator, supplier claim package generation, QR label printing
+     remain **not yet built**. Data models exist for all of these
+     (`apps.tools`, `apps.inventory.CycleCount`,
+     `apps.receiving.AlternativeStorageOption`); none has a UI yet —
+     see `docs/implementation-roadmap.md` for which, if any, are
+     picked up next.
 7. ~~`purchasing_to_finance`/`finance_to_logistics` have no "create
    handoff" button" on the Purchase Order detail page~~ — **Done.** All
    8 required gates now have a "create handoff" entry point on their

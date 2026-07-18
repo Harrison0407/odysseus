@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Reconciliación CONFOTUR — posibles exenciones duplicadas</h3>
+<p class="text-muted small">
+    Muestra grupos de líneas CONFOTUR aún no resueltas que comparten la misma cotización o línea de manifiesto —
+    el riesgo de que la misma exención se reclame dos veces (p. ej. una cotización dividida entre varios contenedores).
+    Nada se resuelve automáticamente: cada grupo permanece aquí hasta que una persona confirme cuál línea es duplicado de cuál.
+</p>
+
+{% for candidate in candidates %}
+<div class="card mb-3 border-warning">
+    <div class="card-header">
+        Posible duplicado — base compartida: {% if candidate.basis == "quotation" %}Cotización{% else %}Línea de manifiesto{% endif %}
+    </div>
+    <div class="card-body">
+        <div class="table-responsive mb-3">
+        <table class="table table-sm">
+            <thead><tr><th>Listado</th><th>Cotización</th><th>Línea de manifiesto</th><th>Cantidad</th><th>Exención solicitada</th></tr></thead>
+            <tbody>
+            {% for line in candidate.lines %}
+                <tr>
+                    <td><a href="{% url 'customs:confotur-detail' line.confotur_list_id %}">{{ line.confotur_list }}</a></td>
+                    <td>{{ line.quotation|default:"—" }}</td>
+                    <td>{{ line.manifest_line|default:"—" }}</td>
+                    <td>{{ line.imported_quantity|default:"—" }}</td>
+                    <td>{{ line.requested_exemption|default:"—" }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% with first_line=candidate.lines.0 %}
+        <form method="post" action="{% url 'customs:confirm-duplicate' first_line.pk %}" class="d-flex gap-2 align-items-end">
+            {% csrf_token %}
+            <div>
+                <label class="form-label small">Marcar "{{ first_line.confotur_list }}" como duplicado de:</label>
+                {{ candidate.form.duplicate_line }}
+            </div>
+            <button class="btn btn-warning btn-sm" type="submit">Confirmar duplicado</button>
+        </form>
+        {% endwith %}
+    </div>
+</div>
+{% empty %}
+<p class="text-muted">Sin candidatos a exención duplicada pendientes de reconciliar.</p>
+{% endfor %}
+
+<a class="btn btn-outline-secondary btn-sm" href="{% url 'customs:confotur-list' %}">Volver a listados</a>
+{% endblock %}

@@ -417,3 +417,25 @@ working tree.
     charge by CBM across its 11 real manifest lines through the actual
     UI buttons, calculated a real `LandedCostVersion` with genuine
     per-unit freight costs, and finalized it.
+
+## Priority 1 (continuing autonomous session, first item)
+
+All Priority 0 gaps from `KNOWN_LIMITATIONS.md` are now closed as of the
+previous entry. Proceeding through Priority 1 in the roadmap's
+documented order.
+
+34. **CONFOTUR reconciliation UI** (spec section 25). `apps.customs` had
+    no `views.py`/`urls.py` wired in at all before this session — built
+    the full vertical slice. `apps.customs.services.detect_duplicate_candidates`
+    groups still-unresolved `ConfoturLine` rows by shared `quotation` or
+    `manifest_line`; `confirm_duplicate` sets the pre-existing
+    `is_duplicate_of` field (modeled since Priority 0, never previously
+    populated by any code path). Deliberately no "dismiss" action —
+    candidates stay visible until a human explicitly confirms one as a
+    duplicate of another (ADR-027), matching the project-wide rule that
+    flagged risks are never silently closed. `/aduanas/confotur/`
+    list/detail/reconciliation screens, linked from the main nav. 10 new
+    tests (`tests/test_confotur_reconciliation.py`), including
+    cross-organization isolation and an HTTP round-trip confirming a
+    resolved pair drops out of the candidate list — 138/138 passing (128
+    pre-existing + 10 new).

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>Listados CONFOTUR</h3>
+    <a class="btn btn-outline-danger btn-sm" href="{% url 'customs:reconciliation' %}">Reconciliación de duplicados</a>
+</div>
+<div class="table-responsive">
+<table class="table table-striped bg-white">
+    <thead><tr><th>Número de listado</th><th>Fecha de envío</th><th>Líneas</th></tr></thead>
+    <tbody>
+    {% for l in lists %}
+        <tr>
+            <td><a href="{% url 'customs:confotur-detail' l.pk %}">{{ l.list_number }}</a></td>
+            <td>{{ l.submitted_date|default:"—" }}</td>
+            <td>{{ l.lines.count }}</td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="3" class="text-muted">Sin listados CONFOTUR registrados.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

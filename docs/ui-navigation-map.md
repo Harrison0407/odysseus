@@ -63,6 +63,10 @@
 | `/reportes/embarque/<id>/instantanea/` | `apps.reports.views.shipment_snapshot` | Generates and downloads a self-contained HTML snapshot |
 | `/reportes/recepcion/<receipt_id>/manifiesto/` | `apps.reports.views.receiving_manifest_snapshot` | Detailed internal receiving manifest (spec 13A.8) — 10-section self-contained HTML download, linked from the receiving detail page |
 | `/reportes/compartir/<token>/` | `shared_view` | Public, revocable, logged read-only share link |
+| `/aduanas/confotur/` | `apps.customs.views.confotur_list_list` | CONFOTUR listings, scoped to organization |
+| `/aduanas/confotur/<id>/` | `confotur_list_detail` | Lines, exemption amounts, duplicate status |
+| `/aduanas/confotur/reconciliacion/` | `confotur_reconciliation` | Duplicate-exemption candidates (spec section 25), grouped by shared quotation/manifest line |
+| `/aduanas/confotur/lineas/<id>/confirmar-duplicado/` (POST) | `confotur_confirm_duplicate` | Confirms one line as a duplicate of another |
 | `/api/v1/...` | DRF router | `shipments`, `purchase-orders`, `manifest-lines`, `manifest-variances`, `discrepancies` (read-only, org-scoped) |
 | `/admin/` | Django admin | Back-office/debug only — every model auto-registered; never the intended business-user interface (spec requirement) |
 

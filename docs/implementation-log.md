@@ -1006,3 +1006,38 @@ documented order.
     the checksum and "Sin clasificar" state immediately after upload
     and the "Clasificado" state with the correct target after
     classification.
+48. **M8 final multi-building validation.** Live-validated the full
+    release across buildings beyond the Lawson-training pair used in
+    earlier milestones: a quality-control walkthrough and a full
+    corrective-issue lifecycle (report→assign→before/after evidence→
+    correct→verify-close) end-to-end in SOLE 26 — a different family
+    entirely from ARENA T1 — followed by a reinspection walkthrough
+    created from it; a pre-delivery-final walkthrough in the real
+    imported MARE B Building 25 (20 real units), including a blocked
+    READY attempt, a correctly-refused unauthorized path, and a
+    written-reason authorized override producing a real
+    `AuditEvent.Action.WAIVER` row. Cross-building filtering
+    (`?purpose=`) and the unfiltered dashboard were confirmed to
+    surface ARENA T1 Building 9, SOLE 26, and MARE B Building 25
+    side-by-side with no per-building branching. Two genuine defects
+    were found and fixed during this pass, both from real HTTP
+    requests, not from the test suite:
+    (1) `apps.walkthroughs.views.item_create_issue` did not catch
+    `apps.fieldissues.services.FieldIssueError` the way every sibling
+    lifecycle view does, so submitting the corrective-issue form
+    without a title crashed with an uncaught 500 instead of a friendly
+    form error — fixed by wrapping the call and redirecting with
+    `messages.error`, matching the existing pattern; a new HTTP-level
+    regression test (`test_http_create_issue_without_title_shows_error_not_500`)
+    confirms a 302 with no `FieldIssue` created rather than a 500.
+    (2) `apps.walkthroughs.services.mark_delivery_decision` did not
+    validate `decision` against `Walkthrough.DeliveryDecision`'s valid
+    values before assigning it, so an invalid or missing decision
+    value reached `walkthrough.save()` and raised a raw
+    `IntegrityError` on the NOT NULL column instead of a clean
+    `WalkthroughError` — fixed by validating up front; a new test
+    (`test_invalid_decision_value_rejected_cleanly`) covers both
+    `None` and an unrecognized string. 370/370 passing (368
+    pre-existing + 2 new). `manage.py check` and
+    `makemigrations --check --dry-run` both clean (no schema changes
+    were needed for either fix).

@@ -159,6 +159,15 @@ class TestCorrectiveIssueLinkage:
         assert issue.walkthrough_item_id == item.id
         assert issue.building_id == building.id
 
+    def test_http_create_issue_without_title_shows_error_not_500(self, client, building, harrison):
+        walkthrough = services.create_walkthrough(building, harrison, purpose=Walkthrough.Purpose.QUALITY_CONTROL)
+        item = services.add_item(walkthrough, harrison, room_or_location="Ventana sin título")
+        client.force_login(harrison)
+        response = client.post(reverse("walkthroughs:item-create-issue", args=[item.pk]), {"title": ""})
+        assert response.status_code == 302
+        item.refresh_from_db()
+        assert item.field_issue is None
+
     def test_full_reject_resubmit_reinspect_cycle_via_linked_issue(self, building, harrison, manuel, doc_type):
         from apps.fieldissues import services as issue_services
         from apps.fieldissues.models import FieldIssueEvidence
@@ -225,6 +234,18 @@ class TestDeliveryReadiness:
         walkthrough.refresh_from_db()
         assert walkthrough.delivery_decision == Walkthrough.DeliveryDecision.READY
         assert walkthrough.delivery_override_reason == ""
+
+    def test_invalid_decision_value_rejected_cleanly(self, building, harrison):
+        """A missing/invalid decision value must raise WalkthroughError,
+        never fall through to an IntegrityError on the NOT NULL
+        delivery_decision column."""
+        walkthrough = services.create_walkthrough(building, harrison, purpose=Walkthrough.Purpose.PRE_DELIVERY_FINAL)
+        with pytest.raises(services.WalkthroughError):
+            services.mark_delivery_decision(walkthrough, harrison, decision=None)
+        with pytest.raises(services.WalkthroughError):
+            services.mark_delivery_decision(walkthrough, harrison, decision="not_a_real_value")
+        walkthrough.refresh_from_db()
+        assert walkthrough.delivery_decision == Walkthrough.DeliveryDecision.PENDING
 
 
 class TestReinspectionAndSequential:

@@ -213,6 +213,9 @@ def mark_delivery_decision(walkthrough: Walkthrough, user, *, decision, override
     .WAIVER`) used throughout this system."""
     from apps.walkthroughs.models import Walkthrough as _Walkthrough
 
+    if decision not in _Walkthrough.DeliveryDecision.values:
+        raise WalkthroughError("Decisión de entrega inválida.")
+
     if decision == _Walkthrough.DeliveryDecision.READY:
         summary = delivery_readiness_summary(walkthrough)
         if summary.is_blocked:

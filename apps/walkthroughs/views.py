@@ -219,12 +219,18 @@ def item_add_evidence(request, pk):
 
 @login_required
 def item_create_issue(request, pk):
+    from apps.fieldissues.services import FieldIssueError
+
     organization = request.user.profile.organization
     item = get_object_or_404(WalkthroughItem, pk=pk, walkthrough__building__project__organization=organization)
     if request.method == "POST":
-        issue = services.create_issue_from_item(
-            item, request.user, title=request.POST.get("title", ""), description=request.POST.get("description", ""),
-        )
+        try:
+            issue = services.create_issue_from_item(
+                item, request.user, title=request.POST.get("title", ""), description=request.POST.get("description", ""),
+            )
+        except FieldIssueError as exc:
+            messages.error(request, str(exc))
+            return redirect("walkthroughs:detail", pk=item.walkthrough_id)
         messages.success(request, "Incidencia correctiva creada.")
         return redirect("fieldissues:detail", pk=issue.pk)
     return redirect("walkthroughs:detail", pk=item.walkthrough_id)

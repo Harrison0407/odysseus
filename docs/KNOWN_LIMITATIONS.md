@@ -474,6 +474,16 @@ is silently claimed to be done when it isn't.
   for this milestone beyond the target-type list being a fixed,
   explicit set (A54) rather than every model in the system — extending
   it to a new target type is a one-line addition.
+- ~~Final multi-building validation~~ — **Done.** The full walkthrough/
+  field-issue/corrective-action/delivery-readiness/override lifecycle
+  was live-validated end-to-end in SOLE 26 and MARE B Building 25 (in
+  addition to the ARENA T1 buildings used in earlier milestones), with
+  cross-building filtering and dashboards confirmed to work with no
+  per-building branching. Two real defects were found and fixed during
+  this pass (an uncaught exception on a missing form field, and a
+  missing input-validation check before a DB write) — see
+  `docs/implementation-log.md` entry 48. No known limitation remains
+  open for this release.
 
 ## Data-quality ambiguities (not bugs — see `DATA_QUALITY_AND_UNCERTAINTY.md`)
 

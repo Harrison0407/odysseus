@@ -883,3 +883,73 @@ documented order.
     pre-existing + 18 new). Verified migrations apply cleanly from an
     empty database; live HTTP walkthrough created a real training
     session in the actual imported ARENA T1 Building 11.
+46. **Apartment walkthroughs and corrective actions.** New
+    `apps.walkthroughs` app (ADR-038): `Walkthrough` requires only
+    `building`; floor/unit/`units` (M2M, for a deliberately-selected
+    group of apartments)/area are all optional (A48), so the same
+    model/service/view code already covers every configured active
+    building without any per-building branching — proven directly by a
+    dedicated test that creates walkthroughs against two independently
+    created buildings and asserts identical behavior. `purpose` is a
+    fixed 6-value enum (construction progress, quality control,
+    training/reference, pre-delivery final, final handover/delivery,
+    reinspection — A47) since the release names exactly these 6 with
+    distinct business logic (only the last two purposes trigger
+    delivery-readiness control), while `category` (windows, doors,
+    kitchens, ...) is `WalkthroughCategory`, a fully configurable
+    taxonomy mirroring `IssueCategory`/`TrainingCategory`.
+    `WalkthroughChecklistTemplateItem` seeds the real 16-item window/
+    sliding-door checklist (`seed_walkthrough_checklist_templates`) as
+    genuinely editable data, not a hard-coded branch;
+    `populate_checklist_from_template` bulk-creates one
+    `WalkthroughItem` per template entry. Each item records checklist
+    result, measurement + unit, digital-level reading, level/plumb/
+    square/operational-test conditions, and — critically —
+    `condition_found`/`adjustment_performed`/
+    `condition_after_adjustment` as three *distinct* fields, never one
+    overwriting another (verified by a dedicated test). Evidence reuses
+    the same stage-tagged wrapper pattern as field issues/training
+    (`WalkthroughItemEvidence`, via `attach_evidence`). A defect becomes
+    a real, fully-lifecycled `FieldIssue`
+    (`WalkthroughItem.field_issue` / `FieldIssue.walkthrough_item`,
+    ADR-038) — the entire reject/resubmit/reinspect/verify cycle is
+    `apps.fieldissues.services`'s, exercised end-to-end through a
+    linked issue in a dedicated test, never duplicated in
+    `apps.walkthroughs`. `delivery_readiness_summary` computes total/
+    passed/conditional/failed items, open issues, blocking defects,
+    overdue corrective actions, missing-evidence items, and pending-
+    verification issues entirely by querying the linked `FieldIssue`
+    rows' real status (A50) — never a second, driftable "resolved"
+    flag. `mark_delivery_decision` refuses a READY decision while
+    blocked unless an authorized override
+    (`can_override_gates` + written reason, logged as
+    `AuditEvent.Action.WAIVER`) is supplied, matching the override
+    shape used throughout this release. `create_reinspection_walkthrough`
+    creates a brand-new linked `Walkthrough` (`previous_walkthrough`)
+    without ever touching the original's own items/evidence;
+    `create_next_sequential_walkthrough` copies building/floor/
+    category/purpose/inspector for the next unit in a floor/building
+    sweep, satisfying "efficient sequential walkthroughs...without
+    repeatedly re-entering the same information" (A49) as a data-
+    copying convenience rather than one `Walkthrough` spanning an
+    entire floor. New `/recorridos/` create/list/detail screens (list
+    filterable by purpose/building), linked from the main nav. 18 new
+    tests (`tests/test_walkthroughs.py`), covering building-agnostic
+    creation across two separate buildings, all 6 purposes, every
+    walkthrough-scope option (building-only/floor/unit/selected
+    group), checklist-template population, digital-level measurement
+    recording, the condition-found-vs-after-adjustment preservation
+    guarantee, staged evidence, the corrective-issue-linkage
+    relationship, a full reject→resubmit→reinspect→verify cycle
+    through the linked issue, delivery-readiness blocking/authorized-
+    override/unauthorized-override/clear-to-proceed cases,
+    reinspection-walkthrough history preservation, sequential-
+    walkthrough creation, cross-organization HTTP isolation, and a
+    full HTTP create→add-item→record-result workflow — 354/354 passing
+    (336 pre-existing + 18 new). Verified migrations apply cleanly from
+    an empty database; live HTTP walkthrough seeded the real 16-item
+    checklist template and created a genuine construction-progress
+    walkthrough in the actual imported ARENA T1 Building 9 (a
+    different building than the training milestone's Building 11,
+    demonstrating the building-agnostic design live, not just in
+    tests).

@@ -2,6 +2,28 @@
 
 Newest first.
 
+## ADR-038 — Walkthrough corrective defects become real FieldIssues; delivery readiness is always read from that issue's actual status, never a parallel flag
+**Decision:** `WalkthroughItem.field_issue` (FK) links a defect to a
+genuinely created, fully-lifecycled `apps.fieldissues.FieldIssue` via
+`create_issue_from_item` (which calls the existing `report_issue`).
+`delivery_readiness_summary` computes blocking-defect/pending-
+verification counts by querying that linked issue's real `status` —
+an item flagged `is_blocking_defect=True` only stops blocking once its
+issue reaches `VERIFIED_CLOSED` through the existing, already-
+evidence-gated closure lifecycle. `mark_delivery_decision` refuses a
+`READY` decision while blocked, unless an authorized override
+(`can_override_gates` + written reason, logged as
+`AuditEvent.Action.WAIVER`) is supplied — the same override shape used
+throughout this release (storage suitability, drawings, spares, field
+issues).
+**Why:** Building a second "is this defect actually fixed" tracker on
+`WalkthroughItem` would let a walkthrough's own record drift out of
+sync with the real correction workflow's state (e.g. an item marked
+"resolved" while its linked issue was actually rejected and never
+re-verified). Reading the live `FieldIssue.status` instead makes that
+drift structurally impossible — there is exactly one place a
+correction's real state lives.
+
 ## ADR-037 — Training sessions mirror the field-issue location/evidence pattern exactly; reference-installation approval requires supervisor sign-off first
 **Decision:** `TrainingSession` (new `apps.training` app) uses the same
 building-required/floor-unit-room-optional location shape as

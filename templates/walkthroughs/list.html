@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center">
+    <h3>Recorridos</h3>
+    <a class="btn btn-primary btn-sm" href="{% url 'walkthroughs:create' %}">+ Nuevo recorrido</a>
+</div>
+<div class="mb-3 d-flex flex-wrap gap-1">
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'walkthroughs:list' %}">Todos</a>
+    {% for code, label in purposes %}
+        <a class="btn btn-sm btn-outline-secondary" href="?purpose={{ code }}">{{ label }}</a>
+    {% endfor %}
+</div>
+<div class="table-responsive">
+<table class="table table-sm table-striped bg-white">
+    <thead><tr><th>Edificio</th><th>Unidad</th><th>Propósito</th><th>Progreso</th><th>Decisión de entrega</th></tr></thead>
+    <tbody>
+    {% for w in walkthroughs %}
+        <tr>
+            <td><a href="{% url 'walkthroughs:detail' w.pk %}">{{ w.building }}</a></td>
+            <td>{{ w.unit|default:"—" }}</td>
+            <td>{{ w.get_purpose_display }}</td>
+            <td><span class="badge bg-secondary">{{ w.get_progress_status_display }}</span></td>
+            <td>
+                {% if w.delivery_decision == "ready" %}<span class="badge bg-success">Listo</span>
+                {% elif w.delivery_decision == "not_ready" %}<span class="badge bg-danger">No listo</span>
+                {% else %}<span class="badge bg-secondary">Pendiente</span>{% endif %}
+            </td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="5" class="text-muted">Sin recorridos registrados.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

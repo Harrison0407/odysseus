@@ -217,6 +217,17 @@
   participant list** — `acknowledge_participation` raises if the
   calling user isn't actually registered as a participant on that
   session, verified by a dedicated test.
+- **An apartment cannot be marked ready for delivery while blocking
+  defects or unverified corrections remain, without an authorized,
+  written-reason override.** `mark_delivery_decision` requires
+  `can_override_gates` for the override path (verified by a dedicated
+  unauthorized-attempt test) and always logs the override as
+  `AuditEvent.Action.WAIVER` with the full readiness snapshot as
+  `before_state` — never a silent bypass.
+- **A rejected walkthrough-linked correction's evidence is never
+  deleted**, since the correction lifecycle itself is `FieldIssue`'s —
+  the same guarantee already covers walkthrough-originated corrective
+  issues with no additional code.
 
 ## Known gaps (see `KNOWN_LIMITATIONS.md` for the full list)
 

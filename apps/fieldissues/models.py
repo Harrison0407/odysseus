@@ -80,6 +80,10 @@ class FieldIssue(BaseModel):
         "training.TrainingSession", on_delete=models.SET_NULL, null=True, blank=True, related_name="field_issues",
         help_text="Set when this issue was created directly from a training session — preserves the relationship.",
     )
+    walkthrough_item = models.ForeignKey(
+        "walkthroughs.WalkthroughItem", on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+        help_text="Set when this issue was created directly from a walkthrough inspection item.",
+    )
 
     status = models.CharField(max_length=30, choices=Status.choices, default=Status.REPORTED)
 

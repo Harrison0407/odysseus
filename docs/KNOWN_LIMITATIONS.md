@@ -450,9 +450,17 @@ is silently claimed to be done when it isn't.
   ordinary configured user — nothing branches on a specific name.
   Reference-installation approval requires supervisor sign-off first
   (A45). `/capacitaciones/` screens.
-- Apartment walkthroughs/corrective actions and the Unclassified
-  Evidence Inbox remain **not yet built** as of this entry — see
-  `docs/implementation-roadmap.md` for build order.
+- ~~Apartment walkthroughs and corrective actions~~ — **Done.** New
+  `apps.walkthroughs` app (ADR-038); building-agnostic (only
+  `building` required — proven by a test running the identical code
+  path against two independently created buildings). A defect becomes
+  a real `FieldIssue`; delivery readiness is always computed from that
+  issue's live status, never a second "resolved" flag (A50). An
+  apartment cannot be marked ready for delivery while blocking defects
+  or unverified corrections remain, unless an authorized override with
+  a written reason is recorded. `/recorridos/` screens.
+- The Unclassified Evidence Inbox remains **not yet built** as of this
+  entry — see `docs/implementation-roadmap.md` for build order.
 
 ## Data-quality ambiguities (not bugs — see `DATA_QUALITY_AND_UNCERTAINTY.md`)
 

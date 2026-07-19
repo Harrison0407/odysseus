@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>{{ walkthrough.get_purpose_display }} — {{ walkthrough.building }}</h3>
+<p>
+    <span class="badge bg-secondary">{{ walkthrough.get_progress_status_display }}</span>
+    {% if walkthrough.unit %}<span class="badge bg-info text-dark">{{ walkthrough.unit }}</span>{% endif %}
+    {% if walkthrough.previous_walkthrough %}<span class="badge bg-warning text-dark">Reinspección de recorrido anterior</span>{% endif %}
+</p>
+<a class="btn btn-outline-secondary btn-sm mb-3" href="{% url 'walkthroughs:list' %}">&larr; Volver</a>
+
+{% if readiness %}
+<div class="card mb-3 {% if readiness.is_blocked %}border-danger{% else %}border-success{% endif %}">
+    <div class="card-header">Control de listo-para-entrega</div>
+    <div class="card-body">
+        <table class="table table-sm mb-0">
+            <tr><th>Total de ítems</th><td>{{ readiness.total_items }}</td></tr>
+            <tr><th>Aprobados</th><td>{{ readiness.passed_items }}</td></tr>
+            <tr><th>Condicionados</th><td>{{ readiness.conditional_items }}</td></tr>
+            <tr><th>Rechazados</th><td>{{ readiness.failed_items }}</td></tr>
+            <tr><th>Incidencias abiertas</th><td>{{ readiness.open_issues }}</td></tr>
+            <tr><th>Defectos bloqueantes</th><td>{{ readiness.blocking_defects }}</td></tr>
+            <tr><th>Correcciones vencidas</th><td>{{ readiness.overdue_corrective_actions }}</td></tr>
+            <tr><th>Ítems sin evidencia</th><td>{{ readiness.missing_evidence_items }}</td></tr>
+            <tr><th>Incidencias pendientes de verificación</th><td>{{ readiness.pending_verification_issues }}</td></tr>
+            <tr><th>Decisión final</th><td>
+                {% if walkthrough.delivery_decision == "ready" %}<span class="badge bg-success">Listo para entrega</span>
+                {% elif walkthrough.delivery_decision == "not_ready" %}<span class="badge bg-danger">No listo</span>
+                {% else %}<span class="badge bg-secondary">Pendiente</span>{% endif %}
+                {% if walkthrough.delivery_decided_by %} — {{ walkthrough.delivery_decided_by }} ({{ walkthrough.delivery_decided_at|date:"d/m/Y H:i" }}){% endif %}
+            </td></tr>
+        </table>
+        <form method="post" action="{% url 'walkthroughs:delivery-decision' walkthrough.pk %}" class="row g-2 mt-2">
+            {% csrf_token %}
+            <div class="col-12 col-md-3">
+                <select name="decision" class="form-control form-control-sm">
+                    <option value="ready">Listo para entrega</option>
+                    <option value="not_ready">No listo</option>
+                </select>
+            </div>
+            <div class="col-12 col-md-6"><input type="text" name="override_reason" class="form-control form-control-sm" placeholder="Motivo de anulación (solo si hay bloqueo)"></div>
+            <div class="col-12 col-md-3"><button class="btn btn-primary btn-sm" type="submit">Registrar decisión</button></div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<div class="card mb-3">
+    <div class="card-header">Ítems del checklist</div>
+    <div class="table-responsive">
+    <table class="table table-sm bg-white mb-0">
+        <thead><tr><th>Ubicación/ítem</th><th>Resultado</th><th>Medición</th><th>Defecto bloqueante</th><th>Incidencia</th><th></th></tr></thead>
+        <tbody>
+        {% for item in items %}
+            <tr>
+                <td>{{ item.room_or_location|default:item.component_description }}</td>
+                <td><span class="badge bg-secondary">{{ item.get_checklist_result_display }}</span></td>
+                <td>{{ item.measurement|default:"—" }} {{ item.measurement_unit }} {{ item.digital_level_reading }}</td>
+                <td>{{ item.is_blocking_defect|yesno:"Sí,No" }}</td>
+                <td>{% if item.field_issue %}<a href="{% url 'fieldissues:detail' item.field_issue.pk %}">{{ item.field_issue.get_status_display }}</a>{% else %}—{% endif %}</td>
+                <td><button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#item-{{ item.pk }}">Detalle</button></td>
+            </tr>
+            <tr class="collapse" id="item-{{ item.pk }}">
+                <td colspan="6">
+                    <form method="post" action="{% url 'walkthroughs:item-record-result' item.pk %}" class="row g-2 mb-2">
+                        {% csrf_token %}
+                        <div class="col-6 col-md-2">
+                            <select name="checklist_result" class="form-control form-control-sm">
+                                {% for code, label in result_choices %}<option value="{{ code }}" {% if item.checklist_result == code %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-2"><input type="number" step="0.001" name="measurement" class="form-control form-control-sm" placeholder="Medición" value="{{ item.measurement|default:'' }}"></div>
+                        <div class="col-6 col-md-2"><input type="text" name="measurement_unit" class="form-control form-control-sm" placeholder="Unidad" value="{{ item.measurement_unit }}"></div>
+                        <div class="col-6 col-md-2"><input type="text" name="digital_level_reading" class="form-control form-control-sm" placeholder="Lectura nivel digital" value="{{ item.digital_level_reading }}"></div>
+                        <div class="col-6 col-md-2">
+                            <select name="level_condition" class="form-control form-control-sm">
+                                {% for code, label in condition_choices %}<option value="{{ code }}">Nivel: {{ label }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-2">
+                            <select name="plumb_condition" class="form-control form-control-sm">
+                                {% for code, label in condition_choices %}<option value="{{ code }}">Plomo: {{ label }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6"><textarea name="condition_found" class="form-control form-control-sm" rows="2" placeholder="Condición encontrada">{{ item.condition_found }}</textarea></div>
+                        <div class="col-12 col-md-6"><textarea name="adjustment_performed" class="form-control form-control-sm" rows="2" placeholder="Ajuste realizado">{{ item.adjustment_performed }}</textarea></div>
+                        <div class="col-12 col-md-6"><textarea name="condition_after_adjustment" class="form-control form-control-sm" rows="2" placeholder="Condición después del ajuste">{{ item.condition_after_adjustment }}</textarea></div>
+                        <div class="col-12 col-md-6"><textarea name="remaining_defect" class="form-control form-control-sm" rows="2" placeholder="Defecto remanente">{{ item.remaining_defect }}</textarea></div>
+                        <div class="col-12"><label class="small"><input type="checkbox" name="is_blocking_defect" {% if item.is_blocking_defect %}checked{% endif %}> Defecto bloqueante</label></div>
+                        <div class="col-12"><button class="btn btn-success btn-sm" type="submit">Guardar resultado</button></div>
+                    </form>
+
+                    <div class="row mb-2">
+                        {% for e in item.evidence.all %}
+                        <div class="col-6 col-md-3 mb-1">
+                            <div class="badge bg-secondary">{{ e.get_stage_display }}</div>
+                            {% if e.document.current_version %}<a href="{% url 'documents:download' e.document.pk e.document.current_version.pk %}" class="d-block small">{{ e.document.title }}</a>{% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <form method="post" action="{% url 'walkthroughs:item-add-evidence' item.pk %}" enctype="multipart/form-data" class="row g-2 mb-2">
+                        {% csrf_token %}
+                        <div class="col-6 col-md-2">
+                            <select name="stage" class="form-control form-control-sm">
+                                <option value="before">Antes</option><option value="during">Durante</option><option value="after">Después</option>
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-3">{{ upload_form.document_type }}</div>
+                        <div class="col-6 col-md-3">{{ upload_form.title }}</div>
+                        <div class="col-6 col-md-2">{{ upload_form.file }}</div>
+                        <div class="col-12 col-md-2"><button class="btn btn-outline-primary btn-sm" type="submit">Adjuntar</button></div>
+                    </form>
+
+                    {% if not item.field_issue %}
+                    <form method="post" action="{% url 'walkthroughs:item-create-issue' item.pk %}" class="row g-2">
+                        {% csrf_token %}
+                        <div class="col-12 col-md-6"><input type="text" name="title" class="form-control form-control-sm" placeholder="Título de incidencia correctiva" required></div>
+                        <div class="col-12 col-md-6"><input type="text" name="description" class="form-control form-control-sm" placeholder="Descripción"></div>
+                        <div class="col-12"><button class="btn btn-warning btn-sm" type="submit">Crear incidencia correctiva</button></div>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="6" class="text-muted">Sin ítems registrados.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    <div class="card-body d-flex flex-wrap gap-2">
+        <form method="post" action="{% url 'walkthroughs:populate-checklist' walkthrough.pk %}">
+            {% csrf_token %}<button class="btn btn-outline-primary btn-sm" type="submit">Poblar checklist desde plantilla</button>
+        </form>
+        <form method="post" action="{% url 'walkthroughs:add-item' walkthrough.pk %}" class="d-flex gap-2">
+            {% csrf_token %}
+            <input type="text" name="room_or_location" class="form-control form-control-sm" placeholder="Ubicación/ítem manual">
+            <button class="btn btn-outline-secondary btn-sm" type="submit">Agregar ítem</button>
+        </form>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Acciones del recorrido</div>
+    <div class="card-body d-flex flex-wrap gap-3">
+        <form method="post" action="{% url 'walkthroughs:set-progress' walkthrough.pk %}" class="d-flex gap-2">
+            {% csrf_token %}
+            <select name="progress_status" class="form-control form-control-sm">
+                <option value="not_started">No iniciado</option>
+                <option value="in_progress">En progreso</option>
+                <option value="completed">Completado</option>
+            </select>
+            <button class="btn btn-outline-primary btn-sm" type="submit">Actualizar progreso</button>
+        </form>
+        <form method="post" action="{% url 'walkthroughs:create-reinspection' walkthrough.pk %}">
+            {% csrf_token %}<button class="btn btn-outline-warning btn-sm" type="submit">Crear recorrido de reinspección</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

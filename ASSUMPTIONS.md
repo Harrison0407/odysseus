@@ -446,3 +446,45 @@ instead, exactly as required, and is **not** listed here as a resolved assumptio
   literal reading of "acknowledgement" and avoids a supervisor being
   able to silently mark someone as having acknowledged something they
   didn't.
+- **A47. "Purpose" (6 fixed values: construction progress, quality
+  control, training/reference, pre-delivery final, final handover/
+  delivery, reinspection) is a fixed `TextChoices` enum, while
+  "category" (windows, doors, kitchens, ...) is a fully configurable
+  taxonomy (`WalkthroughCategory`).** These are different axes with
+  different natures: purpose drives concrete, distinct business logic
+  (only pre-delivery/final-handover purposes trigger the delivery-
+  readiness control) and the release names exactly 6 of them with no
+  "configurable future purposes" language — unlike category, which the
+  release explicitly calls out as extensible ("configurable future
+  categories"). Modeling purpose as a fixed enum and category as
+  configurable data matches how each was actually described.
+- **A48. A "selected group of apartments" walkthrough uses a separate
+  `units` M2M field, distinct from the single `unit` FK.** A
+  walkthrough scoped to exactly one apartment sets `unit`; one spanning
+  a curated subset (e.g. "recheck these 3 units that reported issues")
+  sets `units` instead. `WalkthroughItem.unit` is independently
+  nullable so a multi-unit walkthrough's items can each record which
+  specific unit they belong to — the release's own item field list
+  doesn't include a `unit` field, but without one, a multi-unit
+  walkthrough's checklist would have no way to attribute an item to a
+  specific apartment, which would silently lose information the
+  release explicitly asks this scope option to support.
+- **A49. Efficient "sequential walkthroughs" are a service-layer
+  convenience (`create_next_sequential_walkthrough`) that copies
+  building/floor/category/purpose/inspector into a new `Walkthrough`
+  for the next unit — not one `Walkthrough` row spanning an entire
+  floor's apartments.** Keeping one walkthrough per apartment (with
+  `units` reserved for the deliberate "selected group" case, A48)
+  keeps `WalkthroughItem`'s cardinality simple and its delivery-
+  readiness computation scoped to exactly the apartment it's actually
+  about, while still satisfying "without repeatedly re-entering the
+  same information" as a UX/data-copying convenience.
+- **A50. Blocking-defect resolution is judged by the linked
+  `FieldIssue.status`, not a separate boolean the walkthrough tracks
+  itself.** `delivery_readiness_summary` treats a `WalkthroughItem
+  .is_blocking_defect=True` item as still blocking unless its linked
+  issue has reached `VERIFIED_CLOSED` — reusing the existing,
+  already-tested closure lifecycle (which itself requires before/after
+  evidence and an authorized independent verifier) rather than a
+  second, weaker "resolved" flag on the walkthrough item that could
+  drift out of sync with the real correction's actual state.

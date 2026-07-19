@@ -179,7 +179,12 @@ All four Priority 1 features are now complete. See
     evidence pattern; reference-installation approval requires
     supervisor sign-off first. `/capacitaciones/` screens, live-
     validated in the real ARENA T1 Building 11.
-37. Apartment walkthroughs and corrective actions — pending.
+37. ~~Apartment walkthroughs and corrective actions~~ — **Done.** New
+    `apps.walkthroughs` app (ADR-038); building-agnostic (only
+    `building` required), 6 configurable purposes, a defect becomes a
+    real `FieldIssue`, delivery readiness always read from that
+    issue's live status. `/recorridos/` screens, live-validated in
+    ARENA T1 Building 9.
 38. Unclassified Evidence Inbox — pending.
 
 ## Explicitly out of scope for any near-term increment

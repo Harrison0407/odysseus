@@ -134,6 +134,14 @@
 | `/capacitaciones/<id>/` | `session_detail` | Full detail: checklist, staged evidence, participant acknowledgements, lifecycle actions |
 | `/capacitaciones/<id>/iniciar/`, `/finalizar/`, `/firma-supervisor/`, `/aprobar-referencia/` (POST) | lifecycle actions | Reference-installation approval requires supervisor sign-off first (both gated by `can_override_gates`) |
 | `/capacitaciones/<id>/crear-incidencia/` (POST) | `session_create_issue` | Creates a real `FieldIssue` linked via `training_session`, never a disconnected copy |
+| `/recorridos/` | `apps.walkthroughs.views.walkthrough_list` | All walkthroughs; filterable by `?purpose=` (6 configurable purposes) or `?building=` |
+| `/recorridos/nuevo/` | `walkthrough_create` | Building required; floor/unit/units(group)/area/category/purpose/inspector all configurable |
+| `/recorridos/<id>/` | `walkthrough_detail` | Items, delivery-readiness control (pre-delivery/final-handover purposes only), per-item result/evidence/corrective-issue forms |
+| `/recorridos/<id>/poblar-checklist/` (POST) | `walkthrough_populate_checklist` | Bulk-creates items from the walkthrough's category's configured checklist template |
+| `/recorridos/<id>/decision-entrega/` (POST) | `walkthrough_delivery_decision` | Blocked by open blocking defects/unverified corrections unless an authorized override with a written reason is supplied |
+| `/recorridos/<id>/reinspeccion/` (POST) | `walkthrough_create_reinspection` | Creates a new linked walkthrough; the original is never edited |
+| `/recorridos/<id>/siguiente-secuencial/` (POST) | `walkthrough_create_next_sequential` | Creates the next unit's walkthrough pre-filled from this one, for efficient floor/building sweeps |
+| `/recorridos/items/<id>/registrar-resultado/`, `/evidencia/`, `/crear-incidencia/` (POST) | item actions | Checklist result + measurements/conditions, staged evidence, and linking a real corrective `FieldIssue` |
 
 | Role code | Dashboard template |
 |---|---|

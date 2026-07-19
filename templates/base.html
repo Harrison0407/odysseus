@@ -81,6 +81,17 @@
                         <li><a class="dropdown-item" href="{% url 'training:list' %}?reference=1">{% trans "Instalaciones de referencia" %}</a></li>
                     </ul>
                 </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" id="recorridosDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        {% trans "Recorridos" %}
+                    </a>
+                    <ul class="dropdown-menu" aria-labelledby="recorridosDropdown">
+                        <li><a class="dropdown-item" href="{% url 'walkthroughs:create' %}">{% trans "Nuevo recorrido" %}</a></li>
+                        <li><a class="dropdown-item" href="{% url 'walkthroughs:list' %}">{% trans "Todos los recorridos" %}</a></li>
+                        <li><a class="dropdown-item" href="{% url 'walkthroughs:list' %}?purpose=pre_delivery_final">{% trans "Previo a entrega" %}</a></li>
+                        <li><a class="dropdown-item" href="{% url 'walkthroughs:list' %}?purpose=final_handover_delivery">{% trans "Entrega final" %}</a></li>
+                    </ul>
+                </li>
                 <li class="nav-item"><a class="nav-link" href="{% url 'workflow:inbox' %}">{% trans "Flujo y Entregas" %}</a></li>
             </ul>
             <span class="navbar-text text-white me-3">{{ user.get_full_name|default:user.username }}</span>

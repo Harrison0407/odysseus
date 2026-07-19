@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>{{ party.display_name }}</h3>
+<p><span class="badge bg-secondary">{{ party.get_party_type_display }}</span> {% if party.is_hidden_by_default %}<span class="badge bg-danger">Oculta por defecto</span>{% endif %}</p>
+<a class="btn btn-outline-secondary btn-sm mb-3" href="{% url 'governance:party-list' %}">&larr; Volver</a>
+
+<div class="card mb-3">
+    <div class="card-header">Asignaciones de rol</div>
+    <ul class="list-group list-group-flush">
+        {% for ra in role_assignments %}
+        <li class="list-group-item">{{ ra.role_code }} — {{ ra.package|default:ra.project|default:"—" }} <span class="badge bg-secondary">{{ ra.get_status_display }}</span></li>
+        {% empty %}
+        <li class="list-group-item text-muted">Sin asignaciones de rol.</li>
+        {% endfor %}
+    </ul>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Usuarios miembros</div>
+    <ul class="list-group list-group-flush">
+        {% for m in memberships %}
+        <li class="list-group-item">{{ m.user }} {% if m.is_primary_contact %}<span class="badge bg-info text-dark">Contacto principal</span>{% endif %}</li>
+        {% empty %}
+        <li class="list-group-item text-muted">Sin usuarios miembros.</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endblock %}

@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Nueva cotización de cliente — {{ package.name }}</h3>
+<p class="text-muted">Solo información aprobada para el cliente — nunca precios/fábrica/costos internos.</p>
+<form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button class="btn btn-primary" type="submit">Preparar cotización</button>
+    <a class="btn btn-outline-secondary" href="{% url 'procurement:package-detail' package.pk %}">Cancelar</a>
+</form>
+{% endblock %}

@@ -210,7 +210,6 @@ def assign_package_role(package, party, role_code, user, *, effective_from=None,
     )
 
 
-@transaction.atomic
 def submit_factory_quote(package, factory_party, supplier, user, *, reference, currency="USD", total_amount=None,
                           issued_date=None, valid_until=None, trade_terms="") -> "Quotation":
     """Anyone holding CREATE_COMMERCIAL_DOCUMENT in this package may
@@ -219,17 +218,18 @@ def submit_factory_quote(package, factory_party, supplier, user, *, reference, c
     from apps.governance import services as governance_services
 
     if not governance_services.has_capability(user, "CREATE_COMMERCIAL_DOCUMENT", package=package):
+        governance_services.log_denied_attempt(user, "CREATE_COMMERCIAL_DOCUMENT", package=package, required_capability="CREATE_COMMERCIAL_DOCUMENT")
         raise PackageError("No tiene permiso para registrar cotizaciones de fábrica en este paquete.")
-    quotation = Quotation.objects.create(
-        organization=package.organization, supplier=supplier, reference=reference, currency=currency,
-        total_amount=total_amount, issued_date=issued_date, valid_until=valid_until, trade_terms=trade_terms,
-        package=package, factory_party=factory_party, classification="source_private", created_by=user,
-    )
-    audit.log(AuditEvent.Action.OTHER, instance=quotation, actor=user, summary=f"Cotización de fábrica registrada: {quotation}")
+    with transaction.atomic():
+        quotation = Quotation.objects.create(
+            organization=package.organization, supplier=supplier, reference=reference, currency=currency,
+            total_amount=total_amount, issued_date=issued_date, valid_until=valid_until, trade_terms=trade_terms,
+            package=package, factory_party=factory_party, classification="source_private", created_by=user,
+        )
+        audit.log(AuditEvent.Action.OTHER, instance=quotation, actor=user, summary=f"Cotización de fábrica registrada: {quotation}")
     return quotation
 
 
-@transaction.atomic
 def create_internal_commercial_sheet(package, user, *, source_quotation=None, factory_price, currency="USD",
                                       inland_transport=0, inspection_qc=0, consolidation=0, freight=0, insurance=0,
                                       duties_taxes=0, administration=0, contingency=0, markup_method="",
@@ -237,19 +237,20 @@ def create_internal_commercial_sheet(package, user, *, source_quotation=None, fa
     from apps.governance import services as governance_services
 
     if not governance_services.has_capability(user, "CREATE_COMMERCIAL_DOCUMENT", package=package):
+        governance_services.log_denied_attempt(user, "CREATE_COMMERCIAL_DOCUMENT", package=package, required_capability="CREATE_COMMERCIAL_DOCUMENT")
         raise PackageError("No tiene permiso para preparar hojas comerciales internas en este paquete.")
-    sheet = InternalCommercialSheet.objects.create(
-        package=package, source_quotation=source_quotation, factory_price=factory_price, currency=currency,
-        inland_transport=inland_transport, inspection_qc=inspection_qc, consolidation=consolidation, freight=freight,
-        insurance=insurance, duties_taxes=duties_taxes, administration=administration, contingency=contingency,
-        markup_method=markup_method, markup_value=markup_value, recommended_sell_price=recommended_sell_price,
-        exchange_rate_note=exchange_rate_note, prepared_by=user, created_by=user,
-    )
-    audit.log(AuditEvent.Action.OTHER, instance=sheet, actor=user, summary=f"Hoja comercial interna creada: {sheet}")
+    with transaction.atomic():
+        sheet = InternalCommercialSheet.objects.create(
+            package=package, source_quotation=source_quotation, factory_price=factory_price, currency=currency,
+            inland_transport=inland_transport, inspection_qc=inspection_qc, consolidation=consolidation, freight=freight,
+            insurance=insurance, duties_taxes=duties_taxes, administration=administration, contingency=contingency,
+            markup_method=markup_method, markup_value=markup_value, recommended_sell_price=recommended_sell_price,
+            exchange_rate_note=exchange_rate_note, prepared_by=user, created_by=user,
+        )
+        audit.log(AuditEvent.Action.OTHER, instance=sheet, actor=user, summary=f"Hoja comercial interna creada: {sheet}")
     return sheet
 
 
-@transaction.atomic
 def create_client_quote(package, user, *, visible_seller_party, product_description, quantity, sell_price,
                          currency="USD", client_facing_terms="", delivery_terms="", source_internal_sheet=None) -> "ClientQuote":
     """Deliberately accepts only explicit client-facing fields — never
@@ -258,17 +259,18 @@ def create_client_quote(package, user, *, visible_seller_party, product_descript
     from apps.governance import services as governance_services
 
     if not governance_services.has_capability(user, "CREATE_COMMERCIAL_DOCUMENT", package=package):
+        governance_services.log_denied_attempt(user, "CREATE_COMMERCIAL_DOCUMENT", package=package, required_capability="CREATE_COMMERCIAL_DOCUMENT")
         raise PackageError("No tiene permiso para preparar cotizaciones de cliente en este paquete.")
-    quote = ClientQuote.objects.create(
-        package=package, source_internal_sheet=source_internal_sheet, visible_seller_party=visible_seller_party,
-        product_description=product_description, quantity=quantity, sell_price=sell_price, currency=currency,
-        client_facing_terms=client_facing_terms, delivery_terms=delivery_terms, prepared_by=user, created_by=user,
-    )
-    audit.log(AuditEvent.Action.OTHER, instance=quote, actor=user, summary=f"Cotización de cliente preparada: {quote}")
+    with transaction.atomic():
+        quote = ClientQuote.objects.create(
+            package=package, source_internal_sheet=source_internal_sheet, visible_seller_party=visible_seller_party,
+            product_description=product_description, quantity=quantity, sell_price=sell_price, currency=currency,
+            client_facing_terms=client_facing_terms, delivery_terms=delivery_terms, prepared_by=user, created_by=user,
+        )
+        audit.log(AuditEvent.Action.OTHER, instance=quote, actor=user, summary=f"Cotización de cliente preparada: {quote}")
     return quote
 
 
-@transaction.atomic
 def approve_client_quote(quote: "ClientQuote", user) -> "ClientQuote":
     """Separation of duties: APPROVE_CLIENT_QUOTE is never implied by
     CREATE_COMMERCIAL_DOCUMENT — the two capabilities are granted
@@ -277,16 +279,17 @@ def approve_client_quote(quote: "ClientQuote", user) -> "ClientQuote":
     from apps.governance import services as governance_services
 
     if not governance_services.has_capability(user, "APPROVE_CLIENT_QUOTE", package=quote.package):
+        governance_services.log_denied_attempt(user, "APPROVE_CLIENT_QUOTE", package=quote.package, resource=quote, required_capability="APPROVE_CLIENT_QUOTE")
         raise PackageError("No tiene permiso para aprobar cotizaciones de cliente.")
-    quote.status = ClientQuote.Status.APPROVED
-    quote.approved_by = user
-    quote.approved_at = timezone.now()
-    quote.save()
-    audit.log(AuditEvent.Action.OTHER, instance=quote, actor=user, summary=f"Cotización de cliente aprobada: {quote}")
+    with transaction.atomic():
+        quote.status = ClientQuote.Status.APPROVED
+        quote.approved_by = user
+        quote.approved_at = timezone.now()
+        quote.save()
+        audit.log(AuditEvent.Action.OTHER, instance=quote, actor=user, summary=f"Cotización de cliente aprobada: {quote}")
     return quote
 
 
-@transaction.atomic
 def freeze_package(package, user, *, incoterm="", currency="USD", payment_terms="", specification_drawing=None,
                     evidence_policy="") -> "ProcurementPackage":
     """Freezes the critical package terms (spec section 16) — seller of
@@ -298,28 +301,30 @@ def freeze_package(package, user, *, incoterm="", currency="USD", payment_terms=
     from apps.governance.models import RoleAssignment
 
     if not governance_services.has_capability(user, "APPROVE_GATE", package=package):
+        governance_services.log_denied_attempt(user, "APPROVE_GATE", package=package, required_capability="APPROVE_GATE")
         raise PackageError("No tiene permiso para congelar los términos de este paquete.")
 
-    critical_roles = ["seller_of_record", "exporter_of_record", "china_procurement_operator", "production_factory", "production_site"]
-    role_snapshot = {}
-    for role_code in critical_roles:
-        assignment = RoleAssignment.objects.filter(
-            package=package, role_code=role_code, status=RoleAssignment.Status.ACTIVE,
-        ).order_by("-created_at").first()
-        role_snapshot[role_code] = str(assignment.party_id) if assignment else None
+    with transaction.atomic():
+        critical_roles = ["seller_of_record", "exporter_of_record", "china_procurement_operator", "production_factory", "production_site"]
+        role_snapshot = {}
+        for role_code in critical_roles:
+            assignment = RoleAssignment.objects.filter(
+                package=package, role_code=role_code, status=RoleAssignment.Status.ACTIVE,
+            ).order_by("-created_at").first()
+            role_snapshot[role_code] = str(assignment.party_id) if assignment else None
 
-    package.frozen_snapshot = {
-        "roles": role_snapshot, "visibility_mode": package.visibility_mode, "incoterm": incoterm,
-        "currency": currency, "payment_terms": payment_terms,
-        "specification_drawing_id": str(specification_drawing.id) if specification_drawing else None,
-        "evidence_policy": evidence_policy,
-    }
-    package.is_frozen = True
-    package.status = ProcurementPackage.Status.FROZEN
-    package.frozen_at = timezone.now()
-    package.frozen_by = user
-    package.save()
-    audit.log(AuditEvent.Action.PACKAGE_FREEZE, instance=package, actor=user, summary=f"Paquete congelado: {package}")
+        package.frozen_snapshot = {
+            "roles": role_snapshot, "visibility_mode": package.visibility_mode, "incoterm": incoterm,
+            "currency": currency, "payment_terms": payment_terms,
+            "specification_drawing_id": str(specification_drawing.id) if specification_drawing else None,
+            "evidence_policy": evidence_policy,
+        }
+        package.is_frozen = True
+        package.status = ProcurementPackage.Status.FROZEN
+        package.frozen_at = timezone.now()
+        package.frozen_by = user
+        package.save()
+        audit.log(AuditEvent.Action.PACKAGE_FREEZE, instance=package, actor=user, summary=f"Paquete congelado: {package}")
     return package
 
 
@@ -346,7 +351,6 @@ def client_safe_site_alias(party, package) -> str:
     return f"Verified Production Site {index}"
 
 
-@transaction.atomic
 def create_verification_assertion(package, assertion_code, client_visible_wording, user, *, source_evidence_bundle=None,
                                    source_party=None, valid_until=None) -> "VerificationAssertion":
     from apps.audit.models import EvidenceBundle
@@ -356,15 +360,17 @@ def create_verification_assertion(package, assertion_code, client_visible_wordin
     from apps.governance import services as governance_services
 
     if not governance_services.has_capability(user, "CREATE_COMMERCIAL_DOCUMENT", package=package):
+        governance_services.log_denied_attempt(user, "CREATE_COMMERCIAL_DOCUMENT", package=package, required_capability="CREATE_COMMERCIAL_DOCUMENT")
         raise PackageError("No tiene permiso para crear aserciones de verificación en este paquete.")
     if source_evidence_bundle is not None and source_evidence_bundle.status != EvidenceBundle.Status.VERIFIED:
         raise PackageError("La aserción requiere un paquete de evidencia ya verificado, no solo cargado.")
-    assertion = VerificationAssertion.objects.create(
-        package=package, assertion_code=assertion_code, client_visible_wording=client_visible_wording,
-        source_evidence_bundle=source_evidence_bundle, source_party=source_party, verifier=user,
-        verified_at=timezone.now(), valid_until=valid_until, created_by=user,
-    )
-    audit.log(AuditEvent.Action.VERIFICATION_ASSERTION, instance=assertion, actor=user, summary=f"Aserción de verificación creada: {assertion}")
+    with transaction.atomic():
+        assertion = VerificationAssertion.objects.create(
+            package=package, assertion_code=assertion_code, client_visible_wording=client_visible_wording,
+            source_evidence_bundle=source_evidence_bundle, source_party=source_party, verifier=user,
+            verified_at=timezone.now(), valid_until=valid_until, created_by=user,
+        )
+        audit.log(AuditEvent.Action.VERIFICATION_ASSERTION, instance=assertion, actor=user, summary=f"Aserción de verificación creada: {assertion}")
     return assertion
 
 

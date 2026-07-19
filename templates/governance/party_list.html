@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center">
+    <h3>Partes (Party)</h3>
+    <a class="btn btn-primary btn-sm" href="{% url 'governance:party-create' %}">+ Nueva parte</a>
+</div>
+<div class="table-responsive">
+<table class="table table-sm table-striped bg-white">
+    <thead><tr><th>Nombre</th><th>Tipo</th><th>Oculta por defecto</th></tr></thead>
+    <tbody>
+    {% for p in parties %}
+    <tr>
+        <td><a href="{% url 'governance:party-detail' p.pk %}">{{ p.display_name }}</a></td>
+        <td>{{ p.get_party_type_display }}</td>
+        <td>{{ p.is_hidden_by_default|yesno:"Sí,No" }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="3" class="text-muted">Sin partes registradas.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

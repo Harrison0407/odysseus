@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>{{ package.name }}</h3>
+<p>
+    <span class="badge bg-secondary">{{ package.get_visibility_mode_display }}</span>
+    <span class="badge bg-light text-dark border">{{ package.get_status_display }}</span>
+    {% if package.is_on_hold %}<span class="badge bg-warning text-dark">En espera de cambio</span>{% endif %}
+</p>
+<a class="btn btn-outline-secondary btn-sm mb-3" href="{% url 'procurement:package-list' %}">&larr; Volver a paquetes</a>
+
+<div class="card mb-3">
+    <div class="card-header">Roles asignados (visibles para su usuario)</div>
+    <ul class="list-group list-group-flush">
+        {% for ra in role_assignments %}
+        <li class="list-group-item">{{ ra.party }} — {{ ra.role_code }} {% if ra.client_visible %}<span class="badge bg-info text-dark">Visible a cliente</span>{% endif %}</li>
+        {% empty %}
+        <li class="list-group-item text-muted">Sin roles visibles.</li>
+        {% endfor %}
+    </ul>
+</div>
+
+{% if can_view_client_quote %}
+<div class="card mb-3">
+    <div class="card-header">Cotizaciones de cliente (client-safe)</div>
+    <div class="card-body">
+        {% for q in client_quotes %}
+        <div class="border rounded p-2 mb-2">
+            <strong>{{ q.visible_seller_party }}</strong> — {{ q.product_description }}<br>
+            Cantidad: {{ q.quantity }} — Precio: {{ q.sell_price }} {{ q.currency }}<br>
+            Estado: <span class="badge bg-secondary">{{ q.get_status_display }}</span>
+            {% if q.status == "draft" and can_approve_client_quote %}
+            <form method="post" action="{% url 'procurement:client-quote-approve' q.pk %}" class="d-inline">
+                {% csrf_token %}
+                <button class="btn btn-sm btn-success">Aprobar cotización</button>
+            </form>
+            {% endif %}
+        </div>
+        {% empty %}
+        <p class="text-muted">Sin cotizaciones de cliente todavía.</p>
+        {% endfor %}
+        <a class="btn btn-sm btn-outline-primary" href="{% url 'procurement:client-quote-create' package.pk %}">+ Nueva cotización de cliente</a>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Verificación (client-safe)</div>
+    <div class="card-body">
+        {% for a in verification_assertions %}
+        <p>&#10003; {{ a.client_visible_wording }} <small class="text-muted">({{ a.verified_at|date:"d/m/Y" }})</small></p>
+        {% empty %}
+        <p class="text-muted">Sin aserciones de verificación todavía.</p>
+        {% endfor %}
+    </div>
+</div>
+{% else %}
+<div class="alert alert-secondary">No tiene permiso para ver las cotizaciones de cliente de este paquete.</div>
+{% endif %}
+
+{% if can_view_factory %}
+<div class="card mb-3 border-danger">
+    <div class="card-header bg-danger text-white">Cotizaciones de fábrica (confidencial — SOURCE_PRIVATE)</div>
+    <div class="card-body">
+        {% for fq in factory_quotes %}
+        <div class="border rounded p-2 mb-2">
+            {% if can_view_factory_identity %}<strong>{{ fq.supplier.name }}</strong> — {{ fq.supplier.address }}<br>{% endif %}
+            Ref: {{ fq.reference }} — Total: {{ fq.total_amount }} {{ fq.currency }}
+        </div>
+        {% empty %}
+        <p class="text-muted">Sin cotizaciones de fábrica todavía.</p>
+        {% endfor %}
+        <a class="btn btn-sm btn-outline-danger" href="{% url 'procurement:factory-quote-create' package.pk %}">+ Registrar cotización de fábrica</a>
+    </div>
+</div>
+{% endif %}
+
+{% if can_view_cost %}
+<div class="card mb-3 border-danger">
+    <div class="card-header bg-danger text-white">Hojas comerciales internas (confidencial — TRADING_COMPANY_CONFIDENTIAL)</div>
+    <div class="card-body">
+        {% for sheet in internal_sheets %}
+        <div class="border rounded p-2 mb-2">
+            Precio fábrica: {{ sheet.factory_price }} {{ sheet.currency }} — Costo total: {{ sheet.landed_cost }} —
+            Margen: {{ sheet.margin_amount|default:"—" }} — Precio sugerido: {{ sheet.recommended_sell_price|default:"—" }}
+        </div>
+        {% empty %}
+        <p class="text-muted">Sin hojas comerciales todavía.</p>
+        {% endfor %}
+        <a class="btn btn-sm btn-outline-danger" href="{% url 'procurement:commercial-sheet-create' package.pk %}">+ Nueva hoja comercial interna</a>
+    </div>
+</div>
+{% endif %}
+
+{% if can_freeze %}
+<div class="card mb-3">
+    <div class="card-header">Congelar términos críticos</div>
+    <div class="card-body">
+        <form method="post" action="{% url 'procurement:package-freeze' package.pk %}" class="row g-2">
+            {% csrf_token %}
+            <div class="col-md-3"><input class="form-control form-control-sm" name="incoterm" placeholder="Incoterm (FOB, CIF...)"></div>
+            <div class="col-md-2"><input class="form-control form-control-sm" name="currency" placeholder="Moneda" value="USD"></div>
+            <div class="col-md-4"><input class="form-control form-control-sm" name="payment_terms" placeholder="Términos de pago"></div>
+            <div class="col-md-3"><button class="btn btn-sm btn-warning" type="submit">Congelar paquete</button></div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+{% if package.is_frozen %}
+<div class="card mb-3">
+    <div class="card-header">Solicitudes de cambio (términos congelados)</div>
+    <div class="card-body">
+        {% for cr in change_requests %}
+        <div class="border rounded p-2 mb-2">
+            <strong>{{ cr.field_name }}</strong>: {{ cr.frozen_current_value }} &rarr; {{ cr.proposed_new_value }}
+            <span class="badge bg-secondary">{{ cr.get_status_display }}</span>
+            {% if cr.status == "pending" %}
+            <form method="post" action="{% url 'procurement:change-request-decide' cr.pk 'approve' %}" class="d-inline">{% csrf_token %}<button class="btn btn-sm btn-success">Aprobar</button></form>
+            <form method="post" action="{% url 'procurement:change-request-decide' cr.pk 'reject' %}" class="d-inline">{% csrf_token %}<button class="btn btn-sm btn-outline-danger">Rechazar</button></form>
+            {% endif %}
+        </div>
+        {% empty %}
+        <p class="text-muted">Sin solicitudes de cambio.</p>
+        {% endfor %}
+        <form method="post" action="{% url 'procurement:change-request-create' package.pk %}" class="row g-2 mt-2">
+            {% csrf_token %}
+            <div class="col-md-3"><input class="form-control form-control-sm" name="field_name" placeholder="Campo (ej. visibility_mode)"></div>
+            <div class="col-md-3"><input class="form-control form-control-sm" name="proposed_new_value" placeholder="Nuevo valor"></div>
+            <div class="col-md-4"><input class="form-control form-control-sm" name="reason" placeholder="Motivo"></div>
+            <div class="col-md-2"><button class="btn btn-sm btn-outline-warning" type="submit">Solicitar cambio</button></div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+{% if can_authorize_disclosure %}
+<div class="card mb-3">
+    <div class="card-header">Divulgaciones autorizadas (parciales)</div>
+    <div class="card-body">
+        {% for grant in disclosure_grants %}
+        <div class="border rounded p-2 mb-2">
+            {{ grant.source_party }} &rarr; {{ grant.recipient_organization }}: {{ grant.field_scope }}
+            {% if grant.revoked_at %}<span class="badge bg-secondary">Revocada</span>
+            {% else %}
+            <form method="post" action="{% url 'procurement:disclosure-grant-revoke' grant.pk %}" class="d-inline">{% csrf_token %}<button class="btn btn-sm btn-outline-danger">Revocar</button></form>
+            {% endif %}
+        </div>
+        {% empty %}
+        <p class="text-muted">Sin divulgaciones todavía.</p>
+        {% endfor %}
+        <form method="post" action="{% url 'procurement:disclosure-grant-create' package.pk %}" class="row g-2 mt-2">
+            {% csrf_token %}
+            <div class="col-md-3"><input class="form-control form-control-sm" name="source_party" placeholder="ID de la parte fuente"></div>
+            <div class="col-md-3"><input class="form-control form-control-sm" name="recipient_organization" placeholder="ID de organización receptora"></div>
+            <div class="col-md-2"><input class="form-control form-control-sm" name="field_scope" placeholder="campos (coma)"></div>
+            <div class="col-md-2"><input class="form-control form-control-sm" name="reason" placeholder="Motivo"></div>
+            <div class="col-md-2"><button class="btn btn-sm btn-outline-primary" type="submit">Autorizar</button></div>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

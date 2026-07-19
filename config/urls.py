@@ -26,6 +26,7 @@ urlpatterns = [
     path("etiquetas/", include("apps.labels.urls")),
     path("propiedades/", include("apps.projects.urls")),
     path("propiedades/", include("apps.unitplans.urls")),
+    path("gobernanza/", include("apps.governance.urls")),
     path("planos/", include("apps.drawings.urls")),
     path("incidencias/", include("apps.fieldissues.urls")),
     path("capacitaciones/", include("apps.training.urls")),

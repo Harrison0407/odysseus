@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Paquetes de compra (Controlled Transparency / Confidentiality)</h3>
+<div class="table-responsive">
+<table class="table table-sm table-striped bg-white">
+    <thead><tr><th>Nombre</th><th>Código</th><th>Modo de visibilidad</th><th>Estado</th></tr></thead>
+    <tbody>
+    {% for pkg in packages %}
+    <tr>
+        <td><a href="{% url 'procurement:package-detail' pkg.pk %}">{{ pkg.name }}</a></td>
+        <td><code>{{ pkg.code }}</code></td>
+        <td><span class="badge bg-secondary">{{ pkg.get_visibility_mode_display }}</span></td>
+        <td>{{ pkg.get_status_display }} {% if pkg.is_on_hold %}<span class="badge bg-warning text-dark">En espera</span>{% endif %}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="4" class="text-muted">Sin paquetes visibles para su usuario.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

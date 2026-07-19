@@ -199,6 +199,16 @@ def visible_classifications_for(user, package=None) -> set:
     return {c for c in Classification.values if can_view_classification(user, c, package=package)}
 
 
+def log_denied_attempt(user, action_code, *, package=None, resource=None, required_capability=None):
+    """Every denied privileged attempt must appear in the restricted
+    audit trail (spec section 20/22) — not only successful actions."""
+    audit.log(
+        AuditEvent.Action.PRIVILEGED_ACCESS_DENIED, instance=resource if resource is not None else package,
+        actor=user, summary=f"Acceso privilegiado denegado: {action_code}",
+        required_capability=required_capability, package=str(package) if package is not None else None,
+    )
+
+
 def filter_authorized_queryset(user, queryset, *, package=None, classification_field="classification"):
     allowed = visible_classifications_for(user, package=package)
     return queryset.filter(**{f"{classification_field}__in": allowed})
@@ -272,21 +282,22 @@ def explain_privileged_decision(admin_user, *, target_user, action_code, resourc
 # ---------------------------------------------------------------------------
 
 
-@transaction.atomic
 def create_disclosure_grant(source_party, package, recipient_organization, field_scope: list, reason, user, *,
                              recipient_party=None, classification_before=Classification.SOURCE_PRIVATE,
                              expires_at=None, permitted_projection=None) -> DisclosureGrant:
     if not has_capability(user, "AUTHORIZE_DISCLOSURE", package=package):
+        log_denied_attempt(user, "AUTHORIZE_DISCLOSURE", package=package, required_capability="AUTHORIZE_DISCLOSURE")
         raise AuthorizationDenied("No tiene permiso para autorizar una divulgación.")
     if not field_scope:
         raise AuthorizationDenied("Debe especificarse al menos un campo a divulgar.")
-    grant = DisclosureGrant.objects.create(
-        source_party=source_party, package=package, recipient_organization=recipient_organization,
-        recipient_party=recipient_party, field_scope=field_scope, classification_before=classification_before,
-        permitted_projection=permitted_projection or {}, reason=reason, requested_by=user, approved_by=user,
-        effective_from=timezone.now(), expires_at=expires_at, created_by=user,
-    )
-    audit.log(AuditEvent.Action.DISCLOSURE_GRANT, instance=grant, actor=user, summary=f"Divulgación autorizada: {grant}", reason=reason)
+    with transaction.atomic():
+        grant = DisclosureGrant.objects.create(
+            source_party=source_party, package=package, recipient_organization=recipient_organization,
+            recipient_party=recipient_party, field_scope=field_scope, classification_before=classification_before,
+            permitted_projection=permitted_projection or {}, reason=reason, requested_by=user, approved_by=user,
+            effective_from=timezone.now(), expires_at=expires_at, created_by=user,
+        )
+        audit.log(AuditEvent.Action.DISCLOSURE_GRANT, instance=grant, actor=user, summary=f"Divulgación autorizada: {grant}", reason=reason)
     return grant
 
 
@@ -333,31 +344,35 @@ def request_change(package, field_name, proposed_new_value, reason, user, *, aff
     return change_request
 
 
-@transaction.atomic
 def approve_change_request(change_request: ChangeRequest, user, *, comment="") -> ChangeRequest:
     if change_request.status != ChangeRequest.Status.PENDING:
         raise AuthorizationDenied("Esta solicitud de cambio ya fue resuelta.")
     required_capability = CHANGE_REQUEST_APPROVAL_CAPABILITY.get(change_request.field_name, "APPROVE_ROLE_CHANGE")
     if not has_capability(user, required_capability, package=change_request.package):
+        log_denied_attempt(
+            user, required_capability, package=change_request.package, resource=change_request,
+            required_capability=required_capability,
+        )
         raise AuthorizationDenied("No tiene permiso para aprobar esta solicitud de cambio.")
 
-    change_request.status = ChangeRequest.Status.APPROVED
-    change_request.decided_by = user
-    change_request.decided_at = timezone.now()
-    change_request.decision_comment = comment
-    change_request.save()
+    with transaction.atomic():
+        change_request.status = ChangeRequest.Status.APPROVED
+        change_request.decided_by = user
+        change_request.decided_at = timezone.now()
+        change_request.decision_comment = comment
+        change_request.save()
 
-    package = change_request.package
-    if change_request.field_name == "visibility_mode":
-        package.visibility_mode = change_request.proposed_new_value
-        package.visibility_mode_version += 1
-        audit.log(AuditEvent.Action.VISIBILITY_MODE_CHANGE, instance=package, actor=user, summary=f"Modo de visibilidad cambiado: {package}")
-    else:
-        package.frozen_snapshot.setdefault("roles", {})[change_request.field_name] = change_request.proposed_new_value
-    package.is_on_hold = False
-    package.save()
+        package = change_request.package
+        if change_request.field_name == "visibility_mode":
+            package.visibility_mode = change_request.proposed_new_value
+            package.visibility_mode_version += 1
+            audit.log(AuditEvent.Action.VISIBILITY_MODE_CHANGE, instance=package, actor=user, summary=f"Modo de visibilidad cambiado: {package}")
+        else:
+            package.frozen_snapshot.setdefault("roles", {})[change_request.field_name] = change_request.proposed_new_value
+        package.is_on_hold = False
+        package.save()
 
-    audit.log(AuditEvent.Action.CHANGE_REQUEST, instance=change_request, actor=user, summary=f"Solicitud de cambio aprobada: {change_request}")
+        audit.log(AuditEvent.Action.CHANGE_REQUEST, instance=change_request, actor=user, summary=f"Solicitud de cambio aprobada: {change_request}")
     return change_request
 
 

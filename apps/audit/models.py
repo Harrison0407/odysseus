@@ -2,6 +2,7 @@ from django.conf import settings
 from django.db import models
 
 from apps.core.models import BaseModel
+from apps.governance.models import Classification
 
 
 class AuditEvent(BaseModel):
@@ -34,6 +35,19 @@ class AuditEvent(BaseModel):
         CLAIM_ACTION = "claim_action", "Acción de reclamo"
         SHARE_LINK_CREATED = "share_link_created", "Enlace compartido creado"
         SHARE_LINK_REVOKED = "share_link_revoked", "Enlace compartido revocado"
+        ROLE_ASSIGNMENT = "role_assignment", "Asignación de rol"
+        CAPABILITY_GRANT = "capability_grant", "Otorgamiento de capacidad"
+        DISCLOSURE_GRANT = "disclosure_grant", "Otorgamiento de divulgación"
+        DISCLOSURE_REVOKED = "disclosure_revoked", "Revocación de divulgación"
+        VISIBILITY_MODE_CHANGE = "visibility_mode_change", "Cambio de modo de visibilidad"
+        PACKAGE_FREEZE = "package_freeze", "Congelamiento de paquete"
+        CHANGE_REQUEST = "change_request", "Solicitud de cambio"
+        VERIFICATION_ASSERTION = "verification_assertion", "Aserción de verificación"
+        EVIDENCE_VERIFICATION = "evidence_verification", "Verificación de evidencia"
+        PRIVILEGED_ACCESS_GRANTED = "privileged_access_granted", "Acceso privilegiado concedido"
+        PRIVILEGED_ACCESS_DENIED = "privileged_access_denied", "Acceso privilegiado denegado"
+        RISK_FLAG = "risk_flag", "Señal de riesgo"
+        DERIVED_ARTIFACT = "derived_artifact", "Artefacto derivado"
         OTHER = "other", "Otro"
 
     action = models.CharField(max_length=40, choices=Action.choices)
@@ -72,6 +86,86 @@ class Attachment(BaseModel):
 
     class Meta:
         indexes = [models.Index(fields=["content_type", "object_id"])]
+
+
+class EvidenceBundle(BaseModel):
+    """Groups EvidenceItems for a configurable workflow checkpoint
+    (inspection, receiving, production verification, QC, packing,
+    shipment, installation, walkthrough, approval, ...). Uploading a
+    file is never automatically verification — `status` only reaches
+    VERIFIED once an independently-authorized user (never the uploader
+    of the item(s) being verified) records that check."""
+
+    class BundleType(models.TextChoices):
+        PRODUCTION_VERIFICATION = "production_verification", "Verificación de producción"
+        QUALITY_CONTROL = "quality_control", "Control de calidad"
+        PACKING = "packing", "Empaque"
+        RECEIVING = "receiving", "Recepción"
+        SHIPMENT = "shipment", "Embarque"
+        INSTALLATION = "installation", "Instalación"
+        WALKTHROUGH = "walkthrough", "Recorrido"
+        APPROVAL = "approval", "Aprobación"
+        OTHER = "other", "Otro (configurable)"
+
+    class Status(models.TextChoices):
+        INCOMPLETE = "incomplete", "Incompleto"
+        COMPLETE = "complete", "Completo (sin verificar)"
+        VERIFIED = "verified", "Verificado"
+
+    content_type = models.ForeignKey("contenttypes.ContentType", on_delete=models.CASCADE, related_name="+")
+    object_id = models.UUIDField()
+
+    bundle_type = models.CharField(max_length=40, choices=BundleType.choices, default=BundleType.OTHER)
+    required_evidence_types = models.JSONField(default=list, blank=True)
+    minimum_count = models.PositiveIntegerField(default=1)
+    required_verifier_capability = models.CharField(max_length=60, blank=True, default="VERIFY_EVIDENCE")
+    minimum_review_state = models.CharField(max_length=20, default="verified")
+    requires_geolocation = models.BooleanField(default=False)
+
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.INCOMPLETE)
+    classification = models.CharField(max_length=40, choices=Classification.choices, default=Classification.OPERATIONAL_SHARED, blank=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["content_type", "object_id"])]
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.get_bundle_type_display()} bundle ({self.get_status_display()})"
+
+
+class EvidenceItem(BaseModel):
+    """A single piece of evidence within a bundle — reuses the existing
+    immutable `Document`/`DocumentVersion` mechanism for the actual file;
+    this row adds capture provenance, review state, and classification.
+    No confidence score is assigned — this system has no real basis for
+    computing one."""
+
+    class ReviewStatus(models.TextChoices):
+        PENDING = "pending", "Pendiente"
+        REVIEWED = "reviewed", "Revisado"
+        VERIFIED = "verified", "Verificado"
+        REJECTED = "rejected", "Rechazado"
+
+    bundle = models.ForeignKey(EvidenceBundle, on_delete=models.CASCADE, related_name="items")
+    document = models.ForeignKey("documents.Document", on_delete=models.PROTECT, related_name="+")
+    evidence_type = models.CharField(max_length=100, blank=True)
+    capture_method = models.CharField(max_length=50, blank=True, help_text="photo, scan, manual, ...")
+    captured_at = models.DateTimeField(null=True, blank=True)
+    device_metadata = models.JSONField(default=dict, blank=True)
+    location = models.CharField(max_length=255, blank=True, help_text="Free-text location, only when lawfully captured.")
+
+    classification = models.CharField(max_length=40, choices=Classification.choices, default=Classification.OPERATIONAL_SHARED, blank=True)
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    review_status = models.CharField(max_length=20, choices=ReviewStatus.choices, default=ReviewStatus.PENDING)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    verification_basis = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"{self.evidence_type or 'Evidencia'} — {self.bundle}"
 
 
 class Notification(BaseModel):

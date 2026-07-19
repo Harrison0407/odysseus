@@ -81,6 +81,7 @@ INSTALLED_APPS = [
     "apps.walkthroughs",
     "apps.evidenceinbox",
     "apps.unitplans",
+    "apps.governance",
     "apps.api",
 ]
 

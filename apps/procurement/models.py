@@ -2,12 +2,14 @@ from django.conf import settings
 from django.db import models
 
 from apps.core.models import BaseModel, DestinationScope
+from apps.governance.models import Classification, VisibilityMode
 
 
 class Supplier(BaseModel):
     organization = models.ForeignKey("accounts.Organization", on_delete=models.CASCADE, related_name="suppliers")
     name = models.CharField(max_length=255)
     country = models.CharField(max_length=100, blank=True)
+    address = models.TextField(blank=True, help_text="Registered/production-site address — confidentiality-sensitive for hidden factories.")
     default_currency = models.CharField(max_length=3, default="USD")
     notes = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
@@ -53,6 +55,22 @@ class Quotation(BaseModel):
     trade_terms = models.CharField(max_length=50, blank=True, help_text="EXW, FOB, C&I, CIF, etc.")
     source_document = models.ForeignKey(
         "documents.Document", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+
+    # Controlled Transparency / Confidentiality foundation — a Quotation
+    # already models exactly what a "Factory Quote" is (a supplier's PI/
+    # quotation); rather than a duplicate object, it is reused directly
+    # and scoped to a package with an explicit classification. Legacy
+    # rows (no package) default to the system's pre-existing implicit
+    # "visible within organization" behavior.
+    package = models.ForeignKey(
+        "ProcurementPackage", on_delete=models.SET_NULL, null=True, blank=True, related_name="factory_quotes",
+    )
+    factory_party = models.ForeignKey(
+        "governance.Party", on_delete=models.SET_NULL, null=True, blank=True, related_name="factory_quotes",
+    )
+    classification = models.CharField(
+        max_length=40, choices=Classification.choices, default=Classification.OPERATIONAL_SHARED, blank=True,
     )
 
     class Meta:
@@ -125,6 +143,19 @@ class PurchaseOrder(BaseModel):
         default=False,
         help_text="True if the source PO document itself bears a 'RECEIVED IN FULL' stamp. This "
         "is metadata about the document, never treated as physical receiving evidence.",
+    )
+
+    class POKind(models.TextChoices):
+        STANDARD = "standard", "Estándar"
+        CLIENT = "client", "Orden de compra del cliente"
+        UPSTREAM_FACTORY = "upstream_factory", "Orden de compra a fábrica (aguas arriba)"
+
+    package = models.ForeignKey(
+        "ProcurementPackage", on_delete=models.SET_NULL, null=True, blank=True, related_name="purchase_orders_in_package",
+    )
+    po_kind = models.CharField(max_length=20, choices=POKind.choices, default=POKind.STANDARD)
+    classification = models.CharField(
+        max_length=40, choices=Classification.choices, default=Classification.OPERATIONAL_SHARED, blank=True,
     )
 
     class Meta:
@@ -308,3 +339,235 @@ class OpenPurchaseOrderRelease(BaseModel):
 
     def __str__(self):
         return f"{self.purchase_order} release {self.quantity_released}"
+
+
+# ---------------------------------------------------------------------------
+# DT Beach Controlled Transparency, Commercial Confidentiality & Authorization
+# Foundation — commercial layers (spec section 6) and visibility modes
+# (spec section 4). Six distinct commercial records, never one record
+# whose columns are merely hidden in the UI: Factory RFQ (below), Factory
+# Quote (reuses Quotation/QuotationLine directly — already models exactly
+# that), Internal Commercial Sheet, Client Quote, Client Purchase Order
+# and Upstream Factory Purchase Order (both reuse PurchaseOrder, `po_kind`
+# distinguishes them).
+# ---------------------------------------------------------------------------
+
+
+class ProcurementPackage(BaseModel):
+    """A confidentiality/visibility scope wrapping one commercial
+    relationship — e.g. one buyer, one seller of record, one China
+    procurement operator, one (possibly hidden) production factory.
+    `organization` is the hosting/administering tenant (typically the
+    China procurement operator's own organization); other parties
+    participate through package-scoped `governance.RoleAssignment`
+    rows, never by owning this row themselves."""
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Borrador"
+        ACTIVE = "active", "Activo"
+        FROZEN = "frozen", "Congelado"
+        CLOSED = "closed", "Cerrado"
+
+    organization = models.ForeignKey(
+        "accounts.Organization", on_delete=models.CASCADE, related_name="procurement_packages",
+        help_text="The hosting/administering organization for this package.",
+    )
+    project = models.ForeignKey(
+        "projects.Project", on_delete=models.SET_NULL, null=True, blank=True, related_name="procurement_packages",
+    )
+    code = models.SlugField(max_length=80)
+    name = models.CharField(max_length=255)
+
+    visibility_mode = models.CharField(
+        max_length=40, choices=VisibilityMode.choices, default=VisibilityMode.CONTROLLED_CONFIDENTIALITY,
+        help_text="For China-managed DT Beach procurement, CONTROLLED_CONFIDENTIALITY is the configured default.",
+    )
+    visibility_mode_version = models.PositiveIntegerField(default=1)
+
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    is_frozen = models.BooleanField(default=False)
+    frozen_at = models.DateTimeField(null=True, blank=True)
+    frozen_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    frozen_snapshot = models.JSONField(
+        default=dict, blank=True,
+        help_text="Critical terms frozen at freeze time: role party ids, incoterm, currency, payment terms, "
+        "specification/drawing revision, evidence policy — altering any of these afterward requires a "
+        "governance.ChangeRequest, never a direct edit.",
+    )
+    is_on_hold = models.BooleanField(default=False, help_text="True while a Change Request against a frozen term is pending.")
+
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        unique_together = [("organization", "code")]
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.name} ({self.get_visibility_mode_display()})"
+
+
+class FactoryRFQ(BaseModel):
+    """A request sent to a factory before it has quoted — distinct from
+    the resulting Factory Quote (`Quotation`), never the same record
+    with empty price columns."""
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Borrador"
+        SENT = "sent", "Enviado"
+        QUOTED = "quoted", "Cotizado"
+        CANCELLED = "cancelled", "Cancelado"
+
+    package = models.ForeignKey(ProcurementPackage, on_delete=models.CASCADE, related_name="factory_rfqs")
+    factory_party = models.ForeignKey(
+        "governance.Party", on_delete=models.SET_NULL, null=True, blank=True, related_name="factory_rfqs",
+    )
+    requested_spec = models.TextField()
+    quantity = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
+    target_price = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
+    currency = models.CharField(max_length=3, default="USD")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    classification = models.CharField(max_length=40, choices=Classification.choices, default=Classification.SOURCE_PRIVATE)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"RFQ — {self.package}"
+
+
+class InternalCommercialSheet(BaseModel):
+    """Factory price, full landed-cost breakdown, markup method/value and
+    recommended sell price — never visible to the client, never merged
+    into the Client Quote as hidden columns."""
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Borrador"
+        PENDING_APPROVAL = "pending_approval", "Pendiente de aprobación"
+        APPROVED = "approved", "Aprobado"
+
+    package = models.ForeignKey(ProcurementPackage, on_delete=models.CASCADE, related_name="internal_commercial_sheets")
+    source_quotation = models.ForeignKey(
+        Quotation, on_delete=models.SET_NULL, null=True, blank=True, related_name="commercial_sheets",
+    )
+
+    factory_price = models.DecimalField(max_digits=14, decimal_places=4)
+    currency = models.CharField(max_length=3, default="USD")
+    exchange_rate_note = models.CharField(max_length=255, blank=True)
+    inland_transport = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    inspection_qc = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    consolidation = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    freight = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    insurance = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    duties_taxes = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    administration = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    contingency = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+
+    markup_method = models.CharField(max_length=50, blank=True, help_text='E.g. "percentage_on_landed_cost", "fixed_fee".')
+    markup_value = models.DecimalField(max_digits=14, decimal_places=4, default=0)
+    recommended_sell_price = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
+
+    status = models.CharField(max_length=30, choices=Status.choices, default=Status.DRAFT)
+    prepared_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    approved_at = models.DateTimeField(null=True, blank=True)
+    classification = models.CharField(max_length=40, choices=Classification.choices, default=Classification.TRADING_COMPANY_CONFIDENTIAL)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    @property
+    def landed_cost(self):
+        return (
+            (self.factory_price or 0) + self.inland_transport + self.inspection_qc + self.consolidation
+            + self.freight + self.insurance + self.duties_taxes + self.administration + self.contingency
+        )
+
+    @property
+    def margin_amount(self):
+        if self.recommended_sell_price is None:
+            return None
+        return self.recommended_sell_price - self.landed_cost
+
+    def __str__(self):
+        return f"Hoja comercial interna — {self.package}"
+
+
+class ClientQuote(BaseModel):
+    """Only approved client-facing information — visible seller,
+    product/spec, quantity, sell price, terms, approved documents/
+    verification statements. Never exposes hidden factory identity,
+    source cost, internal calculations, markup, margin, or upstream
+    document ids — those simply are not fields on this model."""
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Borrador"
+        APPROVED = "approved", "Aprobado"
+        SENT = "sent", "Enviado al cliente"
+
+    package = models.ForeignKey(ProcurementPackage, on_delete=models.CASCADE, related_name="client_quotes")
+    source_internal_sheet = models.ForeignKey(
+        InternalCommercialSheet, on_delete=models.SET_NULL, null=True, blank=True, related_name="client_quotes",
+        help_text="Internal traceability only — must never be exposed through any client-facing view/serializer/export.",
+    )
+
+    visible_seller_party = models.ForeignKey(
+        "governance.Party", on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+        help_text="The client-visible seller of record, e.g. the trading company.",
+    )
+    product_description = models.TextField()
+    quantity = models.DecimalField(max_digits=14, decimal_places=3)
+    sell_price = models.DecimalField(max_digits=14, decimal_places=4)
+    currency = models.CharField(max_length=3, default="USD")
+    client_facing_terms = models.TextField(blank=True)
+    delivery_terms = models.CharField(max_length=150, blank=True)
+
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    prepared_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    approved_at = models.DateTimeField(null=True, blank=True)
+    classification = models.CharField(max_length=40, choices=Classification.choices, default=Classification.CLIENT_SHARED)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Cotización al cliente — {self.package}"
+
+
+class VerificationAssertion(BaseModel):
+    """A reusable client-safe verification assertion (spec section 8) —
+    e.g. "Production verified at an authorized site." Preserves the
+    hidden source Party/evidence bundle internally; the buyer only ever
+    sees `client_visible_wording`."""
+
+    package = models.ForeignKey(ProcurementPackage, on_delete=models.CASCADE, related_name="verification_assertions")
+    assertion_code = models.SlugField(max_length=80)
+    client_visible_wording = models.TextField()
+
+    source_evidence_bundle = models.ForeignKey(
+        "audit.EvidenceBundle", on_delete=models.SET_NULL, null=True, blank=True, related_name="verification_assertions",
+    )
+    source_party = models.ForeignKey(
+        "governance.Party", on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+        help_text="Hidden internally — never rendered in client_visible_wording.",
+    )
+
+    verifier = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    verified_at = models.DateTimeField(null=True, blank=True)
+    valid_until = models.DateTimeField(null=True, blank=True)
+
+    classification = models.CharField(max_length=40, choices=Classification.choices, default=Classification.CLIENT_SHARED)
+    version = models.PositiveIntegerField(default=1)
+    supersedes = models.OneToOneField(
+        "self", on_delete=models.SET_NULL, null=True, blank=True, related_name="superseded_by",
+    )
+    is_revoked = models.BooleanField(default=False)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    revoked_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.assertion_code} — {self.package}"

@@ -2,6 +2,7 @@ from django.conf import settings
 from django.db import models
 
 from apps.core.models import BaseModel, ConfidenceLevel
+from apps.governance.models import Classification
 
 
 class DocumentType(BaseModel):
@@ -86,6 +87,18 @@ class Document(BaseModel):
         "procurement.Supplier", on_delete=models.SET_NULL, null=True, blank=True, related_name="documents"
     )
     uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="+")
+
+    # Controlled Transparency / Confidentiality foundation. Defaults to
+    # OPERATIONAL_SHARED so every pre-existing document keeps behaving
+    # exactly as before (visible within its organization) — only new
+    # confidentiality-aware uploads (factory quotes, internal commercial
+    # sheets, ...) set a stricter classification explicitly.
+    classification = models.CharField(
+        max_length=40, choices=Classification.choices, default=Classification.OPERATIONAL_SHARED, blank=True,
+    )
+    package = models.ForeignKey(
+        "procurement.ProcurementPackage", on_delete=models.SET_NULL, null=True, blank=True, related_name="documents_in_package",
+    )
 
     def __str__(self):
         return self.title

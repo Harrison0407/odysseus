@@ -163,7 +163,12 @@ All four Priority 1 features are now complete. See
     permission used elsewhere. `/planos/` screens, linked from building/
     unit detail. All 3 supplied source PDFs registered
     (`register_source_drawings`).
-34. Order destination allocation and purchased spares — pending.
+34. ~~Order destination allocation and purchased spares~~ — **Done.**
+    `OrderLineAllocation`/`PurchasedSpare` (new, ADR-035) extend
+    `apps.procurement`; spares are an authorization record only —
+    quantity received/available/reserved always read from the existing
+    inventory ledger, never a second balance. `/compras/lineas/<id>/
+    asignacion/` + allocation/spares list screens.
 35. Field issue tracking — pending.
 36. Lawson training and reference installations — pending.
 37. Apartment walkthroughs and corrective actions — pending.

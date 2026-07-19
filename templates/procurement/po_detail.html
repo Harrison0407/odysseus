@@ -3,6 +3,13 @@
 <h3>{{ order.po_number }}</h3>
 <p class="text-muted">{{ order.supplier }} — {{ order.project|default:"proyecto no asignado" }}</p>
 
+{% if has_unresolved_excess %}
+<div class="alert alert-warning">
+    ⚠ Hay cantidad sin asignar en una o más líneas — asígnela a un destino o confirme un repuesto comprado
+    antes de la aprobación final de esta orden.
+</div>
+{% endif %}
+
 {% if order.document_marked_received_in_full %}
 <div class="alert alert-danger">
     ⚠ El documento fuente de esta orden trae un sello <strong>"RECIBIDO EN FULL"</strong> aplicado antes de
@@ -15,12 +22,19 @@
     <div class="card-header">Líneas</div>
     <div class="table-responsive">
     <table class="table mb-0">
-        <thead><tr><th>#</th><th>Descripción</th><th>Cantidad</th><th>Unidad</th><th>Precio</th><th>Total</th></tr></thead>
+        <thead><tr><th>#</th><th>Descripción</th><th>Cantidad</th><th>Unidad</th><th>Precio</th><th>Total</th><th>Sin asignar</th><th></th></tr></thead>
         <tbody>
-        {% for line in order.lines.all %}
-            <tr><td>{{ line.line_no }}</td><td>{{ line.description }}</td><td>{{ line.quantity_ordered }}</td>
-                <td>{{ line.unit_of_measure }}</td><td>{{ line.unit_price }}</td><td>{{ line.line_total }}</td></tr>
-        {% empty %}<tr><td colspan="6" class="text-muted">Sin líneas registradas.</td></tr>{% endfor %}
+        {% for line, summary in line_rows %}
+            <tr>
+                <td>{{ line.line_no }}</td><td>{{ line.description }}</td><td>{{ line.quantity_ordered }}</td>
+                <td>{{ line.unit_of_measure }}</td><td>{{ line.unit_price }}</td><td>{{ line.line_total }}</td>
+                <td>
+                    {% if summary.unallocated_quantity > 0 %}<span class="badge bg-warning text-dark">{{ summary.unallocated_quantity }}</span>
+                    {% else %}<span class="badge bg-success">0</span>{% endif %}
+                </td>
+                <td><a class="btn btn-outline-secondary btn-sm" href="{% url 'procurement:line-allocation-detail' line.pk %}">Asignar destino</a></td>
+            </tr>
+        {% empty %}<tr><td colspan="8" class="text-muted">Sin líneas registradas.</td></tr>{% endfor %}
         </tbody>
     </table>
     </div>

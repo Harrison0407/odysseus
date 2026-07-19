@@ -158,6 +158,11 @@ class PurchaseOrderLine(BaseModel):
         "items.Item", on_delete=models.SET_NULL, null=True, blank=True, related_name="purchase_order_lines"
     )
     quantity_ordered = models.DecimalField(max_digits=14, decimal_places=3)
+    required_quantity = models.DecimalField(
+        max_digits=14, decimal_places=3, null=True, blank=True,
+        help_text="The actually-needed quantity, when known, for shortage calculation — never "
+        "assumed equal to quantity_ordered when not explicitly recorded.",
+    )
     unit_of_measure = models.ForeignKey("items.UnitOfMeasure", on_delete=models.PROTECT, related_name="+")
     unit_price = models.DecimalField(max_digits=14, decimal_places=4)
     line_total = models.DecimalField(max_digits=14, decimal_places=2)
@@ -171,6 +176,66 @@ class PurchaseOrderLine(BaseModel):
 
     def __str__(self):
         return f"{self.purchase_order}: {self.description[:40]}"
+
+
+class OrderLineAllocation(BaseModel):
+    """A split destination allocation for a `PurchaseOrderLine` (spec:
+    "order destination allocation" — a line can be split across
+    building family/physical building/floor/unit/room/common area).
+    Reassignment never deletes the original row: a reassignment closes
+    this one (`is_active=False`) and creates a new row pointing back at
+    it via `reassigned_from`, so the original planned destination stays
+    visible in history (core principle 4.4)."""
+
+    purchase_order_line = models.ForeignKey(PurchaseOrderLine, on_delete=models.CASCADE, related_name="allocations")
+    destination_scope = models.CharField(max_length=30, choices=DestinationScope.choices)
+    building_family = models.ForeignKey("projects.BuildingFamily", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    building = models.ForeignKey("projects.Building", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    floor = models.ForeignKey("projects.Floor", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    unit = models.ForeignKey("projects.Unit", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    area = models.ForeignKey("projects.Area", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    quantity = models.DecimalField(max_digits=14, decimal_places=3)
+    drawing = models.ForeignKey(
+        "drawings.Drawing", on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+        help_text="The exact drawing revision used for this allocation — never silently replaced by a later revision.",
+    )
+    notes = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    reassigned_from = models.ForeignKey(
+        "self", on_delete=models.SET_NULL, null=True, blank=True, related_name="reassigned_to_set",
+    )
+    reassignment_reason = models.TextField(blank=True)
+    reassigned_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    reassigned_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.purchase_order_line}: {self.quantity} -> {self.get_destination_scope_display()}"
+
+
+class PurchasedSpare(BaseModel):
+    """Authorized confirmation that an order line's excess quantity is a
+    deliberate purchased spare, not silently-unallocated stock (spec:
+    "explicitly confirmed purchased-spare quantity"). This is the
+    *authorization* record — once physically received, the resulting
+    `InventoryLot` (via `apps.receiving.services.post_receipt_line`)
+    links back here (`InventoryLot.purchased_spare`) and all
+    quantity-received/available/reserved/consumed figures are read from
+    the existing ledger/reservation architecture, never duplicated as
+    directly-editable fields here (core principle 4.5 — never a second
+    inventory source of truth)."""
+
+    purchase_order_line = models.ForeignKey(PurchaseOrderLine, on_delete=models.PROTECT, related_name="purchased_spares")
+    quantity = models.DecimalField(max_digits=14, decimal_places=3)
+    compatible_typology = models.CharField(max_length=255, blank=True, help_text="Compatibility / intended typology.")
+    reason = models.TextField()
+    confirmed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="+")
+    confirmed_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Repuesto comprado: {self.quantity} — {self.purchase_order_line}"
 
 
 class PaymentTerm(BaseModel):

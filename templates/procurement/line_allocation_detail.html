@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Asignación de destino — línea {{ line.line_no }}</h3>
+<p class="text-muted">{{ line.description }} — {{ line.purchase_order }}</p>
+<a class="btn btn-outline-secondary btn-sm mb-3" href="{% url 'procurement:po-detail' line.purchase_order.pk %}">&larr; Volver a la orden</a>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <table class="table table-sm mb-0">
+            <tr><th>Cantidad requerida</th><td>{{ summary.required_quantity|default:"Desconocida" }}</td></tr>
+            <tr><th>Cantidad ordenada</th><td>{{ summary.quantity_ordered }}</td></tr>
+            <tr><th>Cantidad asignada</th><td>{{ summary.allocated_quantity }}</td></tr>
+            <tr><th>Repuestos comprados confirmados</th><td>{{ summary.confirmed_spare_quantity }}</td></tr>
+            <tr><th>Sin asignar</th><td>
+                {% if summary.unallocated_quantity > 0 %}<span class="badge bg-warning text-dark">{{ summary.unallocated_quantity }}</span>
+                {% else %}<span class="badge bg-success">0</span>{% endif %}
+            </td></tr>
+            <tr><th>Faltante (requerido − ordenado)</th><td>{{ summary.shortage_quantity|default:"Desconocido" }}</td></tr>
+        </table>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Asignaciones activas</div>
+    <div class="table-responsive">
+    <table class="table table-sm bg-white mb-0">
+        <thead><tr><th>Destino</th><th>Cantidad</th><th>Notas</th><th></th></tr></thead>
+        <tbody>
+        {% for a in allocations %}
+            <tr>
+                <td>{{ a.get_destination_scope_display }} — {{ a.building_family|default:"" }} {{ a.building|default:"" }} {{ a.floor|default:"" }} {{ a.unit|default:"" }} {{ a.area|default:"" }}</td>
+                <td>{{ a.quantity }}</td>
+                <td>{{ a.notes|default:"—" }}</td>
+                <td>
+                    <button class="btn btn-outline-warning btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#reasignar-{{ a.pk }}">Reasignar</button>
+                </td>
+            </tr>
+            <tr class="collapse" id="reasignar-{{ a.pk }}">
+                <td colspan="4">
+                    <form method="post" action="{% url 'procurement:allocation-reassign' a.pk %}" class="row g-2">
+                        {% csrf_token %}
+                        {{ reassign_form.as_p }}
+                        <div class="col-12"><button class="btn btn-warning btn-sm" type="submit">Confirmar reasignación</button></div>
+                    </form>
+                </td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="4" class="text-muted">Sin asignaciones activas.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Agregar asignación de destino</div>
+    <div class="card-body">
+        <form method="post" action="{% url 'procurement:line-allocate' line.pk %}">
+            {% csrf_token %}
+            {{ allocation_form.as_p }}
+            <button class="btn btn-primary btn-sm" type="submit">Asignar</button>
+        </form>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Repuestos comprados de esta línea</div>
+    <div class="table-responsive">
+    <table class="table table-sm bg-white mb-0">
+        <thead><tr><th>Cantidad confirmada</th><th>Recibido</th><th>Disponible</th><th>Reservado</th><th>Razón</th><th>Confirmado por</th></tr></thead>
+        <tbody>
+        {% for spare, inv in spare_summaries %}
+            <tr>
+                <td>{{ inv.quantity_confirmed }}</td>
+                <td>{{ inv.quantity_received }}</td>
+                <td>{{ inv.quantity_available }}</td>
+                <td>{{ inv.quantity_reserved }}</td>
+                <td>{{ spare.reason }}</td>
+                <td>{{ spare.confirmed_by }}</td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="6" class="text-muted">Sin repuestos comprados confirmados para esta línea.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Confirmar repuesto comprado</div>
+    <div class="card-body">
+        <form method="post" action="{% url 'procurement:line-confirm-spare' line.pk %}">
+            {% csrf_token %}
+            {{ spare_form.as_p }}
+            <button class="btn btn-warning btn-sm" type="submit">Confirmar como repuesto comprado</button>
+        </form>
+        <p class="small text-muted mt-2">Requiere autorización de nivel gerencial — nunca convierte cantidad sin asignar en repuesto silenciosamente.</p>
+    </div>
+</div>
+{% endblock %}

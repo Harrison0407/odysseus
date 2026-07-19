@@ -117,6 +117,12 @@
 | `/planos/<id>/` | `drawing_detail` | One drawing's metadata, download link, approve/supersede actions, full revision history |
 | `/planos/<id>/reemplazar/` (POST) | `drawing_supersede` | Registers a new revision; the prior one is preserved, never edited |
 | `/planos/<id>/aprobar/` (POST) | `drawing_approve` | Requires the same senior-authorization permission as every other approval gate |
+| `/compras/lineas/<id>/asignacion/` | `apps.procurement.views.line_allocation_detail` | Per-line allocation summary (ordered/required/allocated/unallocated/shortage/spare), active allocations, purchased spares with ledger-derived availability |
+| `/compras/lineas/<id>/asignar/` (POST) | `line_allocate` | Adds a split destination allocation |
+| `/compras/lineas/<id>/confirmar-repuesto/` (POST) | `line_confirm_spare` | Authorized-only purchased-spare confirmation |
+| `/compras/asignaciones/<id>/reasignar/` (POST) | `allocation_reassign` | Closes the original allocation, creates a new one, preserves full history |
+| `/compras/asignaciones/` | `allocations_by_destination` | All active allocations grouped by building/unit |
+| `/compras/repuestos/` | `purchased_spares_list` | All confirmed purchased spares with ledger-derived received/available/reserved quantities |
 
 | Role code | Dashboard template |
 |---|---|

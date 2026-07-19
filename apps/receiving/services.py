@@ -26,12 +26,19 @@ from .models import AlternativeStorageOption, DamageRecord, ReceiptLine, Storage
 @transaction.atomic
 def post_receipt_line(receipt_line: ReceiptLine, *, quantity_received, quantity_damaged, quantity_missing,
                        exception_type, notes, user, receiving_location, quarantine_location=None,
-                       storage_override_reason=None):
+                       storage_override_reason=None, purchased_spare=None):
     """`storage_override_reason`: only used if `receiving_location` fails
     a *blocking* storage-suitability/capacity check (spec section 17 —
     see `apps.inventory.services.check_location_suitability`); requires
     `can_override_gates(user)`, exactly like every other authorized
-    override in this system — never a silent bypass."""
+    override in this system — never a silent bypass.
+
+    `purchased_spare`: an `apps.procurement.models.PurchasedSpare`,
+    explicitly supplied by the caller when this receipt line is known
+    to be receiving against a confirmed purchased-spare quantity — the
+    resulting lot is linked back to it and tagged
+    `DestinationScope.REPLACEMENT_RESERVE` (never auto-detected/guessed
+    from the manifest line)."""
     receipt_line.quantity_received = quantity_received
     receipt_line.quantity_damaged = quantity_damaged
     receipt_line.quantity_missing = quantity_missing
@@ -48,12 +55,15 @@ def post_receipt_line(receipt_line: ReceiptLine, *, quantity_received, quantity_
         enforce_location_suitability(
             receiving_location, item, user, quantity=good_quantity, override_reason=storage_override_reason
         )
+        from apps.core.models import DestinationScope
+
         lot = InventoryLot.objects.create(
             item=item,
             source_receipt_line=receipt_line,
             lot_code=f"{receipt_line.receipt_id}-{receipt_line.id}",
-            bought_for_scope=manifest_line.destination_scope,
+            bought_for_scope=DestinationScope.REPLACEMENT_RESERVE if purchased_spare else manifest_line.destination_scope,
             bought_for_building=manifest_line.building,
+            purchased_spare=purchased_spare,
             created_by=user,
         )
         InventoryMovement.objects.create(

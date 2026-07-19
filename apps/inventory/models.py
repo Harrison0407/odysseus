@@ -98,6 +98,11 @@ class InventoryLot(BaseModel):
     bought_for_building = models.ForeignKey(
         "projects.Building", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
+    purchased_spare = models.ForeignKey(
+        "procurement.PurchasedSpare", on_delete=models.SET_NULL, null=True, blank=True, related_name="inventory_lots",
+        help_text="Set when this lot was received against an authorized purchased-spare confirmation — "
+        "quantity received/available/reserved/consumed are still read from the ledger, never duplicated here.",
+    )
 
     def __str__(self):
         return f"Lote {self.lot_code or self.id} — {self.item}"

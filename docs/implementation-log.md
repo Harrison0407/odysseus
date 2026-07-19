@@ -760,3 +760,47 @@ documented order.
     confirmed the drawing list, detail pages, and the building-detail
     "linked drawings" section all render correctly with the real
     registered source documents.
+43. **Order destination allocation and purchased spares.**
+    `PurchaseOrderLine` already had a single `destination_scope`/
+    `building` pair (no split-allocation support) — extended
+    `apps.procurement` with `OrderLineAllocation` (split allocation
+    across building family/physical building/floor/unit/common area,
+    with an optional linked `Drawing` revision) and `PurchasedSpare`
+    (ADR-035). `PurchasedSpare` is deliberately an authorization record
+    only — no quantity-tracking fields of its own; `InventoryLot`
+    gained one nullable `purchased_spare` FK, and
+    `apps.procurement.services.spare_inventory_summary` computes
+    received/available/reserved entirely from the existing
+    `InventoryMovement`/`InventoryReservation` ledger, so a spare is
+    ordinary inventory with an extra provenance link, never a second
+    balance. `allocate_order_line`/`confirm_purchased_spare` both
+    enforce "allocated + confirmed spares never exceed ordered
+    quantity" on every write; `confirm_purchased_spare` requires the
+    same senior-authorization permission (`can_override_gates`) used
+    throughout this system. `reassign_allocation` never edits or
+    deletes the original allocation — it flips `is_active` and creates
+    a new row linked via `reassigned_from`, preserving the original
+    planned destination in full. A visible warning banner (not a hard
+    block — this codebase has no existing "approve this PO" workflow
+    transition to attach a gate to, A40) appears on the PO detail page
+    when any line has unresolved unallocated quantity. New
+    `/compras/lineas/<id>/asignacion/` (per-line summary, allocations,
+    spares, add-allocation/confirm-spare/reassign forms),
+    `/compras/asignaciones/` (all allocations by destination), and
+    `/compras/repuestos/` (all confirmed spares with ledger-derived
+    availability) screens. 20 new tests
+    (`tests/test_order_allocation_spares.py`), covering split
+    allocation across destinations, unallocated/shortage calculation
+    (shortage reported as unknown, never a fabricated zero, when
+    `required_quantity` was never recorded), the allocated-plus-spares
+    ceiling, authorized/unauthorized spare confirmation (with audit
+    verification), spare receipt/availability/consumption entirely
+    through real `InventoryMovement` rows, destination-reassignment
+    history preservation (including refusing to reassign an
+    already-reassigned allocation), cross-organization HTTP isolation,
+    and a full HTTP allocate→confirm-spare workflow — 298/298 passing
+    (278 pre-existing + 20 new). Verified migrations apply cleanly from
+    an empty database; live HTTP walkthrough against a real imported
+    fixture PO line (`DT-BEACH804`, 40 units) confirmed a 30-unit
+    allocation plus a 10-unit spare confirmation correctly reduced the
+    unallocated badge to 0.

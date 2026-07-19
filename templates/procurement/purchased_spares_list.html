@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Repuestos comprados</h3>
+<div class="table-responsive">
+<table class="table table-sm table-striped bg-white">
+    <thead><tr><th>Línea</th><th>Confirmado</th><th>Recibido</th><th>Disponible</th><th>Reservado</th><th>Razón</th><th>Confirmado por</th></tr></thead>
+    <tbody>
+    {% for spare, inv in rows %}
+        <tr>
+            <td><a href="{% url 'procurement:line-allocation-detail' spare.purchase_order_line.pk %}">{{ spare.purchase_order_line }}</a></td>
+            <td>{{ inv.quantity_confirmed }}</td>
+            <td>{{ inv.quantity_received }}</td>
+            <td>{{ inv.quantity_available }}</td>
+            <td>{{ inv.quantity_reserved }}</td>
+            <td>{{ spare.reason }}</td>
+            <td>{{ spare.confirmed_by }}</td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="7" class="text-muted">Sin repuestos comprados confirmados.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

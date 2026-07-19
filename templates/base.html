@@ -35,6 +35,8 @@
                 <li class="nav-item"><a class="nav-link" href="{% url 'dashboard-home' %}">{% trans "Inicio" %}</a></li>
                 <li class="nav-item"><a class="nav-link" href="{% url 'documents:list' %}">{% trans "Documentos" %}</a></li>
                 <li class="nav-item"><a class="nav-link" href="{% url 'procurement:po-list' %}">{% trans "Compras" %}</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'procurement:allocations-by-destination' %}">{% trans "Asignaciones" %}</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'procurement:purchased-spares-list' %}">{% trans "Repuestos Comprados" %}</a></li>
                 <li class="nav-item"><a class="nav-link" href="{% url 'shipments:list' %}">{% trans "Embarques" %}</a></li>
                 <li class="nav-item"><a class="nav-link" href="{% url 'receiving:list' %}">{% trans "Recepción" %}</a></li>
                 <li class="nav-item"><a class="nav-link" href="{% url 'inventory:locations' %}">{% trans "Almacén" %}</a></li>

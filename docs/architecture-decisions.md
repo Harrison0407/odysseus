@@ -2,6 +2,28 @@
 
 Newest first.
 
+## ADR-035 — Purchased spares are an authorization record, not a second inventory balance; consumption is always a real ledger movement
+**Decision:** `PurchasedSpare` (new) records only the *authorization*
+(actor, permission, quantity, compatibility, reason, timestamp,
+related order line). It has no `quantity_available`/
+`quantity_consumed` fields of its own — `InventoryLot` gained one
+nullable `purchased_spare` FK (and reuses its pre-existing, previously
+unused `bought_for_scope`/`bought_for_building` fields), and
+`apps.procurement.services.spare_inventory_summary` computes every
+quantity (received/available/reserved) by querying the existing
+`InventoryMovement`/`InventoryReservation` ledger for lots linked to
+that confirmation. `OrderLineAllocation` similarly never mutates a
+prior allocation on reassignment — it flips `is_active` and creates a
+new row linked via `reassigned_from`.
+**Why:** The release is explicit: "do not alter inventory balances
+through direct field updates" and "a spare later used in an apartment
+must move through the existing auditable inventory movement,
+reservation, delivery and installation architecture." Giving
+`PurchasedSpare` its own quantity-tracking fields would create exactly
+the second, competing source of truth core principle 4.5 already
+forbids for ordinary inventory — spares are ordinary inventory with an
+extra provenance link, not a separate ledger.
+
 ## ADR-034 — Drawing wraps an existing Document; a new revision is always a new row, never an edit
 **Decision:** `apps.drawings.Drawing` has a `source_document` FK to the
 pre-existing `apps.documents.Document` (SHA-256 hashing/duplicate

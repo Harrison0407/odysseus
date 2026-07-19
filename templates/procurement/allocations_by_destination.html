@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Asignaciones por edificio/apartamento</h3>
+<div class="table-responsive">
+<table class="table table-sm table-striped bg-white">
+    <thead><tr><th>Familia</th><th>Edificio</th><th>Unidad</th><th>Línea de orden</th><th>Cantidad</th><th>Tipo de destino</th></tr></thead>
+    <tbody>
+    {% for a in allocations %}
+        <tr>
+            <td>{{ a.building_family|default:"—" }}</td>
+            <td>{{ a.building|default:"—" }}</td>
+            <td>{% if a.unit %}<a href="{% url 'projects:unit-detail' a.unit.pk %}">{{ a.unit }}</a>{% else %}—{% endif %}</td>
+            <td><a href="{% url 'procurement:line-allocation-detail' a.purchase_order_line.pk %}">{{ a.purchase_order_line }}</a></td>
+            <td>{{ a.quantity }}</td>
+            <td>{{ a.get_destination_scope_display }}</td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="6" class="text-muted">Sin asignaciones registradas.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

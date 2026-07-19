@@ -368,3 +368,30 @@ instead, exactly as required, and is **not** listed here as a resolved assumptio
   exists (Django orders by PK — a random UUID — when no explicit
   ordering is defined).** This mirrors the `--org-name` option already
   present on `seed_delivery_demo_data`, not a new pattern.
+- **A40. "Before final order approval, any excess must either be
+  assigned or confirmed as spare" is surfaced as a visible warning
+  banner on the PO detail page, not a hard workflow block.** This
+  codebase has no existing "approve this PurchaseOrder" action/status
+  transition to attach a hard gate to — `PurchaseOrder.approval_status`
+  is a plain field, and the actual cross-department handoff
+  (`purchasing_to_finance`) is a generic, reusable mechanism
+  (`apps.workflow.services.create_handoff`) shared by every gate in the
+  system. Hard-coding a domain-specific allocation check into that
+  generic function would couple it to procurement specifically; adding
+  a bespoke "approve PO" workflow action that doesn't otherwise exist
+  is out of this release's scope. The warning is real and visible
+  (`po_detail` computes `has_unresolved_excess` from the same
+  `line_allocation_summary` the allocation screen uses), just not a
+  server-side block on a transition this system doesn't yet model.
+- **A41. `apps.receiving.services.post_receipt_line`'s new
+  `purchased_spare` parameter is always explicitly supplied by the
+  caller — never auto-detected from the manifest line.** Tracing a
+  `ReceiptLine` back to a `PurchasedSpare` would require walking
+  `ManifestLine.sources -> PurchaseOrderLine -> purchased_spares`,
+  which is possible but would guess *which* spare confirmation applies
+  when a line has more than one. Requiring the receiving user to
+  explicitly pick the spare confirmation they're receiving against
+  keeps this an authorized, deliberate act — consistent with "never
+  alter inventory... except via valid posted movements" and "a
+  photo/scan/link must never authorize a consequential action by
+  itself."

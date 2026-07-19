@@ -174,6 +174,9 @@ _TIMEOUT_EXEMPT_EXACT = {
     # This route owns one end-to-end deadline covering body read, isolated
     # inference, result transfer, and child cleanup.
     "/api/marketmatch/stt/transcribe",
+    # Structured Calls analysis owns a bounded local-model deadline and safe
+    # timeout response; keep the generic 45s wrapper from pre-empting it.
+    "/api/marketmatch/calls/analyze",
 }
 _TIMEOUT_EXEMPT_PREFIXES = (
     "/api/chat",            # streaming
@@ -740,8 +743,10 @@ logger.info("STT service initialized (provider managed via settings)")
 
 # Controlled MarketMatch Calls pilot (raw canonical WAV; isolated local worker)
 from routes.marketmatch_stt_routes import setup_marketmatch_stt_routes
+from routes.marketmatch_calls_analysis_routes import setup_marketmatch_calls_analysis_routes
 from src.marketmatch_stt_process import shutdown_active_workers
 app.include_router(setup_marketmatch_stt_routes())
+app.include_router(setup_marketmatch_calls_analysis_routes())
 
 # Documents (artifacts/canvas)
 from routes.document_routes import setup_document_routes

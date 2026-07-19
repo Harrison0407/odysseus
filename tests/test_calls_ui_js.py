@@ -1103,3 +1103,327 @@ def test_history_open_uses_existing_document_module_and_accessible_safe_ui():
     assert "setElementText(title, documentValue.title)" in SOURCE
     assert "documentModule.loadDocument(documentId)" in APP_SOURCE
     assert "callsModule.init(document" in APP_SOURCE
+
+
+def test_analysis_controls_are_explicit_accessible_and_render_with_text_nodes():
+    required = (
+        'id="calls-analysis"',
+        'id="calls-analysis-generate-btn"',
+        'id="calls-analysis-regenerate-btn"',
+        'id="calls-analysis-copy-btn"',
+        'id="calls-analysis-status"',
+        'id="calls-analysis-summary-heading">Summary',
+        'id="calls-analysis-decisions-heading">Decisions',
+        'id="calls-analysis-actions-heading">Action Items',
+        'id="calls-analysis-questions-heading">Open Questions',
+        'aria-live="polite"',
+    )
+    assert all(marker in INDEX for marker in required)
+    assert 'id="calls-analysis-generate-btn" class="calls-button calls-button-primary" disabled' in INDEX
+    assert "setElementText(analysisSummary, value.summary)" in SOURCE
+    assert "setElementText(item, itemValue)" in SOURCE
+    assert "analysisSummary.innerHTML" not in SOURCE
+    assert "analysisResult.innerHTML" not in SOURCE
+
+
+def test_analysis_request_is_exact_bounded_same_origin_json_and_strictly_validated():
+    result = _run_node(
+        """
+        import {
+          MAX_CALLS_ANALYSIS_TRANSCRIPT_CHARS,
+          formatCallsAnalysisText,
+          requestCallsAnalysis,
+        } from 'CALLS_MODULE';
+        const transcript = 'Complete transcript only';
+        const valid = {
+          summary: '<b>Summary stays text</b>',
+          decisions: [],
+          action_items: [{ task: 'Send drawing', owner: null, due_date: null }],
+          open_questions: [],
+        };
+        let captured;
+        let calls = 0;
+        const fetchImpl = async (url, options) => {
+          calls += 1;
+          captured = { url, options };
+          return { ok: true, status: 200, json: async () => valid };
+        };
+        const analysis = await requestCallsAnalysis(transcript, { fetchImpl });
+        let oversized;
+        try {
+          await requestCallsAnalysis('x'.repeat(MAX_CALLS_ANALYSIS_TRANSCRIPT_CHARS + 1), { fetchImpl });
+        } catch (error) {
+          oversized = { code: error.code, message: error.message };
+        }
+        const firstCaptured = captured;
+        let unicodeBoundaryCalls = 0;
+        await requestCallsAnalysis('😀'.repeat(MAX_CALLS_ANALYSIS_TRANSCRIPT_CHARS), {
+          fetchImpl: async () => {
+            unicodeBoundaryCalls += 1;
+            return { ok: true, status: 200, json: async () => valid };
+          },
+        });
+        const headers = Object.fromEntries(
+          Object.entries(firstCaptured.options.headers).map(([key, value]) => [key.toLowerCase(), value]),
+        );
+        console.log(JSON.stringify({
+          calls,
+          unicodeBoundaryCalls,
+          url: firstCaptured.url,
+          method: firstCaptured.options.method,
+          credentials: firstCaptured.options.credentials,
+          headers,
+          body: JSON.parse(firstCaptured.options.body),
+          bodyKeys: Object.keys(JSON.parse(firstCaptured.options.body)).sort(),
+          optionKeys: Object.keys(firstCaptured.options).sort(),
+          analysis,
+          copied: formatCallsAnalysisText(analysis),
+          oversized,
+        }));
+        """
+    )
+    assert result["calls"] == 1
+    assert result["unicodeBoundaryCalls"] == 1
+    assert result["url"] == "/api/marketmatch/calls/analyze"
+    assert "Complete transcript" not in result["url"]
+    assert result["method"] == "POST"
+    assert result["credentials"] == "same-origin"
+    assert result["headers"] == {"content-type": "application/json"}
+    assert result["body"] == {"transcript": "Complete transcript only"}
+    assert result["bodyKeys"] == ["transcript"]
+    assert not ({"authorization", "x-api-key", "x-odysseus-internal-token", "x-odysseus-owner"} & result["headers"].keys())
+    assert result["oversized"]["code"] == "ANALYSIS_TOO_LONG"
+    assert "Summary\n<b>Summary stays text</b>" in result["copied"]
+    assert "Decisions\nNone identified." in result["copied"]
+    assert "Owner: Not stated." in result["copied"]
+    assert "Due date: Not stated." in result["copied"]
+    assert "Open Questions\nNone identified." in result["copied"]
+
+
+def test_analysis_safe_errors_and_malformed_responses_never_expose_backend_details():
+    result = _run_node(
+        """
+        import { requestCallsAnalysis } from 'CALLS_MODULE';
+        const responses = [
+          { ok: false, status: 502, json: async () => ({ detail: 'PRIVATE MODEL OUTPUT' }) },
+          { ok: true, status: 200, json: async () => { throw new SyntaxError('PRIVATE HTML'); } },
+          { ok: true, status: 200, json: async () => ({ summary: 'x', decisions: 'bad', action_items: [], open_questions: [] }) },
+          { ok: true, status: 200, json: async () => ({ summary: 'x', decisions: [], action_items: [{ task: 'x' }], open_questions: [] }) },
+        ];
+        const errors = [];
+        for (const response of responses) {
+          try {
+            await requestCallsAnalysis('Keep this transcript', { fetchImpl: async () => response });
+          } catch (error) {
+            errors.push({ code: error.code, message: error.message, status: error.status });
+          }
+        }
+        console.log(JSON.stringify(errors));
+        """
+    )
+    assert result[0] == {
+        "code": "ANALYSIS_HTTP_502",
+        "message": "The local analysis result could not be validated.",
+        "status": 502,
+    }
+    assert all(item["message"] == "The local analysis result could not be validated." for item in result)
+    assert "PRIVATE" not in json.dumps(result)
+
+
+def test_analysis_controller_requires_success_prevents_duplicates_copies_regenerates_and_does_not_save_analysis():
+    result = _run_node(
+        """
+        import { createCallsController } from 'CALLS_MODULE';
+        const events = [];
+        const requests = [];
+        const copied = [];
+        let resolveAnalysis;
+        let analysisNumber = 0;
+        let analysisShouldFail = false;
+        let documentBody = null;
+        const analysisPayload = () => ({
+          summary: `ANALYSIS CANARY ${analysisNumber}`,
+          decisions: analysisNumber === 1 ? [] : ['Proceed carefully.'],
+          action_items: [{ task: 'Send drawing', owner: null, due_date: null }],
+          open_questions: [],
+        });
+        const fetchImpl = (url, options) => {
+          requests.push([url, options]);
+          if (url === '/api/marketmatch/stt/transcribe') {
+            return Promise.resolve({ ok: true, status: 200, json: async () => ({
+              duration_ms: 1000,
+              transcript_text: 'Keep this complete transcript',
+              segments: [{ start_ms: 0, end_ms: 1000, text: 'Keep this complete transcript' }],
+            }) });
+          }
+          if (url === '/api/marketmatch/calls/analyze') {
+            analysisNumber += 1;
+            return new Promise((resolve) => { resolveAnalysis = () => resolve(
+              analysisShouldFail
+                ? { ok: false, status: 503, json: async () => ({ detail: 'PRIVATE' }) }
+                : { ok: true, status: 200, json: async () => analysisPayload() },
+            ); });
+          }
+          if (url === '/api/document') {
+            documentBody = JSON.parse(options.body);
+            return Promise.resolve({ ok: true, status: 200, json: async () => ({ id: 'doc-1' }) });
+          }
+          throw new Error('unexpected request');
+        };
+        const view = {
+          clearResult() {}, clearSave() {}, clearAnalysis() { events.push(['analysis-clear']); },
+          clearRecording() {}, showSelected() {}, setReady() {}, setBusy() {}, setStatus() {},
+          renderResult() {}, showSave() {}, setSaveBusy() {}, setSaved() {}, setSaveStatus() {},
+          showAnalysisReady(enabled) { events.push(['analysis-ready', enabled]); },
+          beginAnalysisAttempt() { events.push(['analysis-attempt']); },
+          setAnalysisBusy(value) { events.push(['analysis-busy', value]); },
+          setAnalysisStatus(message, kind) { events.push(['analysis-status', kind, message]); },
+          renderAnalysis(value) { events.push(['analysis-render', value.summary]); },
+          reset() {}, setRecordingState() {},
+        };
+        const controller = createCallsController({
+          view,
+          fetchImpl,
+          copyText: async (text) => { copied.push(text); },
+          now: () => new Date(2026, 6, 18, 14, 5).getTime(),
+        });
+        const before = await controller.generateAnalysis();
+        controller.selectFile({ name: 'call.wav', size: 46 });
+        const transcribed = await controller.submit();
+        const firstPromise = controller.generateAnalysis();
+        const duplicate = await controller.generateAnalysis();
+        resolveAnalysis();
+        const first = await firstPromise;
+        const copiedFirst = await controller.copyAnalysis();
+        const regeneratePromise = controller.generateAnalysis();
+        resolveAnalysis();
+        const regenerated = await regeneratePromise;
+        analysisShouldFail = true;
+        const failedPromise = controller.generateAnalysis();
+        resolveAnalysis();
+        const failed = await failedPromise;
+        const transcriptAfterFailure = await controller.copyTranscript();
+        const saved = await controller.saveToLibrary('Transcript only');
+        console.log(JSON.stringify({
+          before, transcribed, duplicate, first, copiedFirst, regenerated,
+          failed, transcriptAfterFailure, saved,
+          analysisRequests: requests.filter(([url]) => url.includes('/calls/analyze')).length,
+          copied, events, documentBody,
+        }));
+        """
+    )
+    assert result["before"] is False
+    assert result["transcribed"] is True
+    assert result["duplicate"] is False
+    assert result["first"] is True
+    assert result["copiedFirst"] is True
+    assert result["regenerated"] is True
+    assert result["failed"] is False
+    assert result["transcriptAfterFailure"] is True
+    assert result["analysisRequests"] == 3
+    assert ["analysis-ready", True] in result["events"]
+    assert ["analysis-render", "ANALYSIS CANARY 1"] in result["events"]
+    assert ["analysis-render", "ANALYSIS CANARY 2"] in result["events"]
+    assert all(heading in result["copied"][0] for heading in ("Summary", "Decisions", "Action Items", "Open Questions"))
+    assert result["copied"][-1] == "Keep this complete transcript"
+    assert result["saved"] is True
+    assert "Keep this complete transcript" in result["documentBody"]["content"]
+    assert "ANALYSIS CANARY" not in result["documentBody"]["content"]
+    assert set(result["documentBody"]) == {"title", "language", "content"}
+
+
+def test_analysis_lifecycle_aborts_and_ignores_stale_results_without_losing_transcript():
+    result = _run_node(
+        """
+        import { createCallsController } from 'CALLS_MODULE';
+        const pending = [];
+        const signals = [];
+        const events = [];
+        const copied = [];
+        let transcriptNumber = 0;
+        const validAnalysis = (label) => ({
+          summary: label, decisions: [], action_items: [], open_questions: [],
+        });
+        const fetchImpl = (url, options) => {
+          if (url === '/api/marketmatch/stt/transcribe') {
+            transcriptNumber += 1;
+            const text = `Transcript ${transcriptNumber}`;
+            return Promise.resolve({ ok: true, status: 200, json: async () => ({
+              duration_ms: 1000, transcript_text: text,
+              segments: [{ start_ms: 0, end_ms: 1000, text }],
+            }) });
+          }
+          if (url === '/api/marketmatch/calls/analyze') {
+            signals.push(options.signal);
+            return new Promise((resolve) => pending.push((label) => resolve({
+              ok: true, status: 200, json: async () => validAnalysis(label),
+            })));
+          }
+          throw new Error('unexpected request');
+        };
+        const view = {
+          clearResult() {}, clearSave() {}, clearRecording() {}, showSelected() {}, setReady() {},
+          setBusy() {}, setStatus() {}, renderResult() {}, showSave() {}, setSaveBusy() {},
+          clearAnalysis() { events.push('clear-analysis'); },
+          showAnalysisReady(enabled) { events.push(`ready-${enabled}`); },
+          beginAnalysisAttempt() {}, setAnalysisBusy() {}, setAnalysisStatus() {},
+          renderAnalysis(value) { events.push(`render-${value.summary}`); },
+          reset() {}, setRecordingState() {}, setRecordingStatus() {},
+        };
+        const controller = createCallsController({
+          view, fetchImpl, copyText: async (text) => copied.push(text),
+          mediaDevices: { getUserMedia: async () => { throw { name: 'NotAllowedError' }; } },
+          MediaRecorderClass: function FakeRecorder() {}, BlobClass: Blob,
+        });
+        controller.selectFile({ name: 'one.wav', size: 46 });
+        await controller.submit();
+
+        const staleAfterAudio = controller.generateAnalysis();
+        controller.selectFile({ name: 'two.wav', size: 46 });
+        pending.shift()('old-audio');
+        const audioIgnored = await staleAfterAudio;
+
+        await controller.submit();
+        const staleAfterTranscription = controller.generateAnalysis();
+        const retranscribed = await controller.submit();
+        pending.shift()('old-transcription');
+        const transcriptionIgnored = await staleAfterTranscription;
+
+        const staleAfterClear = controller.generateAnalysis();
+        controller.reset();
+        pending.shift()('old-clear');
+        const clearIgnored = await staleAfterClear;
+
+        controller.selectFile({ name: 'three.wav', size: 46 });
+        await controller.submit();
+        const staleAfterClose = controller.generateAnalysis();
+        controller.onPanelHidden();
+        pending.shift()('old-close');
+        const closeIgnored = await staleAfterClose;
+
+        const completed = controller.generateAnalysis();
+        pending.shift()('current');
+        const completedResult = await completed;
+        const transcriptPreserved = await controller.copyTranscript();
+        const recordingStarted = await controller.startRecording();
+
+        console.log(JSON.stringify({
+          audioIgnored, retranscribed, transcriptionIgnored, clearIgnored, closeIgnored,
+          completedResult, recordingStarted, transcriptPreserved, copied, events,
+          aborted: signals.map((signal) => signal.aborted),
+          staleRendered: events.filter((event) => String(event).startsWith('render-old')),
+        }));
+        """
+    )
+    assert result["audioIgnored"] is False
+    assert result["retranscribed"] is True
+    assert result["transcriptionIgnored"] is False
+    assert result["clearIgnored"] is False
+    assert result["closeIgnored"] is False
+    assert result["completedResult"] is True
+    assert result["recordingStarted"] is False
+    assert result["transcriptPreserved"] is True
+    assert result["copied"][-1].startswith("Transcript ")
+    assert result["staleRendered"] == []
+    assert result["aborted"][:4] == [True, True, True, True]
+    assert "render-current" in result["events"]

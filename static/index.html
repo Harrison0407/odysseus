@@ -321,6 +321,34 @@
             <h3>Segments</h3>
             <ol id="calls-segments" class="calls-segments"></ol>
           </div>
+          <div id="calls-analysis" class="calls-analysis" aria-labelledby="calls-analysis-heading" hidden>
+            <h3 id="calls-analysis-heading">Call analysis</h3>
+            <p class="calls-requirements">Generate an AI-produced draft from this transcript for review. Analysis stays in memory and is not saved to Library.</p>
+            <div class="calls-actions">
+              <button type="button" id="calls-analysis-generate-btn" class="calls-button calls-button-primary" disabled>Generate call analysis</button>
+              <button type="button" id="calls-analysis-regenerate-btn" class="calls-button" disabled hidden>Regenerate analysis</button>
+              <button type="button" id="calls-analysis-copy-btn" class="calls-button" disabled hidden>Copy analysis</button>
+            </div>
+            <p id="calls-analysis-status" class="calls-status" role="status" aria-live="polite"></p>
+            <div id="calls-analysis-result" class="calls-analysis-result" hidden>
+              <section class="calls-analysis-section" aria-labelledby="calls-analysis-summary-heading">
+                <h4 id="calls-analysis-summary-heading">Summary</h4>
+                <p id="calls-analysis-summary"></p>
+              </section>
+              <section class="calls-analysis-section" aria-labelledby="calls-analysis-decisions-heading">
+                <h4 id="calls-analysis-decisions-heading">Decisions</h4>
+                <ul id="calls-analysis-decisions"></ul>
+              </section>
+              <section class="calls-analysis-section" aria-labelledby="calls-analysis-actions-heading">
+                <h4 id="calls-analysis-actions-heading">Action Items</h4>
+                <ol id="calls-analysis-actions"></ol>
+              </section>
+              <section class="calls-analysis-section" aria-labelledby="calls-analysis-questions-heading">
+                <h4 id="calls-analysis-questions-heading">Open Questions</h4>
+                <ul id="calls-analysis-questions"></ul>
+              </section>
+            </div>
+          </div>
           <div id="calls-save" class="calls-save" hidden>
             <h3>Save transcript</h3>
             <p class="calls-requirements">Saving is optional. The transcript will be stored as an AI-generated document in your existing Library; audio is not saved.</p>

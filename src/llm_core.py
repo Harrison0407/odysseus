@@ -1903,6 +1903,7 @@ async def llm_call_async(
     prompt_type: Optional[str] = None,
     session_id: Optional[str] = None,
     workload: str = "foreground",
+    use_cache: bool = True,
 ) -> str:
     """Asynchronous LLM call using httpx with connection pooling, timeout, retry logic, and performance logging."""
     provider = _detect_provider(url)
@@ -1922,10 +1923,11 @@ async def llm_call_async(
         messages_copy = non_sys
 
     cache_key = _get_cache_key(url, model, messages_copy, temperature, max_tokens)
-    cached_response = _get_cached_response(cache_key)
-    if cached_response:
-        logger.debug(f"Returning cached response for key: {cache_key}")
-        return cached_response
+    if use_cache:
+        cached_response = _get_cached_response(cache_key)
+        if cached_response:
+            logger.debug(f"Returning cached response for key: {cache_key}")
+            return cached_response
 
     if provider == "chatgpt-subscription":
         # ChatGPT/Codex requires streamed Responses requests even for callers
@@ -1954,7 +1956,8 @@ async def llm_call_async(
                     continue
                 if raw == "[DONE]":
                     response = "".join(parts)
-                    _set_cached_response(cache_key, response)
+                    if use_cache:
+                        _set_cached_response(cache_key, response)
                     return response
                 try:
                     data = json.loads(raw)
@@ -1968,7 +1971,8 @@ async def llm_call_async(
                 if isinstance(delta, str):
                     parts.append(delta)
         response = "".join(parts)
-        _set_cached_response(cache_key, response)
+        if use_cache:
+            _set_cached_response(cache_key, response)
         return response
 
     if provider == "anthropic":
@@ -2043,7 +2047,8 @@ async def llm_call_async(
                 else:
                     msg = data["choices"][0]["message"]
                     response = msg.get("content") or msg.get("reasoning_content") or ""
-                _set_cached_response(cache_key, response)
+                if use_cache:
+                    _set_cached_response(cache_key, response)
                 return response
             except Exception:
                 raise HTTPException(502, f"Unexpected schema from {target_url}: {str(data)[:400]}")

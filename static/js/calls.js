@@ -1,4 +1,5 @@
 const ENDPOINT = '/api/marketmatch/stt/transcribe';
+const ANALYSIS_ENDPOINT = '/api/marketmatch/calls/analyze';
 const DOCUMENT_ENDPOINT = '/api/document';
 const DOCUMENT_HISTORY_ENDPOINT = '/api/documents/library?search=MarketMatch+Calls+Transcript&sort=recent&offset=0&limit=20';
 const CALLS_DOCUMENT_MARKER = [
@@ -11,6 +12,7 @@ const CALLS_DOCUMENT_MARKER = [
 const MAX_CALLS_HISTORY_ITEMS = 20;
 export const MAX_CALLS_WAV_BYTES = 20 * 1024 * 1024;
 export const CALLS_WAV_SAMPLE_RATE = 16000;
+export const MAX_CALLS_ANALYSIS_TRANSCRIPT_CHARS = 12000;
 const WAV_HEADER_BYTES = 44;
 const MAX_RECORDING_MILLISECONDS = Math.floor(
   ((MAX_CALLS_WAV_BYTES - WAV_HEADER_BYTES) / 2 / CALLS_WAV_SAMPLE_RATE) * 1000,
@@ -33,6 +35,25 @@ const GENERIC_FAILURE = 'Transcription could not be completed. Please try again.
 const RECORDING_FAILURE = 'The recording could not be prepared safely. Please try again.';
 const DOCUMENT_SAVE_FAILURE = 'The transcript could not be saved. Please try again.';
 const HISTORY_FAILURE = 'Saved transcripts could not be loaded. Please try again.';
+const ANALYSIS_FAILURE = 'Call analysis could not be generated. Please try again.';
+const ANALYSIS_INVALID_RESPONSE = 'The local analysis result could not be validated.';
+
+const ANALYSIS_STATUS_MESSAGES = Object.freeze({
+  401: 'Your browser session has expired. Sign in again, then retry.',
+  403: 'Your account is not allowed to use Calls analysis.',
+  413: 'This transcript is too long for the analysis pilot.',
+  422: 'This transcript cannot be analyzed. Review it and try again.',
+  502: ANALYSIS_INVALID_RESPONSE,
+  503: 'Local call analysis is unavailable right now.',
+  504: 'Local call analysis timed out. Please try again.',
+});
+const ANALYSIS_RESPONSE_LIMITS = Object.freeze({
+  summary: 2000,
+  items: 20,
+  itemText: 1000,
+  ownerOrDueDate: 200,
+  totalText: 16000,
+});
 
 const DOCUMENT_STATUS_MESSAGES = Object.freeze({
   400: 'Check the document title and try again.',
@@ -341,6 +362,10 @@ export function fixedCallsError(status) {
   return STATUS_MESSAGES[status] || GENERIC_FAILURE;
 }
 
+export function fixedCallsAnalysisError(status) {
+  return ANALYSIS_STATUS_MESSAGES[status] || ANALYSIS_FAILURE;
+}
+
 function _validateSuccessPayload(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)
       || !Number.isSafeInteger(value.duration_ms) || value.duration_ms <= 0
@@ -391,6 +416,147 @@ export async function requestCallsTranscription(file, { fetchImpl = globalThis.f
     throw new CallsUiError('MALFORMED_RESPONSE', GENERIC_FAILURE);
   }
   return _validateSuccessPayload(payload);
+}
+
+function _validateAnalysisPayload(value) {
+  const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
+  const exactKeys = (object, expected) => {
+    const keys = Object.keys(object);
+    return keys.length === expected.length && expected.every((key) => hasOwn(object, key));
+  };
+  if (!value || typeof value !== 'object' || Array.isArray(value)
+      || !exactKeys(value, ['summary', 'decisions', 'action_items', 'open_questions'])
+      || typeof value.summary !== 'string' || !value.summary.trim()
+      || _analysisTextCharacters(value.summary) > ANALYSIS_RESPONSE_LIMITS.summary
+      || !Array.isArray(value.decisions) || !Array.isArray(value.action_items)
+      || !Array.isArray(value.open_questions)
+      || value.decisions.length > ANALYSIS_RESPONSE_LIMITS.items
+      || value.action_items.length > ANALYSIS_RESPONSE_LIMITS.items
+      || value.open_questions.length > ANALYSIS_RESPONSE_LIMITS.items) {
+    throw new CallsUiError('ANALYSIS_MALFORMED_RESPONSE', ANALYSIS_INVALID_RESPONSE);
+  }
+  const stringList = (items) => items.map((item) => {
+    if (typeof item !== 'string' || !item.trim()
+        || _analysisTextCharacters(item) > ANALYSIS_RESPONSE_LIMITS.itemText) {
+      throw new CallsUiError('ANALYSIS_MALFORMED_RESPONSE', ANALYSIS_INVALID_RESPONSE);
+    }
+    return item;
+  });
+  const actionItems = value.action_items.map((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)
+        || !exactKeys(item, ['task', 'owner', 'due_date'])
+        || typeof item.task !== 'string' || !item.task.trim()
+        || _analysisTextCharacters(item.task) > ANALYSIS_RESPONSE_LIMITS.itemText
+        || (item.owner !== null && typeof item.owner !== 'string')
+        || (item.due_date !== null && typeof item.due_date !== 'string')
+        || (typeof item.owner === 'string'
+          && (!item.owner.trim()
+            || _analysisTextCharacters(item.owner) > ANALYSIS_RESPONSE_LIMITS.ownerOrDueDate))
+        || (typeof item.due_date === 'string'
+          && (!item.due_date.trim()
+            || _analysisTextCharacters(item.due_date) > ANALYSIS_RESPONSE_LIMITS.ownerOrDueDate))) {
+      throw new CallsUiError('ANALYSIS_MALFORMED_RESPONSE', ANALYSIS_INVALID_RESPONSE);
+    }
+    return { task: item.task, owner: item.owner, due_date: item.due_date };
+  });
+  const analysis = {
+    summary: value.summary,
+    decisions: stringList(value.decisions),
+    action_items: actionItems,
+    open_questions: stringList(value.open_questions),
+  };
+  let totalText = _analysisTextCharacters(analysis.summary);
+  totalText += analysis.decisions.reduce(
+    (total, item) => total + _analysisTextCharacters(item), 0,
+  );
+  totalText += analysis.open_questions.reduce(
+    (total, item) => total + _analysisTextCharacters(item), 0,
+  );
+  totalText += analysis.action_items.reduce(
+    (total, item) => total + _analysisTextCharacters(item.task)
+      + _analysisTextCharacters(item.owner || '') + _analysisTextCharacters(item.due_date || ''),
+    0,
+  );
+  if (totalText > ANALYSIS_RESPONSE_LIMITS.totalText) {
+    throw new CallsUiError('ANALYSIS_MALFORMED_RESPONSE', ANALYSIS_INVALID_RESPONSE);
+  }
+  return analysis;
+}
+
+function _analysisTextCharacters(value) {
+  return Array.from(value).length;
+}
+
+export async function requestCallsAnalysis(
+  transcript,
+  { fetchImpl = globalThis.fetch, signal } = {},
+) {
+  if (typeof transcript !== 'string' || !transcript.trim()) {
+    throw new CallsUiError('ANALYSIS_EMPTY', 'There is no transcript text to analyze.');
+  }
+  if (_analysisTextCharacters(transcript) > MAX_CALLS_ANALYSIS_TRANSCRIPT_CHARS) {
+    throw new CallsUiError(
+      'ANALYSIS_TOO_LONG',
+      'This transcript is longer than the 12,000-character analysis pilot limit.',
+    );
+  }
+  let response;
+  try {
+    response = await fetchImpl(ANALYSIS_ENDPOINT, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transcript }),
+      signal,
+    });
+  } catch (error) {
+    if (error && error.name === 'AbortError') {
+      throw new CallsUiError('ANALYSIS_CANCELLED', 'Call analysis cancelled.');
+    }
+    throw new CallsUiError('ANALYSIS_REQUEST_FAILED', ANALYSIS_FAILURE);
+  }
+  if (!response || response.ok !== true) {
+    const status = response && Number.isInteger(response.status) ? response.status : 0;
+    throw new CallsUiError(
+      `ANALYSIS_HTTP_${status || 'ERROR'}`,
+      fixedCallsAnalysisError(status),
+      status,
+    );
+  }
+  let payload;
+  try {
+    payload = await response.json();
+  } catch (_) {
+    throw new CallsUiError('ANALYSIS_MALFORMED_RESPONSE', ANALYSIS_INVALID_RESPONSE);
+  }
+  return _validateAnalysisPayload(payload);
+}
+
+export function formatCallsAnalysisText(value) {
+  const analysis = _validateAnalysisPayload(value);
+  const listText = (items) => items.length
+    ? items.map((item) => `- ${item}`).join('\n')
+    : 'None identified.';
+  const actions = analysis.action_items.length
+    ? analysis.action_items.map((item, index) => [
+      `${index + 1}. Task: ${item.task}`,
+      `Owner: ${item.owner === null ? 'Not stated.' : item.owner}`,
+      `Due date: ${item.due_date === null ? 'Not stated.' : item.due_date}`,
+    ].join('\n')).join('\n\n')
+    : 'None identified.';
+  return [
+    'Summary',
+    analysis.summary,
+    '',
+    'Decisions',
+    listText(analysis.decisions),
+    '',
+    'Action Items',
+    actions,
+    '',
+    'Open Questions',
+    listText(analysis.open_questions),
+  ].join('\n');
 }
 
 export async function requestCallsDocumentSave(
@@ -530,6 +696,10 @@ export function createCallsController({
   let panelVisible = false;
   let historyHasLoaded = false;
   let historyRefreshPending = false;
+  let analysis = null;
+  let analysisActive = false;
+  let analysisController = null;
+  let analysisGeneration = 0;
 
   const callView = (method, ...args) => {
     if (view && typeof view[method] === 'function') view[method](...args);
@@ -609,6 +779,16 @@ export function createCallsController({
     if (clearView) callView('clearSave');
   }
 
+  function clearAnalysisState({ clearView = true } = {}) {
+    analysisGeneration += 1;
+    if (analysisController) analysisController.abort();
+    analysisController = null;
+    analysisActive = false;
+    analysis = null;
+    callView('setAnalysisBusy', false);
+    if (clearView) callView('clearAnalysis');
+  }
+
   function abortHistory() {
     historyGeneration += 1;
     if (historyController) historyController.abort();
@@ -666,6 +846,7 @@ export function createCallsController({
   function selectFile(file) {
     if (active || saveActive || ['permission', 'recording', 'processing'].includes(recordingState)) return false;
     const validation = validateCallsFile(file);
+    clearAnalysisState();
     result = null;
     clearSaveState();
     view.clearResult();
@@ -699,6 +880,7 @@ export function createCallsController({
       return false;
     }
 
+    clearAnalysisState();
     const run = ++recordingGeneration;
     discardCapture();
     discardRecordedSelection();
@@ -833,6 +1015,7 @@ export function createCallsController({
     selectedFile = null;
     selectedSource = null;
     result = null;
+    clearAnalysisState();
     clearSaveState();
     callView('clearResult');
     setRecordingState('idle');
@@ -847,6 +1030,7 @@ export function createCallsController({
       setTranscriptionStatus(validation.message, 'error');
       return false;
     }
+    clearAnalysisState();
     active = true;
     clearSaveState();
     const run = ++generation;
@@ -863,6 +1047,7 @@ export function createCallsController({
       resultCreatedAt = new Date(now());
       view.renderResult(next);
       callView('showSave', defaultCallsDocumentTitle(resultCreatedAt));
+      callView('showAnalysisReady', next.transcript_text.length > 0);
       setTranscriptionStatus(
         next.segments.length ? 'Transcription complete.' : 'Transcription complete. No speech was detected.',
         'success',
@@ -889,7 +1074,7 @@ export function createCallsController({
   }
 
   async function saveToLibrary(title) {
-    if (!result || saveActive || saved || active
+    if (!result || saveActive || saved || active || analysisActive
         || ['permission', 'recording', 'processing'].includes(recordingState)) return false;
     const normalizedTitle = typeof title === 'string' ? title.trim() : '';
     if (!normalizedTitle) {
@@ -930,11 +1115,76 @@ export function createCallsController({
     }
   }
 
+  async function generateAnalysis() {
+    if (!result || analysisActive || active || saveActive
+        || ['permission', 'recording', 'processing'].includes(recordingState)) return false;
+    const transcript = result.transcript_text;
+    if (typeof transcript !== 'string' || !transcript.trim()) {
+      callView('setAnalysisStatus', 'There is no transcript text to analyze.', 'error');
+      return false;
+    }
+    if (_analysisTextCharacters(transcript) > MAX_CALLS_ANALYSIS_TRANSCRIPT_CHARS) {
+      callView('beginAnalysisAttempt');
+      callView(
+        'setAnalysisStatus',
+        'This transcript is longer than the 12,000-character analysis pilot limit.',
+        'error',
+      );
+      callView('setAnalysisBusy', false);
+      return false;
+    }
+    analysisActive = true;
+    analysis = null;
+    const run = ++analysisGeneration;
+    analysisController = createAbortController();
+    callView('beginAnalysisAttempt');
+    callView('setAnalysisBusy', true);
+    callView('setAnalysisStatus', 'Generating a reviewable draft locally…', 'loading');
+    try {
+      const next = await requestCallsAnalysis(transcript, {
+        fetchImpl,
+        signal: analysisController.signal,
+      });
+      if (run !== analysisGeneration) return false;
+      analysis = next;
+      callView('renderAnalysis', next);
+      callView('setAnalysisStatus', 'Call analysis ready for review.', 'success');
+      return true;
+    } catch (error) {
+      if (run !== analysisGeneration) return false;
+      const safe = error instanceof CallsUiError
+        ? error : new CallsUiError('ANALYSIS_REQUEST_FAILED', ANALYSIS_FAILURE);
+      if (safe.code !== 'ANALYSIS_CANCELLED') {
+        callView('setAnalysisStatus', safe.message, 'error');
+      }
+      return false;
+    } finally {
+      if (run === analysisGeneration) {
+        analysisActive = false;
+        analysisController = null;
+        callView('setAnalysisBusy', false);
+      }
+    }
+  }
+
+  async function copyAnalysis() {
+    if (!analysis || analysisActive || typeof copyText !== 'function') return false;
+    try {
+      await copyText(formatCallsAnalysisText(analysis));
+      callView('setAnalysisStatus', 'Call analysis copied.', 'success');
+      return true;
+    } catch (_) {
+      callView('setAnalysisStatus', 'Call analysis could not be copied.', 'error');
+      return false;
+    }
+  }
+
   function reset() {
     generation += 1;
     if (controller) controller.abort();
     controller = null;
     active = false;
+    clearAnalysisState();
     clearSaveState();
     recordingGeneration += 1;
     discardCapture();
@@ -951,6 +1201,10 @@ export function createCallsController({
     panelVisible = false;
     if (historyActive) abortHistory();
     if (active) cancel();
+    if (analysisActive) {
+      clearAnalysisState();
+      callView('showAnalysisReady', Boolean(result && result.transcript_text));
+    }
     if (saveActive) {
       clearSaveState({ clearView: false });
       callView('setSaveStatus', 'Save cancelled when Calls was closed.', 'cancelled');
@@ -971,6 +1225,7 @@ export function createCallsController({
     if (controller) controller.abort();
     controller = null;
     active = false;
+    clearAnalysisState({ clearView: false });
     clearSaveState({ clearView: false });
     panelVisible = false;
     abortHistory();
@@ -1003,6 +1258,8 @@ export function createCallsController({
     cancel,
     reset,
     copyTranscript,
+    generateAnalysis,
+    copyAnalysis,
     saveToLibrary,
     loadHistory,
     openHistoryDocument,
@@ -1015,6 +1272,7 @@ export function createCallsController({
     isActive: () => active,
     isSaveActive: () => saveActive,
     isHistoryActive: () => historyActive,
+    isAnalysisActive: () => analysisActive,
     getRecordingState: () => recordingState,
   };
 }
@@ -1035,6 +1293,16 @@ function _domView(doc) {
   const segmentsWrap = byId('calls-segments-wrap');
   const segmentsList = byId('calls-segments');
   const copy = byId('calls-copy-btn');
+  const analysisSection = byId('calls-analysis');
+  const analysisGenerate = byId('calls-analysis-generate-btn');
+  const analysisRegenerate = byId('calls-analysis-regenerate-btn');
+  const analysisCopy = byId('calls-analysis-copy-btn');
+  const analysisStatus = byId('calls-analysis-status');
+  const analysisResult = byId('calls-analysis-result');
+  const analysisSummary = byId('calls-analysis-summary');
+  const analysisDecisions = byId('calls-analysis-decisions');
+  const analysisActions = byId('calls-analysis-actions');
+  const analysisQuestions = byId('calls-analysis-questions');
   const saveSection = byId('calls-save');
   const saveTitle = byId('calls-save-title');
   const saveButton = byId('calls-save-btn');
@@ -1060,10 +1328,14 @@ function _domView(doc) {
   let saveBusy = false;
   let saveReady = false;
   let saveComplete = false;
+  let analysisBusy = false;
+  let analysisReady = false;
+  let analysisAttempted = false;
+  let analysisComplete = false;
 
   const captureBusy = () => ['permission', 'recording', 'processing'].includes(recordingUiState);
   const syncControls = () => {
-    const operationBusy = transcriptionBusy || saveBusy || captureBusy();
+    const operationBusy = transcriptionBusy || saveBusy || analysisBusy || captureBusy();
     fileInput.disabled = operationBusy;
     submit.disabled = operationBusy || !uploadReady;
     reset.disabled = !uploadReady;
@@ -1074,6 +1346,30 @@ function _domView(doc) {
     recordClear.disabled = !(recordingReady || captureBusy() || (transcriptionBusy && recordingReady));
     saveTitle.disabled = saveBusy || saveComplete;
     saveButton.disabled = operationBusy || !saveReady || saveComplete;
+    analysisGenerate.disabled = operationBusy || !analysisReady || analysisAttempted;
+    analysisRegenerate.disabled = operationBusy || !analysisReady;
+    analysisCopy.disabled = operationBusy || !analysisComplete;
+  };
+
+  const clearAnalysis = () => {
+    analysisBusy = false;
+    analysisReady = false;
+    analysisAttempted = false;
+    analysisComplete = false;
+    analysisSection.hidden = true;
+    analysisResult.hidden = true;
+    analysisGenerate.hidden = false;
+    analysisGenerate.textContent = 'Generate call analysis';
+    analysisRegenerate.hidden = true;
+    analysisRegenerate.textContent = 'Regenerate analysis';
+    analysisCopy.hidden = true;
+    setElementText(analysisStatus, '');
+    analysisStatus.dataset.state = 'idle';
+    setElementText(analysisSummary, '');
+    analysisDecisions.replaceChildren();
+    analysisActions.replaceChildren();
+    analysisQuestions.replaceChildren();
+    syncControls();
   };
 
   const clearSave = () => {
@@ -1095,6 +1391,7 @@ function _domView(doc) {
     segmentsList.replaceChildren();
     segmentsWrap.hidden = true;
     empty.hidden = true;
+    clearAnalysis();
     clearSave();
   };
 
@@ -1145,6 +1442,95 @@ function _domView(doc) {
         segmentsList.appendChild(item);
       }
       segmentsWrap.hidden = value.segments.length === 0;
+    },
+    showAnalysisReady(enabled) {
+      analysisReady = Boolean(enabled);
+      analysisAttempted = false;
+      analysisComplete = false;
+      analysisSection.hidden = false;
+      analysisResult.hidden = true;
+      analysisGenerate.hidden = false;
+      analysisRegenerate.hidden = true;
+      analysisCopy.hidden = true;
+      setElementText(
+        analysisStatus,
+        enabled
+          ? 'Generate only when you are ready to review an AI-produced draft.'
+          : 'No transcript text is available to analyze.',
+      );
+      analysisStatus.dataset.state = enabled ? 'idle' : 'error';
+      syncControls();
+    },
+    clearAnalysis,
+    beginAnalysisAttempt() {
+      const previousAttempt = analysisAttempted;
+      analysisAttempted = true;
+      analysisComplete = false;
+      analysisResult.hidden = true;
+      analysisGenerate.hidden = previousAttempt;
+      analysisRegenerate.hidden = !previousAttempt;
+      analysisCopy.hidden = true;
+      setElementText(analysisSummary, '');
+      analysisDecisions.replaceChildren();
+      analysisActions.replaceChildren();
+      analysisQuestions.replaceChildren();
+      syncControls();
+    },
+    setAnalysisBusy(busy) {
+      analysisBusy = busy;
+      if (!busy && analysisAttempted) {
+        analysisGenerate.hidden = true;
+        analysisRegenerate.hidden = false;
+      }
+      analysisGenerate.textContent = busy ? 'Generating…' : 'Generate call analysis';
+      analysisRegenerate.textContent = busy ? 'Generating…' : 'Regenerate analysis';
+      syncControls();
+    },
+    setAnalysisStatus(message, kind) {
+      setElementText(analysisStatus, message);
+      analysisStatus.dataset.state = kind;
+      analysisStatus.setAttribute('role', kind === 'error' ? 'alert' : 'status');
+      analysisStatus.setAttribute('aria-live', kind === 'error' ? 'assertive' : 'polite');
+    },
+    renderAnalysis(value) {
+      const appendList = (element, values) => {
+        const items = values.length ? values : ['None identified.'];
+        for (const itemValue of items) {
+          const item = doc.createElement('li');
+          setElementText(item, itemValue);
+          element.appendChild(item);
+        }
+      };
+      setElementText(analysisSummary, value.summary);
+      analysisDecisions.replaceChildren();
+      analysisActions.replaceChildren();
+      analysisQuestions.replaceChildren();
+      appendList(analysisDecisions, value.decisions);
+      appendList(analysisQuestions, value.open_questions);
+      if (value.action_items.length === 0) {
+        const item = doc.createElement('li');
+        setElementText(item, 'None identified.');
+        analysisActions.appendChild(item);
+      } else {
+        for (const action of value.action_items) {
+          const item = doc.createElement('li');
+          const task = doc.createElement('p');
+          const owner = doc.createElement('p');
+          const dueDate = doc.createElement('p');
+          setElementText(task, `Task: ${action.task}`);
+          setElementText(owner, `Owner: ${action.owner === null ? 'Not stated.' : action.owner}`);
+          setElementText(
+            dueDate,
+            `Due date: ${action.due_date === null ? 'Not stated.' : action.due_date}`,
+          );
+          item.append(task, owner, dueDate);
+          analysisActions.appendChild(item);
+        }
+      }
+      analysisComplete = true;
+      analysisResult.hidden = false;
+      analysisCopy.hidden = false;
+      syncControls();
     },
     showSave(title) {
       saveReady = true;
@@ -1360,6 +1746,9 @@ export function init(doc = globalThis.document, { openDocument } = {}) {
     fileInput.focus();
   });
   doc.getElementById('calls-copy-btn').addEventListener('click', () => controller.copyTranscript());
+  doc.getElementById('calls-analysis-generate-btn').addEventListener('click', () => controller.generateAnalysis());
+  doc.getElementById('calls-analysis-regenerate-btn').addEventListener('click', () => controller.generateAnalysis());
+  doc.getElementById('calls-analysis-copy-btn').addEventListener('click', () => controller.copyAnalysis());
   doc.getElementById('calls-save-btn').addEventListener('click', () => controller.saveToLibrary(saveTitle.value));
   doc.getElementById('calls-history-refresh-btn').addEventListener('click', () => controller.loadHistory({ refreshing: true }));
   modal.addEventListener('click', (event) => { if (event.target === modal) close(); });

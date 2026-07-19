@@ -92,6 +92,7 @@
                         <li><a class="dropdown-item" href="{% url 'walkthroughs:list' %}?purpose=final_handover_delivery">{% trans "Entrega final" %}</a></li>
                     </ul>
                 </li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'evidenceinbox:list' %}">{% trans "Evidencias sin Clasificar" %}</a></li>
                 <li class="nav-item"><a class="nav-link" href="{% url 'workflow:inbox' %}">{% trans "Flujo y Entregas" %}</a></li>
             </ul>
             <span class="navbar-text text-white me-3">{{ user.get_full_name|default:user.username }}</span>

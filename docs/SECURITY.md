@@ -228,6 +228,24 @@
   deleted**, since the correction lifecycle itself is `FieldIssue`'s —
   the same guarantee already covers walkthrough-originated corrective
   issues with no additional code.
+- **Unclassified Evidence Inbox: classification targets are
+  organization-checked, not just the evidence record itself.** An
+  initial implementation of `inbox_classify`/`inbox_reclassify`/
+  `inbox_batch_classify` resolved the destination target by
+  `ContentType` + primary key alone, with no verification that the
+  resolved object belonged to the requesting user's organization —
+  found and fixed during development, before any commit, via a shared
+  `_resolve_target_or_none()` helper that checks the target through
+  `apps.workflow.services.resolve_organization()` (extended with
+  `shipment`/`purchase_order`/`walkthrough` fallbacks for `Container`,
+  `PurchaseOrderLine`, and `WalkthroughItem`). Verified by a dedicated
+  test asserting a cross-organization classification attempt is
+  silently refused and leaves the evidence unclassified.
+- **Reassigning a classification requires a written reason and never
+  deletes the prior classification** — `reclassify_evidence` raises
+  without one, and marks the old row inactive + `superseded_by` rather
+  than mutating or removing it, verified by dedicated tests including
+  an attempt to reclassify an already-superseded row.
 
 ## Known gaps (see `KNOWN_LIMITATIONS.md` for the full list)
 

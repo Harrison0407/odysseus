@@ -953,3 +953,56 @@ documented order.
     different building than the training milestone's Building 11,
     demonstrating the building-agnostic design live, not just in
     tests).
+47. **Unclassified Evidence Inbox.** New `apps.evidenceinbox` app
+    (ADR-039), for Lawson's historical photographs and any future field
+    evidence whose exact building/apartment/issue isn't known yet.
+    `UnclassifiedEvidence` wraps the existing `Document`/
+    `DocumentVersion` mechanism directly (SHA-256 hashing, duplicate
+    detection, immutable version history — mirrored rather than reused
+    via `attach_evidence` since there is deliberately no target to
+    attach to yet); only an optional coarse project/building guess,
+    `date_taken`, and notes accompany it, and nothing about the
+    original upload is ever modified again. `EvidenceClassification`
+    (generic content_type/object_id, same shape as `Attachment`/
+    `AuditEvent`, ADR-004) is a separate, reassignable pointer covering
+    building/floor/unit/walkthrough/walkthrough item/training session/
+    field issue/product/supplier/purchase order line/shipment/
+    container/installation/inspection record (`CLASSIFIABLE_TARGETS`);
+    `classification_status` (unclassified/partially classified/
+    classified, A53) is derived from whether the classified target is
+    a "leaf" record or a coarser one. Reclassifying never deletes or
+    edits the old classification — it is marked `is_active=False` and
+    linked via `superseded_by` (A52), the same versioned-immutable-row
+    pattern as `Drawing.supersedes`/`OrderLineAllocation
+    .reassigned_from`, and requires a written reason. While building
+    the classify/reclassify/batch-classify views, a genuine
+    organization-isolation gap was caught and fixed before any commit:
+    the classification target was being resolved by `ContentType` + pk
+    alone, with no check that it belonged to the requester's
+    organization. Fixed via a shared `_resolve_target_or_none()` helper
+    that verifies the target through `apps.workflow.services
+    .resolve_organization()` — which itself needed new `shipment`/
+    `purchase_order`/`walkthrough` fallback chains (A55) to correctly
+    resolve organization for `Container`, `PurchaseOrderLine`, and
+    `WalkthroughItem`, none of which carry a direct organization field.
+    New `/evidencias-sin-clasificar/` list/upload/detail screens
+    (list supports batch-classifying multiple selected items at once),
+    linked from the main nav. 14 new tests
+    (`tests/test_evidence_inbox.py`), covering upload provenance
+    (uploader/timestamp/filename/checksum) being established
+    immediately, duplicate-content detection, classification to both
+    coarse and leaf targets and the resulting status transitions,
+    batch classification, reclassification requiring a reason and
+    preserving full history, refusing to reclassify an already-
+    superseded classification, organization isolation for both the
+    evidence record itself and the classification target (including a
+    dedicated test that a cross-organization classification attempt is
+    silently refused rather than linking across organizations), and a
+    full HTTP upload→classify→reclassify workflow — 368/368 passing
+    (354 pre-existing + 14 new). Verified migrations apply cleanly from
+    an empty database; live HTTP walkthrough uploaded a real
+    historical-style photograph and classified it to a genuine unit
+    (Apto A1) in the actual imported ARENA T1 Building 11, confirming
+    the checksum and "Sin clasificar" state immediately after upload
+    and the "Clasificado" state with the correct target after
+    classification.

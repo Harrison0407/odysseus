@@ -79,6 +79,7 @@ INSTALLED_APPS = [
     "apps.fieldissues",
     "apps.training",
     "apps.walkthroughs",
+    "apps.evidenceinbox",
     "apps.api",
 ]
 

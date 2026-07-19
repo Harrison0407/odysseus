@@ -2,6 +2,39 @@
 
 Newest first.
 
+## ADR-039 — Unclassified Evidence Inbox: upload provenance is permanent and untouched; classification is a separate, reassignable, generic pointer
+**Decision:** `apps.evidenceinbox.UnclassifiedEvidence` wraps a
+`documents.Document`/`DocumentVersion` (the same SHA-256-hashed,
+duplicate-detected, immutable-version mechanism every other upload in
+this system uses) with only an optional coarse project/building guess
+and free-text notes — nothing about the original upload is ever
+modified again. A separate `EvidenceClassification` row (generic
+content_type/object_id pointer, same shape as `Attachment`/
+`AuditEvent`, ADR-004) links that evidence to a real target
+(building/floor/unit/walkthrough/walkthrough item/training session/
+field issue/product/supplier/purchase order line/shipment/container/
+installation/inspection record). Reassigning a classification never
+edits or deletes the old row — it is marked `is_active=False` and
+linked via `superseded_by`, the same versioned-immutable-row pattern
+as `Drawing.supersedes` and `OrderLineAllocation.reassigned_from`.
+Every classification target is resolved and organization-checked
+through the shared `apps.workflow.services.resolve_organization()`
+helper (extended with `shipment`/`purchase_order`/`walkthrough`
+fallbacks for this release) rather than a bespoke inbox-specific
+isolation check.
+**Why:** The whole point of this inbox is historical/ambiguous
+evidence (Lawson's own photographs, or any future field upload) whose
+correct building/apartment/issue isn't known yet, and may turn out to
+have been guessed wrong the first time. Keeping the original upload's
+provenance permanent and layering a reassignable, fully-audited
+classification on top means a reviewer can always answer "who
+uploaded this, when, and what did it originally look like," while
+still being free to correct where it belongs — including more than
+once — without ever losing that history. Reusing the shared
+organization resolver, rather than writing a new isolation check
+specific to this app, keeps that guarantee in exactly one place for
+every current and future cross-app reference.
+
 ## ADR-038 — Walkthrough corrective defects become real FieldIssues; delivery readiness is always read from that issue's actual status, never a parallel flag
 **Decision:** `WalkthroughItem.field_issue` (FK) links a defect to a
 genuinely created, fully-lifecycled `apps.fieldissues.FieldIssue` via

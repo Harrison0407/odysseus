@@ -101,6 +101,15 @@ def resolve_organization(target):
     organization = getattr(target, "organization", None)
     if organization is not None:
         return organization
+    shipment = getattr(target, "shipment", None)  # Container -> Shipment
+    if shipment is not None:
+        return resolve_organization(shipment)
+    purchase_order = getattr(target, "purchase_order", None)  # PurchaseOrderLine -> PurchaseOrder
+    if purchase_order is not None:
+        return resolve_organization(purchase_order)
+    walkthrough = getattr(target, "walkthrough", None)  # WalkthroughItem -> Walkthrough -> Building -> Project
+    if walkthrough is not None:
+        return resolve_organization(walkthrough)
     project = resolve_project(target)
     if project is not None:
         return project.organization

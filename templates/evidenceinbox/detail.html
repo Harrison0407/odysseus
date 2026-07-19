@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>{{ evidence.document.title }}</h3>
+<div class="row">
+    <div class="col-md-6">
+        <table class="table table-sm bg-white">
+            <tr><th>Proyecto</th><td>{{ evidence.project|default:"—" }}</td></tr>
+            <tr><th>Edificio</th><td>{{ evidence.building|default:"—" }}</td></tr>
+            <tr><th>Fecha tomada</th><td>{{ evidence.date_taken|default:"—" }}</td></tr>
+            <tr><th>Notas</th><td>{{ evidence.notes|default:"—"|linebreaksbr }}</td></tr>
+            <tr><th>Estado</th><td>{{ evidence.get_classification_status_display }}</td></tr>
+            <tr><th>Cargado por</th><td>{{ evidence.created_by }}</td></tr>
+            <tr><th>Cargado el</th><td>{{ evidence.created_at }}</td></tr>
+            <tr><th>SHA-256</th><td><code>{{ evidence.document.versions.first.sha256 }}</code></td></tr>
+            <tr><th>Archivo</th><td><a href="{% url 'documents:download' evidence.document.pk evidence.document.versions.first.pk %}">{{ evidence.document.versions.first.original_filename }}</a></td></tr>
+        </table>
+    </div>
+    <div class="col-md-6">
+        <h5>Clasificaciones activas</h5>
+        <table class="table table-sm bg-white">
+            <thead><tr><th>Tipo</th><th>Destino</th><th>Motivo</th><th>Acción</th></tr></thead>
+            <tbody>
+            {% for c in classifications %}
+                <tr>
+                    <td>{{ c.content_type.model }}</td>
+                    <td>{{ c.target|default:c.object_id }}</td>
+                    <td>{{ c.reason|default:"—" }}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#reclassify-{{ c.pk }}">Reasignar</button>
+                        <form method="post" action="{% url 'evidenceinbox:reclassify' c.pk %}" class="collapse mt-2" id="reclassify-{{ c.pk }}">
+                            {% csrf_token %}
+                            <select name="app_label_model" class="form-select form-select-sm mb-1" onchange="var v=this.value.split('|'); this.form.app_label.value=v[0]; this.form.model.value=v[1];">
+                                <option value="">Nuevo tipo de destino...</option>
+                                {% for app_label, model, display_name in classifiable_targets %}
+                                    <option value="{{ app_label }}|{{ model }}">{{ display_name }}</option>
+                                {% endfor %}
+                            </select>
+                            <input type="hidden" name="app_label">
+                            <input type="hidden" name="model">
+                            <input class="form-control form-control-sm mb-1" name="object_id" placeholder="Nuevo ID de destino (UUID)">
+                            <input class="form-control form-control-sm mb-1" name="reason" placeholder="Motivo de reasignación (obligatorio)" required>
+                            <button class="btn btn-sm btn-primary" type="submit">Confirmar reasignación</button>
+                        </form>
+                    </td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="4" class="text-muted">Sin clasificaciones aún.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+        <h5 class="mt-4">Clasificar</h5>
+        <form method="post" action="{% url 'evidenceinbox:classify' evidence.pk %}">
+            {% csrf_token %}
+            <select name="app_label_model" class="form-select form-select-sm mb-1" onchange="var v=this.value.split('|'); this.form.app_label.value=v[0]; this.form.model.value=v[1];">
+                <option value="">Tipo de destino...</option>
+                {% for app_label, model, display_name in classifiable_targets %}
+                    <option value="{{ app_label }}|{{ model }}">{{ display_name }}</option>
+                {% endfor %}
+            </select>
+            <input type="hidden" name="app_label">
+            <input type="hidden" name="model">
+            <input class="form-control form-control-sm mb-1" name="object_id" placeholder="ID del destino (UUID)">
+            <input class="form-control form-control-sm mb-1" name="reason" placeholder="Motivo (opcional)">
+            <button class="btn btn-sm btn-primary" type="submit">Clasificar</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

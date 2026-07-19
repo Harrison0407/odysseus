@@ -488,3 +488,57 @@ instead, exactly as required, and is **not** listed here as a resolved assumptio
   evidence and an authorized independent verifier) rather than a
   second, weaker "resolved" flag on the walkthrough item that could
   drift out of sync with the real correction's actual state.
+- **A51. The Unclassified Evidence Inbox wraps every upload in the
+  same `Document`/`DocumentVersion` mechanism (SHA-256 hashing,
+  duplicate detection, immutable version history) already used by
+  every other upload path, rather than inventing a parallel file
+  model.** `UnclassifiedEvidence` is a thin wrapper (organization,
+  optional project/building for a coarse starting guess, optional
+  `date_taken`, notes) around a `Document` FK — provenance (uploader,
+  timestamp, original filename, checksum) is therefore established at
+  upload time and is never touched again by any later classification
+  action.
+- **A52. Classification is a separate, generic, reassignable pointer
+  (`EvidenceClassification`, content_type/object_id) layered on top of
+  the untouched upload, not a field on `UnclassifiedEvidence` itself.**
+  This lets one piece of evidence be classified, reclassified, or even
+  linked to more than one record over time (e.g. a photo classified to
+  a building and, separately, to the specific field issue it
+  documents) without ever losing the history of where it was
+  previously thought to belong — reclassification marks the old row
+  `is_active=False` and links `superseded_by`, mirroring the
+  `OrderLineAllocation.reassigned_from` / `Drawing.supersedes`
+  versioned-immutable-row pattern already used elsewhere in this
+  release.
+- **A53. `classification_status` is derived from whether the
+  classified target is a "leaf" record (unit, walkthrough item,
+  walkthrough, field issue, training session, installation record,
+  inspection record, purchase order line) versus a coarser one
+  (building, floor, project, supplier, ...).** The release describes
+  three states — unclassified, partially classified, classified —
+  without defining the exact boundary; treating "classified" as
+  "resolved to a specific, individually-actionable record" and
+  "partially classified" as "narrowed to a general area but not yet
+  pinned to one" is the most useful reading for a reviewer scanning
+  the inbox to see what still needs finishing.
+- **A54. The classification target list (`CLASSIFIABLE_TARGETS`) is a
+  fixed, explicit list of (app_label, model) pairs covering every
+  target type the release names, rather than every model in the
+  system.** This avoids accidentally exposing classification against
+  models that were never intended as evidence targets (e.g. internal
+  workflow/audit rows) while still covering building/floor/unit,
+  walkthrough/walkthrough item, training session, field issue,
+  product, supplier, purchase order line, shipment/container, and
+  installation/inspection records — extending it to a new target type
+  later is a one-line addition, not a redesign.
+- **A55. Classifying evidence to a target enforces the same
+  organization-isolation guarantee as every other cross-app reference
+  in this release, via the shared `apps.workflow.services
+  .resolve_organization()` resolver rather than a bespoke,
+  evidence-inbox-specific check.** `resolve_organization()` was
+  extended with `shipment`/`purchase_order`/`walkthrough` fallback
+  chains (needed for `Container`, `PurchaseOrderLine`, and
+  `WalkthroughItem`, none of which carry a direct organization field)
+  so this one shared function stays the single place cross-cutting
+  isolation logic lives, instead of duplicating it per classifiable
+  target type.

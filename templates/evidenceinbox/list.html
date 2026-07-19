@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center">
+    <h3>Evidencias sin Clasificar</h3>
+    <a class="btn btn-primary btn-sm" href="{% url 'evidenceinbox:upload' %}">+ Cargar evidencia</a>
+</div>
+<div class="mb-3 d-flex flex-wrap gap-1">
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'evidenceinbox:list' %}">Todas</a>
+    {% for code, label in statuses %}
+        <a class="btn btn-sm btn-outline-secondary" href="?status={{ code }}">{{ label }}</a>
+    {% endfor %}
+</div>
+<form method="post" action="{% url 'evidenceinbox:batch-classify' %}" id="batch-form">
+{% csrf_token %}
+<div class="table-responsive">
+<table class="table table-sm table-striped bg-white">
+    <thead><tr><th></th><th>Documento</th><th>Proyecto</th><th>Edificio</th><th>Fecha tomada</th><th>Estado</th></tr></thead>
+    <tbody>
+    {% for item in evidence %}
+        <tr>
+            <td><input type="checkbox" name="evidence_id" value="{{ item.pk }}"></td>
+            <td><a href="{% url 'evidenceinbox:detail' item.pk %}">{{ item.document.title }}</a></td>
+            <td>{{ item.project|default:"—" }}</td>
+            <td>{{ item.building|default:"—" }}</td>
+            <td>{{ item.date_taken|default:"—" }}</td>
+            <td>
+                {% if item.classification_status == "classified" %}<span class="badge bg-success">Clasificado</span>
+                {% elif item.classification_status == "partially_classified" %}<span class="badge bg-warning">Parcial</span>
+                {% else %}<span class="badge bg-secondary">Sin clasificar</span>{% endif %}
+            </td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="6" class="text-muted">Sin evidencias cargadas.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+<div class="card p-2 mt-2" style="max-width: 32rem;">
+    <p class="mb-1 text-muted">Clasificar en lote los ítems seleccionados arriba:</p>
+    <div class="input-group input-group-sm mb-2">
+        <select name="app_label_model" class="form-select" onchange="var v=this.value.split('|'); this.form.app_label.value=v[0]; this.form.model.value=v[1];">
+            <option value="">Tipo de destino...</option>
+            {% for app_label, model, display_name in classifiable_targets %}
+                <option value="{{ app_label }}|{{ model }}">{{ display_name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <input type="hidden" name="app_label">
+    <input type="hidden" name="model">
+    <input class="form-control form-control-sm mb-2" name="object_id" placeholder="ID del destino (UUID)">
+    <input class="form-control form-control-sm mb-2" name="reason" placeholder="Motivo (opcional)">
+    <button class="btn btn-sm btn-primary" type="submit">Clasificar seleccionados</button>
+</div>
+</form>
+{% endblock %}

@@ -459,8 +459,21 @@ is silently claimed to be done when it isn't.
   apartment cannot be marked ready for delivery while blocking defects
   or unverified corrections remain, unless an authorized override with
   a written reason is recorded. `/recorridos/` screens.
-- The Unclassified Evidence Inbox remains **not yet built** as of this
-  entry — see `docs/implementation-roadmap.md` for build order.
+- ~~Unclassified Evidence Inbox~~ — **Done.** New
+  `apps.evidenceinbox` app (ADR-039); every upload wraps the existing
+  `Document`/`DocumentVersion` provenance mechanism, untouched after
+  upload. Classification is a separate, reassignable, generic pointer
+  covering 14 target types (building/floor/unit/walkthrough/
+  walkthrough item/training session/field issue/product/supplier/
+  purchase order line/shipment/container/installation/inspection
+  record); reassignment never deletes history (A52). A genuine
+  organization-isolation gap on the classification *target* (as
+  opposed to the evidence record itself) was found and fixed before
+  any commit — see `docs/implementation-log.md` entry 47 and A55.
+  `/evidencias-sin-clasificar/` screens. No known limitation remains
+  for this milestone beyond the target-type list being a fixed,
+  explicit set (A54) rather than every model in the system — extending
+  it to a new target type is a one-line addition.
 
 ## Data-quality ambiguities (not bugs — see `DATA_QUALITY_AND_UNCERTAINTY.md`)
 

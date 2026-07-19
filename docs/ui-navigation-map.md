@@ -142,6 +142,12 @@
 | `/recorridos/<id>/reinspeccion/` (POST) | `walkthrough_create_reinspection` | Creates a new linked walkthrough; the original is never edited |
 | `/recorridos/<id>/siguiente-secuencial/` (POST) | `walkthrough_create_next_sequential` | Creates the next unit's walkthrough pre-filled from this one, for efficient floor/building sweeps |
 | `/recorridos/items/<id>/registrar-resultado/`, `/evidencia/`, `/crear-incidencia/` (POST) | item actions | Checklist result + measurements/conditions, staged evidence, and linking a real corrective `FieldIssue` |
+| `/evidencias-sin-clasificar/` | `apps.evidenceinbox.views.inbox_list` | All unclassified/partially-classified/classified evidence for the org; filterable by `?status=`; supports batch classification of multiple selected items |
+| `/evidencias-sin-clasificar/subir/` | `inbox_upload` | Upload form — only the file/document type/title are required; project/building/date-taken/notes are optional starting guesses |
+| `/evidencias-sin-clasificar/<id>/` | `inbox_detail` | Upload provenance (uploader, timestamp, checksum, download link), active classifications, classify/reclassify forms |
+| `/evidencias-sin-clasificar/<id>/clasificar/` (POST) | `inbox_classify` | Links the evidence to a real target (14 supported types); target is resolved and organization-verified server-side |
+| `/evidencias-sin-clasificar/clasificaciones/<id>/reasignar/` (POST) | `inbox_reclassify` | Requires a written reason; the prior classification is preserved, marked inactive and linked via `superseded_by` |
+| `/evidencias-sin-clasificar/clasificar-lote/` (POST) | `inbox_batch_classify` | Classifies every selected evidence row to the same target in one action |
 
 | Role code | Dashboard template |
 |---|---|

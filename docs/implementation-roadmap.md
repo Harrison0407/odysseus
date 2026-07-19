@@ -185,7 +185,17 @@ All four Priority 1 features are now complete. See
     real `FieldIssue`, delivery readiness always read from that
     issue's live status. `/recorridos/` screens, live-validated in
     ARENA T1 Building 9.
-38. Unclassified Evidence Inbox — pending.
+38. ~~Unclassified Evidence Inbox~~ — **Done.** New
+    `apps.evidenceinbox` app (ADR-039): every upload wraps the existing
+    `Document`/`DocumentVersion` provenance mechanism untouched;
+    classification is a separate, reassignable, generic pointer
+    (`EvidenceClassification`) covering building/floor/unit/
+    walkthrough/walkthrough item/training session/field issue/product/
+    supplier/purchase order line/shipment/container/installation/
+    inspection record, org-isolation-checked via the shared
+    `resolve_organization()` resolver. `/evidencias-sin-clasificar/`
+    screens, live-validated with a real historical-style photograph
+    uploaded and classified to a real ARENA T1 Building 11 unit.
 
 ## Explicitly out of scope for any near-term increment
 

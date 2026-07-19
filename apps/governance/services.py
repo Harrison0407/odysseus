@@ -10,6 +10,10 @@ never to an implicit allow.
 
 from __future__ import annotations
 
+import hashlib
+import json
+
+from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 from django.utils import timezone
 
@@ -22,6 +26,7 @@ from .models import (
     CapabilityGrant,
     ChangeRequest,
     Classification,
+    DerivedArtifact,
     DisclosureGrant,
     Party,
     PartyMembership,
@@ -393,3 +398,75 @@ def resolve_risk_flag(flag: RiskFlag, user) -> RiskFlag:
     flag.save()
     audit.log(AuditEvent.Action.RISK_FLAG, instance=flag, actor=user, summary=f"Señal de riesgo resuelta: {flag}")
     return flag
+
+
+# ---------------------------------------------------------------------------
+# Derived Artifacts and the authorization-before-transformation boundary
+# (spec sections 10, 12). The required order is always:
+#   authorization -> permitted retrieval -> permitted field projection
+#   -> optional transformation (translation/summary/AI)
+# never the reverse. `transform_fn` is called ONLY with the already
+# authorized projection dict — it structurally cannot see the full
+# source object, which is the actual guarantee (not just a convention).
+# ---------------------------------------------------------------------------
+
+
+def _hash_projection(projection: dict) -> str:
+    return hashlib.sha256(json.dumps(projection, sort_keys=True, default=str).encode()).hexdigest()
+
+
+@transaction.atomic
+def create_derived_artifact(source_obj, user, *, artifact_type, field_capability_map, transform_fn, language="",
+                             package=None, policy_version="1", author_or_model="", target_classification=None) -> DerivedArtifact:
+    allowed, projection = authorize_derived_artifact_source(user, source_obj, field_capability_map, package=package)
+    if not allowed:
+        raise AuthorizationDenied("No tiene permiso para generar un artefacto derivado de este recurso.")
+
+    source_classification = getattr(source_obj, "classification", Classification.OPERATIONAL_SHARED)
+    artifact_classification = target_classification or source_classification
+    if is_less_restrictive(artifact_classification, source_classification):
+        if not has_capability(user, "AUTHORIZE_DISCLOSURE", package=package):
+            raise AuthorizationDenied(
+                "Un artefacto derivado nunca puede volverse menos restrictivo que su fuente sin una "
+                "decisión de divulgación autorizada explícita."
+            )
+
+    body_text = transform_fn(projection)
+
+    artifact = DerivedArtifact.objects.create(
+        content_type=ContentType.objects.get_for_model(source_obj), object_id=source_obj.pk,
+        source_version=str(getattr(source_obj, "updated_at", "") or getattr(source_obj, "id", "")),
+        source_hash=_hash_projection(projection), source_classification=source_classification,
+        authorized_source_projection=projection, artifact_type=artifact_type, language=language,
+        author_or_model=author_or_model or getattr(user, "username", "system"), policy_version=policy_version,
+        classification=artifact_classification, body_text=body_text, created_by=user,
+    )
+    audit.log(AuditEvent.Action.DERIVED_ARTIFACT, instance=artifact, actor=user, summary=f"Artefacto derivado creado: {artifact}")
+    return artifact
+
+
+def mark_stale_if_source_changed(artifact: DerivedArtifact, source_obj) -> DerivedArtifact:
+    current_version = str(getattr(source_obj, "updated_at", "") or getattr(source_obj, "id", ""))
+    if current_version != artifact.source_version and not artifact.is_stale:
+        artifact.is_stale = True
+        artifact.save(update_fields=["is_stale"])
+    return artifact
+
+
+@transaction.atomic
+def supersede_derived_artifact(old_artifact: DerivedArtifact, user, *, body_text, source_obj, field_capability_map,
+                                transform_fn=None, package=None) -> DerivedArtifact:
+    allowed, projection = authorize_derived_artifact_source(user, source_obj, field_capability_map, package=package)
+    if not allowed:
+        raise AuthorizationDenied("No tiene permiso para generar un artefacto derivado de este recurso.")
+    new_body = transform_fn(projection) if transform_fn else body_text
+    new_artifact = DerivedArtifact.objects.create(
+        content_type=old_artifact.content_type, object_id=old_artifact.object_id,
+        source_version=str(getattr(source_obj, "updated_at", "") or getattr(source_obj, "id", "")),
+        source_hash=_hash_projection(projection), source_classification=getattr(source_obj, "classification", old_artifact.source_classification),
+        authorized_source_projection=projection, artifact_type=old_artifact.artifact_type, language=old_artifact.language,
+        author_or_model=old_artifact.author_or_model, policy_version=old_artifact.policy_version,
+        classification=old_artifact.classification, body_text=new_body, supersedes=old_artifact, created_by=user,
+    )
+    audit.log(AuditEvent.Action.DERIVED_ARTIFACT, instance=new_artifact, actor=user, summary=f"Artefacto derivado reemplazado: {new_artifact}")
+    return new_artifact

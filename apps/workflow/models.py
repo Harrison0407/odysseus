@@ -245,9 +245,27 @@ class GateOverride(BaseModel):
     before_state = models.JSONField(default=dict, help_text="The blocking GateResult at the moment of override.")
     after_state = models.JSONField(default=dict, help_text="Handoff status/fields immediately after the override was applied.")
 
+    # Exception hardening (Controlled Transparency / Confidentiality
+    # release, spec section 14) — an exception may carry a scope/duration
+    # and be explicitly revoked, but the underlying blocked rule itself
+    # is never deleted, edited, or silently marked passed.
+    expires_at = models.DateTimeField(null=True, blank=True, help_text="Optional expiration — the override no longer applies after this time.")
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    revoked_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+
     class Meta:
         indexes = [models.Index(fields=["content_type", "object_id"])]
         ordering = ["-created_at"]
 
     def __str__(self):
         return f"Override de {self.gate_definition} por {self.overridden_by}"
+
+    def is_currently_active(self, *, at=None) -> bool:
+        from django.utils import timezone
+
+        at = at or timezone.now()
+        if self.revoked_at is not None:
+            return False
+        if self.expires_at is not None and self.expires_at < at:
+            return False
+        return True

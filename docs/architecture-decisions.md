@@ -2,6 +2,52 @@
 
 Newest first.
 
+## ADR-041 — Controlled Transparency / Confidentiality foundation: Party/Role/Capability as a cross-cutting layer, commercial layers as genuinely distinct objects
+**Decision:** New `apps.governance` app adds Party (wraps an existing
+`Organization`/`Supplier` rather than duplicating identity), package/
+project/organization-scoped `RoleAssignment` (versioned, effective-dated),
+and `CapabilityGrant` (every APPROVE_*/AUTHORIZE_*/EXPORT_*/
+VIEW_PRIVILEGED_AUDIT-type action requires an explicit grant, never a
+role-implied default) as a layer *alongside* — never replacing — the
+existing `Organization`/`UserProfile`/`Role`/`UserProjectAccess` tenancy
+system. A `ProcurementPackage` (new, in `apps.procurement`) is "hosted"
+by one administering organization while its other participants (buyer,
+seller of record, China procurement operator, factory) are represented
+purely through package-scoped `RoleAssignment` rows — every
+package-related HTTP view and service function authorizes through
+`governance.services.has_capability`/`active_role_assignments`, never a
+bare `request.user.profile.organization` equality check, since a
+package's real participants legitimately span more than one
+organization. Six commercial-layer objects are kept genuinely distinct
+(Factory RFQ, Factory Quote — reusing the existing `Quotation` model
+directly, Internal Commercial Sheet, Client Quote, Client PO and
+Upstream Factory PO — both reusing the existing `PurchaseOrder` model
+via a new `po_kind` field) rather than one record with client-visible
+columns hidden in the UI. A central `Classification` enum
+(`OPERATIONAL_SHARED` by default, preserving every pre-existing
+document/quotation/PO's current behavior exactly) plus
+`CLASSIFICATION_REQUIRED_CAPABILITY` gate read access uniformly across
+documents, evidence, and commercial records. `DisclosureGrant`,
+`ChangeRequest`, `RiskFlag`, and `DerivedArtifact` complete the
+foundation; `apps.audit.EvidenceBundle`/`EvidenceItem` extend the
+existing generic `Attachment` evidence primitive rather than replacing
+it, and `apps.workflow.GateOverride` (the existing exception mechanism)
+is reused directly, only hardened with `expires_at`/`revoked_at`.
+**Why:** The release explicitly forbids a second, parallel authorization
+engine and forbids hard-coding any organization permanently as
+"Factory"/"Trader"/"Seller." Layering Party/Role/Capability alongside
+the existing tenancy system — rather than replacing it — lets a single
+user (Edison) keep his ordinary base-tenant login for every
+pre-existing module while separately holding a package-scoped role for
+this new cross-organization commercial relationship, without
+rearchitecting the single-tenant-scoped convention nearly every other
+model in this codebase already relies on. Reusing `Quotation`/
+`PurchaseOrder`/`GateOverride`/`Attachment` directly (extended with new
+fields) rather than inventing parallel models keeps the "smallest
+reusable policy layer" promise concrete rather than aspirational — see
+`docs/CONTROLLED_TRANSPARENCY_AND_CONFIDENTIALITY.md` for the full
+glossary, capability matrix, and per-policy detail.
+
 ## ADR-040 — Interactive Apartment Plan / Room-Zone layer: reusable per-family/letter/floor-variant templates, never one row per apartment; Missing Source is a valid, honest state
 **Decision:** New `apps.unitplans` app, strictly separating the
 existing immutable Source Drawing (`apps.drawings.Drawing`, untouched)

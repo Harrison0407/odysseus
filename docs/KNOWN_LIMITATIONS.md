@@ -500,6 +500,29 @@ is silently claimed to be done when it isn't.
   these families through the admin mapping tool — no code change
   required. Three genuine defects were found and fixed while building
   this milestone — see `docs/implementation-log.md` entry 49.
+- ~~Controlled Transparency, Commercial Confidentiality & Authorization
+  Foundation~~ — **Done.** New `apps.governance` app (ADR-041). A real
+  bug (denied-attempt audit events silently rolled back by an
+  over-broad `@transaction.atomic` boundary) was found and fixed during
+  live HTTP validation — see `docs/implementation-log.md` entry 50 and
+  ASSUMPTIONS A71. Remaining, explicitly out-of-scope items (full A1-A6
+  procurement gates, payment/settlement/escrow, customs workflows,
+  Asset/Property Digital Passport, native mobile, complete i18n, ...)
+  are listed in full in
+  `docs/CONTROLLED_TRANSPARENCY_AND_CONFIDENTIALITY.md` section 15 —
+  none of them were speculatively built. Two narrower, honestly-recorded
+  gaps: (1) search/autocomplete, exports, QR labels, and notifications
+  do not yet reference any new commercial-layer model at all, so their
+  non-disclosure is "no leak path exists yet," not "tested and
+  hardened" (A72) — any future integration must reuse
+  `governance.services.filter_authorized_queryset`/`authorize_export`.
+  (2) A China-ops user's own base Django login organization (from
+  earlier milestones) does not automatically grant them visibility into
+  a package hosted under a different organization via the pre-existing,
+  org-scoped `/api/v1/purchase-orders/` endpoint — this is overly
+  conservative rather than a security gap (nothing leaks to an
+  unauthorized party), and extending that generic API to be
+  package-aware is deferred.
 
 ## Data-quality ambiguities (not bugs — see `DATA_QUALITY_AND_UNCERTAINTY.md`)
 

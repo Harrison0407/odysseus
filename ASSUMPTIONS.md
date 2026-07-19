@@ -638,3 +638,97 @@ instead, exactly as required, and is **not** listed here as a resolved assumptio
   `DocumentVersion` upload mechanism, itself already gitignored) — the
   `imports/` copy is only ever the one-time seed input, not a second
   source of truth.
+
+- **A64. A `ProcurementPackage` is "hosted" by a single administering
+  `Organization` (typically the China procurement operator's own
+  tenant), not co-owned by every participating organization at the
+  database level.** The release's own live-validation scenario names
+  DT Beach and a China trading company as genuinely separate
+  organizations; rather than rearchitecting the single-tenant-scoped
+  convention used by nearly every other model in this codebase, a
+  package's cross-organization participants (buyer, seller of record,
+  ...) are represented as package-scoped `governance.RoleAssignment`
+  rows pointing at a `Party`, while the package row itself lives under
+  one hosting organization. All package-related HTTP views authorize
+  through `governance.services` (active role assignment or matching
+  capability), never through a bare `request.user.profile.organization`
+  equality check — see ADR-041.
+- **A65. `Party` wraps an existing `accounts.Organization` or
+  `procurement.Supplier` where one already exists, rather than
+  duplicating identity.** A Party representing the buyer wraps DT
+  Beach's own `Organization` row; a Party representing a hidden factory
+  wraps its `Supplier` row (itself extended with a new `address` field,
+  since nothing previously modeled a supplier's physical address). A
+  Party representing a pure individual (e.g. a buyer-approver with no
+  separate legal entity) carries no such wrapped reference.
+- **A66. `PartyMembership` (not a change to `UserProfile`) is the link
+  from a logged-in Django user to the Party they act on behalf of.**
+  A single user may act for more than one Party over time; a Party may
+  have several member users. This is deliberately separate from
+  `UserProfile.organization` (the user's own base tenant for all
+  pre-existing, non-package modules) — Edison, for example, logs in
+  under "DT Beach" for his ordinary base account but acts on behalf of
+  "China Trading Co" via a `PartyMembership` for package purposes,
+  matching the real-world fact that his system login predates this
+  release and his China-operations responsibility is a role he holds
+  in addition to it, not a replacement for it.
+- **A67. Sensitive capabilities are role-implied only for low-risk VIEW
+  actions; every APPROVE_*/AUTHORIZE_*/EXPORT_*/VIEW_PRIVILEGED_AUDIT
+  capability requires an explicit `CapabilityGrant`, with no
+  role-implied default at all.** This is the literal reading of "role
+  membership alone must not grant all actions" — rather than trying to
+  guess a partial, family-specific set of "safe" approval defaults per
+  role, the simplest and most conservative reading is that NONE of the
+  high-risk action capabilities are ever implied by a role, full stop.
+- **A68. Classification-based visibility for `SUPPLIER_SHARED`/
+  `CLIENT_PROJECT`/`CLIENT_SHARED`/`OPERATIONAL_SHARED`/`LEGAL_REQUIRED`
+  requires only *some* active role assignment on the package (not a
+  specific capability), while `CHINA_INTERNAL`/`SOURCE_PRIVATE`/
+  `TRADING_COMPANY_CONFIDENTIAL`/`RESTRICTED_FINANCE` each require a
+  specific named capability.** This two-tier design keeps the common
+  case (a legitimate package participant seeing operational/client-safe
+  information) simple while still gating every genuinely sensitive
+  classification behind its own explicit capability — documented in
+  `CLASSIFICATION_REQUIRED_CAPABILITY`.
+- **A69. `VerificationAssertion` creation requires its source
+  `EvidenceBundle` (when one is given) to already be `Status.VERIFIED`
+  — refusing to create a client-safe assertion on top of merely-uploaded,
+  unverified evidence.** This is the same "upload is never automatically
+  verification" principle applied one layer up, since an assertion is
+  precisely the kind of claim a client will rely on without ever seeing
+  the underlying evidence themselves.
+- **A70. Client-safe site aliases ("Verified Production Site N") are
+  computed on demand from the package's own `RoleAssignment` ordering,
+  never stored as a separate persisted identifier.** This guarantees
+  the alias can never leak a stable, cross-package-correlatable id for
+  the same real factory — the same Party may resolve to "Site 1" in one
+  package and "Site 2" in another, by design.
+- **A71. Denied-attempt audit logging happens *after* the permission
+  check but the surrounding mutation is deliberately wrapped in its own,
+  later `transaction.atomic()` block, not one spanning the whole
+  function.** A real bug was caught during live HTTP validation: six
+  service functions originally wrapped the entire function body
+  (permission check, denial log, and mutation) in one
+  `@transaction.atomic`, so logging a `PRIVILEGED_ACCESS_DENIED` event
+  immediately before raising was rolled back along with the
+  never-attempted mutation — denied attempts silently never reached the
+  audit trail. Fixed by moving the atomic boundary to start only after
+  the permission check.
+- **A72. Search/autocomplete, exports (`apps.reports`), QR labels
+  (`apps.labels`), and notifications (`apps.audit.Notification`) do not
+  yet reference any of this release's new commercial-layer models at
+  all.** Confirmed by direct code search. This is documented honestly
+  as "no leak path exists because no integration exists yet," not as
+  "tested and hardened" — the moment any future work wires
+  `Quotation`/`InternalCommercialSheet`/`ClientQuote` into search,
+  export, QR, or notifications, it must reuse
+  `governance.services.filter_authorized_queryset`/`authorize_export`,
+  never a bespoke check.
+- **A73. The hidden factory in the live-validation scenario never
+  receives its own system login** — Edison (the China procurement
+  operator) records the factory's submitted quote on its behalf via
+  `submit_factory_quote`. This matches the release's own framing
+  ("Factory submits a factory quote" is demonstrated through the
+  authorized China-ops user, not a factory user account) and reflects
+  the realistic assumption that factories rarely have direct access to
+  a buyer-side or intermediary-side system.

@@ -264,6 +264,64 @@
   template supersede untouched even while 48 real units assigned to
   that template were moved onto the new revision.
 
+- **Controlled Transparency / Confidentiality: deny-by-default,
+  classification-gated visibility, never a client-side hide.** A
+  package's factory-quote and internal-cost-sheet sections do not
+  merely render `display:none` for an unauthorized viewer — the backing
+  querysets are empty (`Quotation.objects.none()`) unless the requesting
+  user holds the matching capability, so the data never leaves the
+  server for that request at all. Verified live: the rendered HTML for
+  an unauthorized DT Beach client contained zero occurrences of the
+  factory name, address, or quote reference, and the same package's
+  upstream factory Purchase Order returned zero results through the
+  existing, unmodified `/api/v1/purchase-orders/` endpoint (protected
+  by its pre-existing organization scoping, since the upstream PO is
+  hosted under a different organization than the client).
+- **An unauthorized package is always a 404, never a 403** — verified
+  live for a fully unrelated cross-organization user on the package
+  detail page, and confirmed the package's name never appears in that
+  same user's own package list (no existence leak through listing).
+- **Sensitive capabilities are never role-implied** —
+  `ROLE_DEFAULT_CAPABILITIES` deliberately excludes every APPROVE_*/
+  AUTHORIZE_*/EXPORT_*/VIEW_PRIVILEGED_AUDIT-type action; each requires
+  its own explicit, auditable `CapabilityGrant`, verified by dedicated
+  tests for every gated action (submit factory quote, approve client
+  quote, freeze package, authorize disclosure, approve change request).
+- **Separation of duties enforced structurally, not by convention** — a
+  `ClientQuote`'s preparer cannot approve it themselves (proven live: an
+  authorized China-ops user's own approval attempt was denied and the
+  quote remained in Draft, while a separately-granted buyer-approver
+  user's attempt succeeded), and an `EvidenceItem`'s uploader can never
+  be its own verifier (`verify_evidence_item` raises on
+  `uploaded_by == verifying_user` regardless of capability).
+- **Every denied privileged attempt is now recorded in the restricted
+  audit trail** — fixed a real bug this release where six
+  permission-gated functions' denial-logging call was silently rolled
+  back by an over-broad `@transaction.atomic` boundary spanning the
+  entire function; the fix moves that boundary to start only after the
+  permission check, verified by dedicated tests asserting a
+  `PRIVILEGED_ACCESS_DENIED` `AuditEvent` exists after a denied attempt.
+- **A Disclosure Grant is field-scoped and revocable, never a blanket
+  reveal** — disclosing a manufacturer name never automatically reveals
+  address, cost, markup, or margin (each would need its own grant);
+  revocation prevents future access but the historical row is never
+  deleted, verified live and by dedicated tests including a second
+  revocation attempt being rejected.
+- **Authorization happens before any transformation, structurally** —
+  `governance.services.create_derived_artifact`'s injected `transform_fn`
+  (standing in for a real translation/AI provider) receives only the
+  already-authorized field projection as its sole argument; it has no
+  reference to the full source object at all, proven with a spying test
+  double that records exactly what it was given. A derived artifact can
+  never become less restrictive than its source classification without
+  the caller separately holding `AUTHORIZE_DISCLOSURE`.
+- **The governance admin screens (Party list/detail, privileged-audit
+  explanation log) are gated by `can_override_gates`** — the same
+  senior-authorization permission used everywhere else in this system,
+  never Django superuser status and never a bespoke new flag; verified
+  live that a package-scoped China-ops user without that permission is
+  denied (404) on both screens.
+
 ## Known gaps (see `KNOWN_LIMITATIONS.md` for the full list)
 
 - No automated dependency vulnerability scan is wired into this delivery

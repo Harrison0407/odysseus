@@ -211,10 +211,34 @@ All four Priority 1 features are now complete. See
     screens, live-validated across MARE B Building 25, SOLE Building
     17, SOLE PH Building 18 (including its duplex penthouse), SOLE 26
     Building 26, PALMERA, and ARENA T1 Building 9.
+40. ~~Controlled Transparency, Commercial Confidentiality & Authorization
+    Foundation~~ — **Done.** New `apps.governance` app (ADR-041):
+    Party/RoleAssignment/CapabilityGrant (sensitive actions never
+    role-implied), Classification/VisibilityMode, DisclosureGrant,
+    ChangeRequest, RiskFlag (foundation), DerivedArtifact
+    (authorization-before-transformation). `apps.procurement` gains
+    ProcurementPackage plus 6 distinct commercial-layer objects (Factory
+    RFQ, Factory Quote, Internal Commercial Sheet, Client Quote, Client
+    PO, Upstream Factory PO). `apps.audit` gains EvidenceBundle/
+    EvidenceItem (upload ≠ verification, uploader/verifier separation
+    enforced). Full HTTP surface with role-based projection —
+    `/compras/paquetes/` + `/gobernanza/`. Live-validated end-to-end:
+    DT Beach buyer, China Trading Co, Edison as China ops, a hidden
+    factory, and a DT Beach client, with the client seeing only the
+    approved quote and a client-safe verification statement while every
+    confidential section was completely absent (not just hidden) from
+    both the page and the API, plus a partial Disclosure Grant, package
+    freeze/change-request/hold, and evidence-bundle verification by an
+    independent authorized user. See
+    `docs/CONTROLLED_TRANSPARENCY_AND_CONFIDENTIALITY.md` for the full
+    policy/glossary reference.
 
 ## Explicitly out of scope for any near-term increment
 
 Local OCR execution, automated machine translation, QuickBooks live
 integration, WhatsApp integration, government CONFOTUR e-submission (the
 spec itself excludes electronic submission — evidence/reconciliation
-only).
+only). See `docs/CONTROLLED_TRANSPARENCY_AND_CONFIDENTIALITY.md` section
+15 for the full list of items explicitly deferred by this release
+(A1-A6 procurement gates, payment/settlement/escrow, customs workflows,
+Asset/Property Digital Passport, native mobile, full i18n, ...).

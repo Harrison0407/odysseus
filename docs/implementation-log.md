@@ -1142,3 +1142,118 @@ documented order.
     SOLE 26 Building 26, and ARENA T1 Building 9, and cross-organization
     denial (404) on the interactive viewer, the admin template screen,
     and the field issue itself.
+50. **Controlled Transparency, Commercial Confidentiality &
+    Authorization Foundation.** New `apps.governance` app (ADR-041):
+    `Party` (wraps an existing `Organization` or `Supplier` rather than
+    duplicating identity — never permanently hard-coded as "Factory"/
+    "Trader"/"Seller"), `PartyMembership` (which logged-in users act for
+    a Party — deliberately separate from `UserProfile.organization`, so
+    Edison keeps his ordinary DT Beach login for every pre-existing
+    module while separately holding a China-operator role for this new
+    relationship, A66), `RoleAssignment` (package/project/organization-
+    scoped, versioned, effective-dated), and `CapabilityGrant` — every
+    APPROVE_*/AUTHORIZE_*/EXPORT_*/VIEW_PRIVILEGED_AUDIT-type action
+    requires an explicit grant, never a role-implied default (A67).
+    `Classification` (`OPERATIONAL_SHARED` default, preserving every
+    pre-existing Document/Quotation/PurchaseOrder's current behavior
+    exactly) and `VisibilityMode` (`CONTROLLED_CONFIDENTIALITY` default
+    for a new package) gate read access through
+    `CLASSIFICATION_REQUIRED_CAPABILITY`. `ProcurementPackage` (new, in
+    `apps.procurement`) is hosted by one administering organization
+    while cross-organization participants are represented purely
+    through package-scoped role assignments — every package view/service
+    authorizes through `governance.services`, never a bare organization-
+    equality check (A64). Six commercial-layer objects stay genuinely
+    distinct: `FactoryRFQ` (new); Factory Quote reuses the existing
+    `Quotation`/`QuotationLine` directly; `InternalCommercialSheet` (new,
+    full landed-cost breakdown + markup/margin); `ClientQuote` (new —
+    structurally cannot expose factory identity/cost/markup/margin,
+    those fields don't exist on the model); Client PO and Upstream
+    Factory PO both reuse the existing `PurchaseOrder` via a new
+    `po_kind` field. `client_safe_site_alias` computes a package-scoped
+    "Verified Production Site N" alias on demand, never a persisted,
+    cross-package-correlatable id (A70). `VerificationAssertion` refuses
+    to attach an unverified `EvidenceBundle` (A69). `DisclosureGrant`
+    supports partial, capability-gated, revocable field-level disclosure
+    (revocation preserves history, never deletes it).
+    `apps.audit.EvidenceBundle`/`EvidenceItem` extend the existing
+    generic `Attachment` primitive: upload never implies verification,
+    and `verify_evidence_item` hard-enforces uploader ≠ verifier plus
+    the bundle's required capability. `governance.DerivedArtifact` +
+    `create_derived_artifact` structurally enforce authorization-before-
+    transformation — the injected `transform_fn` (standing in for a real
+    translation/AI provider) receives only the already-authorized
+    projection dict, proven with a spying test double that records
+    exactly what it was given. `apps.workflow.GateOverride` (the
+    existing exception mechanism) is reused unchanged, hardened with
+    `expires_at`/`revoked_at`/`revoked_by`. `ChangeRequest` only applies
+    against an already-frozen package, immediately places it on hold,
+    and requires a field-specific capability to approve
+    (`APPROVE_VISIBILITY_CHANGE` for visibility mode,
+    `APPROVE_ROLE_CHANGE` for critical roles). `RiskFlag` is a
+    foundation-only signal (STANDARD/CONTROLLED_OPAQUE/HIGH_RISK) that
+    never declares legality or approves an opaque transaction.
+
+    Full HTTP surface (`apps/procurement/package_views.py`,
+    `apps/governance/views.py`): package list/detail with role-based
+    projection (factory-quote and internal-cost sections render only
+    for capability-holding users — never hidden client-side), factory-
+    quote/internal-sheet/client-quote creation, client-quote approval
+    (enforcing prepare/approve separation live), package freeze, Change
+    Request create/approve/reject, Disclosure Grant create/revoke,
+    Evidence Bundle create/upload/verify, and Party/privileged-audit
+    admin screens gated by the same `can_override_gates` senior
+    permission used everywhere else in this system.
+
+    A genuine bug was found and fixed during live HTTP validation, not
+    from the test suite: six permission-gated service functions wrapped
+    their *entire* body — including the capability check and its
+    denial-audit-log call — in one `@transaction.atomic`, so logging a
+    `PRIVILEGED_ACCESS_DENIED` event immediately before raising was
+    rolled back along with the (never-attempted) mutation; denied
+    attempts silently never reached the audit trail. Fixed by moving the
+    atomic boundary to start only after the permission check (A71).
+
+    62 new tests across `tests/test_governance.py` (10),
+    `tests/test_procurement_confidentiality.py` (11),
+    `tests/test_evidence_and_disclosure.py` (13),
+    `tests/test_derived_artifacts.py` (12),
+    `tests/test_workflow_template_preservation.py` (3), and
+    `tests/test_confidentiality_http.py` (12), plus one field-level
+    diligence check (`address` added to `Supplier`) — covering Party/
+    Role/Capability separation, classification-gated visibility, the
+    full commercial-layer lifecycle with prepare/approve separation,
+    evidence-bundle uploader/verifier separation and missing-requirement
+    detection, verification-assertion/disclosure-grant mechanics
+    (partial scope, expiration, revocation-preserves-history),
+    authorization-before-transformation with a spying mock, package
+    freeze/change-request/hold, cross-organization 404 denial (with no
+    leak through the package list or the API), and denied attempts now
+    correctly appearing in the audit trail. 455/455 tests passing
+    overall. Migrations apply cleanly to an empty database.
+
+    Live HTTP validation performed end-to-end via
+    `manage.py seed_confidentiality_demo` (DT Beach buyer org, China
+    Trading Co, Edison as China procurement operator, a hidden China
+    tile factory, a DT Beach client user) plus real curl-driven
+    workflow: factory quote submitted, internal commercial sheet
+    prepared (landed cost/margin computed correctly), client quote
+    prepared by Edison and approved by a *separate*, explicitly-granted
+    buyer-approver user (Edison's own attempt to approve his own
+    quote was denied and left the quote in Draft), an evidence bundle
+    uploaded and — critically — still `incomplete`/unverified until an
+    independent authorized user (not the uploader) verified it, a
+    client-safe verification assertion created from that now-verified
+    bundle, the DT Beach client viewing the approved client quote and
+    the verification statement while the factory-quote and internal-
+    cost sections were completely absent from the rendered page (not
+    merely hidden by CSS) and the upstream factory PO returned zero
+    results through the existing `/api/v1/purchase-orders/` endpoint, a
+    partial Disclosure Grant revealing only the manufacturer name
+    (confirmed address/cost/markup/margin still hidden) followed by
+    revocation and confirmed future-access removal, package freeze
+    capturing a full role/term snapshot, an unauthorized change-request
+    approval attempt correctly denied, an authorized approval releasing
+    the hold and applying the change, and a fully unrelated
+    cross-organization user receiving 404 on the package detail page
+    with no trace of the package's existence in their own package list.

@@ -157,6 +157,17 @@
 | `/propiedades/admin-planos/plantillas/<id>/` | `template_admin_detail` | Full mapping screen: upload/replace plan, add/edit zones, validate, approve, supersede |
 | `/propiedades/admin-planos/plantillas/<id>/aprobar/`, `/reemplazar/`, `/cargar-plano/` (POST) | template admin actions | All require `can_override_gates`; supersede/upload-when-approved always create a new revision, never an in-place overwrite |
 | `/propiedades/admin-planos/plantillas/<id>/agregar-zona/`, `/propiedades/admin-planos/zonas/<id>/editar/`, `/validar/` (POST) | zone admin actions | Editing a zone always supersedes rather than mutating in place; requires `can_override_gates` |
+| `/compras/paquetes/` | `procurement.package_views.package_list` | Packages hosted by the user's own organization, plus any package where they hold an active role assignment |
+| `/compras/paquetes/<id>/` | `package_detail` | Role-based projection — factory quotes/internal-cost sheets/client quotes/verification assertions/change requests/disclosure grants each render only for a capability-holding viewer; an unauthorized package is a 404 |
+| `/compras/paquetes/<id>/cotizacion-fabrica/crear/`, `/hoja-comercial/crear/`, `/cotizacion-cliente/crear/` | commercial-layer creation | Each requires `CREATE_COMMERCIAL_DOCUMENT` in the package |
+| `/compras/cotizaciones-cliente/<id>/aprobar/` (POST) | `client_quote_approve` | Requires `APPROVE_CLIENT_QUOTE`, never implied by whoever prepared the quote |
+| `/compras/paquetes/<id>/congelar/` (POST) | `package_freeze` | Requires `APPROVE_GATE`; snapshots critical roles/terms |
+| `/compras/paquetes/<id>/cambios/crear/`, `/compras/cambios/<id>/<approve\|reject>/` (POST) | Change Request lifecycle | Creation requires the package already frozen and places it on hold; approval requires a field-specific capability |
+| `/compras/paquetes/<id>/divulgaciones/crear/`, `/compras/divulgaciones/<id>/revocar/` (POST) | Disclosure Grant lifecycle | Creation requires `AUTHORIZE_DISCLOSURE` and a non-empty field scope; revocation never deletes the historical row |
+| `/compras/paquetes/<id>/evidencia/crear/`, `/compras/evidencia/<id>/agregar/`, `/compras/evidencia-item/<id>/verificar/` | Evidence Bundle lifecycle | Upload never implies verification; verification enforces uploader ≠ verifier plus the bundle's required capability |
+| `/compras/paquetes/<id>/aserciones/crear/` (POST) | `verification_assertion_create` | Refuses an unverified source Evidence Bundle |
+| `/gobernanza/partes/`, `/partes/nueva/`, `/partes/<id>/` | Party admin | Gated by `can_override_gates` |
+| `/gobernanza/auditoria-privilegiada/` | `privileged_audit` | Read-only log of every governance action (role/capability grants, disclosure grants/revocations, visibility-mode changes, package freezes, change requests, verification assertions, evidence verifications, privileged access grants/denials); gated by `can_override_gates` |
 
 | Role code | Dashboard template |
 |---|---|

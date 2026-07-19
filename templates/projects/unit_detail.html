@@ -22,4 +22,14 @@
     </div>
 </div>
 
+<div class="card mb-3">
+    <div class="card-header">Planos vinculados</div>
+    <ul class="list-group list-group-flush">
+        {% for d in drawings %}
+        <li class="list-group-item"><a href="{% url 'drawings:detail' d.pk %}">{{ d.title }} ({{ d.get_drawing_type_display }})</a></li>
+        {% empty %}
+        <li class="list-group-item text-muted">Sin planos vinculados a esta unidad.</li>
+        {% endfor %}
+    </ul>
+</div>
 {% endblock %}

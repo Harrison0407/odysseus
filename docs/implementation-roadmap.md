@@ -156,7 +156,13 @@ All four Priority 1 features are now complete. See
     `BuildingFamily` (new, ADR-033) + extended `Building`/`Floor`/`Unit`,
     idempotent `import_buildings_and_units` command (transcribed from
     the 3 supplied source PDFs), `/propiedades/` screens.
-33. Drawing and floor-plan register — in progress.
+33. ~~Drawing and floor-plan register~~ — **Done.** New `apps.drawings`
+    app: `Drawing` wraps the existing `Document` provenance system
+    (ADR-034); a new revision is always a new row (`supersedes`),
+    never an edit — approval requires the same senior-authorization
+    permission used elsewhere. `/planos/` screens, linked from building/
+    unit detail. All 3 supplied source PDFs registered
+    (`register_source_drawings`).
 34. Order destination allocation and purchased spares — pending.
 35. Field issue tracking — pending.
 36. Lawson training and reference installations — pending.

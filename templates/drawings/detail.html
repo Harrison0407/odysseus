@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>{{ drawing.title }} <small class="text-muted">rev. {{ drawing.revision }}</small></h3>
+<p>
+    <span class="badge bg-secondary">{{ drawing.get_status_display }}</span>
+    {% if not drawing.is_current %}<span class="badge bg-warning text-dark">Reemplazado</span>{% endif %}
+</p>
+<a class="btn btn-outline-secondary btn-sm mb-3" href="{% url 'drawings:list' %}">&larr; Volver a Planos</a>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <table class="table table-sm mb-0">
+            <tr><th>Proyecto</th><td>{{ drawing.project }}</td></tr>
+            <tr><th>Familia de edificio</th><td>{{ drawing.building_family|default:"—" }}</td></tr>
+            <tr><th>Edificio</th><td>{{ drawing.building|default:"—" }}</td></tr>
+            <tr><th>Piso</th><td>{{ drawing.floor|default:"—" }}</td></tr>
+            <tr><th>Unidad</th><td>{{ drawing.unit|default:"—" }}</td></tr>
+            <tr><th>Tipo</th><td>{{ drawing.get_drawing_type_display }}</td></tr>
+            <tr><th>Disciplina</th><td>{{ drawing.get_discipline_display }}</td></tr>
+            <tr><th>Número de plano</th><td>{{ drawing.drawing_number|default:"—" }}</td></tr>
+            <tr><th>Fecha de emisión</th><td>{{ drawing.issue_date|default:"—" }}</td></tr>
+            <tr><th>Aprobador</th><td>{{ drawing.approver|default:"—" }} {% if drawing.approval_date %}({{ drawing.approval_date }}){% endif %}</td></tr>
+            <tr><th>Notas</th><td>{{ drawing.notes|default:"—" }}</td></tr>
+        </table>
+        {% if drawing.source_document.current_version %}
+        <a class="btn btn-sm btn-primary mt-2" href="{% url 'documents:download' drawing.source_document.pk drawing.source_document.current_version.pk %}">Descargar archivo</a>
+        {% endif %}
+    </div>
+</div>
+
+{% if drawing.status != "superseded" %}
+<div class="card mb-3">
+    <div class="card-header">Acciones</div>
+    <div class="card-body">
+        <form method="post" action="{% url 'drawings:approve' drawing.pk %}" class="d-inline">
+            {% csrf_token %}
+            <button class="btn btn-success btn-sm" type="submit">Aprobar</button>
+        </form>
+        <hr>
+        <form method="post" action="{% url 'drawings:supersede' drawing.pk %}" enctype="multipart/form-data" class="row g-2">
+            {% csrf_token %}
+            <p class="small text-muted mb-1">Reemplazar con una nueva revisión (este plano queda preservado en el historial):</p>
+            <div class="col-12 col-md-4">{{ upload_form.document_type }}</div>
+            <div class="col-12 col-md-4">{{ upload_form.title }}</div>
+            <div class="col-12 col-md-4">{{ upload_form.file }}</div>
+            <div class="col-12"><textarea name="notes" class="form-control form-control-sm" rows="2" placeholder="Notas"></textarea></div>
+            <div class="col-12"><button class="btn btn-warning btn-sm" type="submit">Reemplazar</button></div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<div class="card mb-3">
+    <div class="card-header">Historial de revisiones</div>
+    <ul class="list-group list-group-flush">
+        {% for h in history %}
+        <li class="list-group-item d-flex justify-content-between">
+            <a href="{% url 'drawings:detail' h.pk %}">rev. {{ h.revision }} — {{ h.get_status_display }}</a>
+            <span class="text-muted small">{{ h.created_at|date:"d/m/Y" }}</span>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endblock %}

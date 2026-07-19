@@ -720,3 +720,43 @@ documented order.
     walkthrough via a real browser session confirmed the family
     catalog, building detail (showing real permanent codes), and unit
     search all render correctly against the imported data.
+42. **Drawing and floor-plan register.** New `apps.drawings` app:
+    `Drawing` wraps the pre-existing `apps.documents.Document`/
+    `DocumentVersion` provenance system (SHA-256, duplicate detection)
+    rather than a second file-storage mechanism, adding
+    building/floor/unit/discipline/type/status/revision metadata
+    (ADR-034). `supersede_drawing` always creates a brand-new `Drawing`
+    row linked via `supersedes`; the prior row's `source_document` and
+    every other field are left untouched, only `status`/`is_current`
+    flip — so any future FK elsewhere (order allocation, installation,
+    walkthrough, field issue) pointing at a specific historical
+    `Drawing` can never be silently redirected to a newer revision.
+    `approve_drawing` reuses the exact same senior-authorization
+    permission (`can_override_gates`) every other approval gate in this
+    system already uses. `register_source_drawings --organization
+    <name>` registers all 3 supplied source PDFs: the site-plan and
+    apartment-typology-table PDFs (each spanning all 5 projects) get
+    one `Drawing` row per covered project sharing the same underlying
+    `Document` (A38); the Palmera-specific plan set is linked directly
+    to Palmera's one physical building, registered as `DRAFT` status
+    since its own title block explicitly states the plans are still in
+    process (verified live: 11 drawings registered — 5+5+1). No
+    graphical/spatial floor-plan schematic was built, since the only
+    available per-unit data is a letter-grid table with no real
+    coordinates (A39) — the actual architectural PDFs remain linked and
+    downloadable per building/project instead. `/planos/` list/detail
+    screens, linked from the main nav and from building/unit detail
+    pages. 12 new tests (`tests/test_drawing_register.py`), covering
+    drawing registration, permission-gated approval (including refusal
+    for an unauthorized user and for an already-superseded drawing),
+    the full supersede lifecycle (old row preserved exactly, new
+    revision numbered correctly, a second supersede attempt on an
+    already-superseded drawing rejected), a dedicated test proving a
+    historical reference to an old drawing's primary key is never
+    silently redirected after a supersede, cross-organization/cross-
+    project HTTP isolation, and a full HTTP supersede round-trip —
+    278/278 passing (266 pre-existing + 12 new). Verified migrations
+    apply cleanly from an empty database; live HTTP walkthrough
+    confirmed the drawing list, detail pages, and the building-detail
+    "linked drawings" section all render correctly with the real
+    registered source documents.

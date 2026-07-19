@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Planos</h3>
+<div class="table-responsive">
+<table class="table table-sm table-striped bg-white">
+    <thead><tr><th>Título</th><th>Tipo</th><th>Disciplina</th><th>Edificio</th><th>Rev.</th><th>Estado</th></tr></thead>
+    <tbody>
+    {% for d in drawings %}
+        <tr>
+            <td><a href="{% url 'drawings:detail' d.pk %}">{{ d.title }}</a></td>
+            <td>{{ d.get_drawing_type_display }}</td>
+            <td>{{ d.get_discipline_display }}</td>
+            <td>{{ d.building|default:"—" }}</td>
+            <td>{{ d.revision }}</td>
+            <td><span class="badge bg-secondary">{{ d.get_status_display }}</span></td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="6" class="text-muted">Sin planos registrados.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

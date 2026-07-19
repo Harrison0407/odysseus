@@ -335,6 +335,31 @@ instead, exactly as required, and is **not** listed here as a resolved assumptio
   in the local dev database during this session's own live-HTTP
   validation (not a defect found in delivered code — no test exercises
   two organizations importing the same building family).
+- **A38. The two multi-family source PDFs (the site plan and the
+  apartment-typology table) are registered as one `Drawing` row per
+  project they cover, all sharing the same underlying `Document`.**
+  Neither file belongs to a single project — the site plan shows all 5
+  developments, and the typology table is the actual import source for
+  all of them. Rather than picking one arbitrary "owning" project (which
+  would misrepresent the document's real scope) or leaving `Drawing
+  .project` nullable (which would break the existing project-isolation
+  convention used everywhere else), each covered project gets its own
+  `Drawing` row pointing at the identical `Document`/`DocumentVersion` —
+  the file is stored once; only the lightweight metadata row is
+  duplicated per project, matching how the existing snapshot/report
+  mechanism already treats one physical file as reusable across
+  multiple logical references.
+- **A39. No graphical/spatial floor-plan view was built.** The release
+  says to provide one "where a visual topology can be derived
+  reliably." The only per-unit data available is a letter-grid table
+  (floor + apartment letter + measurements) with no real X/Y
+  coordinates — rendering a schematic floor plan from that would mean
+  inventing a spatial layout the source doesn't actually specify,
+  which the release's own labeling requirement ("clearly labeled as an
+  operational schematic, never as the original approved architectural
+  drawing") exists precisely to guard against. Skipping it is the more
+  conservative reading; the real architectural PDFs remain available
+  and linked per building/project instead.
 - **A35. `import_buildings_and_units --organization <name>` was added
   as an explicit, optional flag (defaulting to `Organization.objects
   .first()`, matching every other bootstrap command's existing

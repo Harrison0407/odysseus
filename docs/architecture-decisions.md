@@ -2,6 +2,25 @@
 
 Newest first.
 
+## ADR-034 — Drawing wraps an existing Document; a new revision is always a new row, never an edit
+**Decision:** `apps.drawings.Drawing` has a `source_document` FK to the
+pre-existing `apps.documents.Document` (SHA-256 hashing/duplicate
+detection reused as-is) plus drawing-specific metadata (building/floor/
+unit, discipline, type, status, revision). `supersede_drawing` always
+creates a brand new `Drawing` row (`supersedes` FK to the prior one,
+`revision+1`) and only ever flips the old row's `status`/`is_current` —
+it never edits `source_document`, `building`, or any other field on the
+historical row.
+**Why:** The release is explicit: "a later drawing revision must never
+silently replace the historical drawing linked to an earlier order or
+installation." Any future model with an FK to a specific `Drawing`
+(order allocation, installation, walkthrough, field issue) keeps
+pointing at that exact row forever, by construction — there is no
+"current revision" mutable pointer to accidentally follow into a newer
+version. This is the same versioned-immutable-row pattern already used
+for `ReleasePacketVersion`/`LandedCostVersion`/`StorageComparisonScenario`,
+applied here rather than inventing a parallel "latest version" concept.
+
 ## ADR-033 — BuildingFamily is a new grouping layer above the pre-existing Building model, not a parallel hierarchy; permanent unit codes are stored, not derived
 **Decision:** `BuildingFamily` (new) sits between `Project` and the
 pre-existing `Building` model (`Building.family`, nullable for backward

@@ -164,6 +164,7 @@ Full transcript in `docs/implementation-log.md`.
 | Capability | Module(s) | DB records | UI | Test(s) | Status |
 |---|---|---|---|---|---|
 | Physical building/floor/apartment hierarchy | `apps.projects` | `BuildingFamily` (new), `Building`/`Floor`/`Unit` (extended, ADR-033) | `/propiedades/` catalog, family/building/unit detail, search | `tests/test_property_master.py` (20 tests) | Done |
+| Drawing and floor-plan register | `apps.drawings` (new app) | `Drawing` (ADR-034) | `/planos/` list/detail, linked from building/unit detail | `tests/test_drawing_register.py` (12 tests) | Done — graphical/spatial floor-plan schematic explicitly not built (A39) |
 
 ## Explicitly out of scope for this delivery (see `KNOWN_LIMITATIONS.md`)
 

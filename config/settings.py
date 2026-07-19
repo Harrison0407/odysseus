@@ -75,6 +75,7 @@ INSTALLED_APPS = [
     "apps.customs",
     "apps.claims",
     "apps.labels",
+    "apps.drawings",
     "apps.api",
 ]
 

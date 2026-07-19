@@ -112,7 +112,11 @@
 | `/propiedades/familias/<id>/` | `building_family_detail` | Physical buildings within a family |
 | `/propiedades/edificios/<id>/` | `building_detail` | Floors and units within one physical building, common areas |
 | `/propiedades/unidades/` | `unit_search` | Search/filter by permanent code, apartment number, or family |
-| `/propiedades/unidades/<id>/` | `unit_detail` | Unit detail — measurements, and (extended in later milestones) linked drawings/allocations/issues/walkthroughs |
+| `/propiedades/unidades/<id>/` | `unit_detail` | Unit detail — measurements, linked drawings, and (extended in later milestones) allocations/issues/walkthroughs |
+| `/planos/` | `apps.drawings.views.drawing_list` | Drawing register, org + project scoped |
+| `/planos/<id>/` | `drawing_detail` | One drawing's metadata, download link, approve/supersede actions, full revision history |
+| `/planos/<id>/reemplazar/` (POST) | `drawing_supersede` | Registers a new revision; the prior one is preserved, never edited |
+| `/planos/<id>/aprobar/` (POST) | `drawing_approve` | Requires the same senior-authorization permission as every other approval gate |
 
 | Role code | Dashboard template |
 |---|---|

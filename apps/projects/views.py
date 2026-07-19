@@ -63,7 +63,11 @@ def building_detail(request, pk):
         raise Http404
     floors = building.floors.prefetch_related("units").order_by("level", "name")
     areas = building.areas.all()
-    return render(request, "projects/building_detail.html", {"building": building, "floors": floors, "areas": areas})
+    from apps.drawings.models import Drawing
+    drawings = Drawing.objects.filter(building=building, is_current=True).order_by("discipline", "title")
+    return render(request, "projects/building_detail.html", {
+        "building": building, "floors": floors, "areas": areas, "drawings": drawings,
+    })
 
 
 class UnitSearchForm(forms.Form):
@@ -108,4 +112,6 @@ def unit_detail(request, pk):
     )
     if not wfsvc.user_can_access_project(request.user, unit.building.project):
         raise Http404
-    return render(request, "projects/unit_detail.html", {"unit": unit})
+    from apps.drawings.models import Drawing
+    drawings = Drawing.objects.filter(unit=unit, is_current=True).order_by("discipline", "title")
+    return render(request, "projects/unit_detail.html", {"unit": unit, "drawings": drawings})

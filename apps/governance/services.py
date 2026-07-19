@@ -20,14 +20,28 @@ from .models import (
     ALL_CAPABILITY_CODES,
     CLASSIFICATION_RANK,
     CapabilityGrant,
+    ChangeRequest,
     Classification,
     DisclosureGrant,
     Party,
     PartyMembership,
+    RiskFlag,
     RoleAssignment,
     ROLE_DEFAULT_CAPABILITIES,
     is_less_restrictive,
 )
+
+# Which capability is required to approve a Change Request against a
+# given frozen field — never a single blanket "can change anything"
+# permission.
+CHANGE_REQUEST_APPROVAL_CAPABILITY = {
+    "visibility_mode": "APPROVE_VISIBILITY_CHANGE",
+    "seller_of_record": "APPROVE_ROLE_CHANGE",
+    "exporter_of_record": "APPROVE_ROLE_CHANGE",
+    "china_procurement_operator": "APPROVE_ROLE_CHANGE",
+    "production_factory": "APPROVE_ROLE_CHANGE",
+    "production_site": "APPROVE_ROLE_CHANGE",
+}
 
 
 class AuthorizationDenied(Exception):
@@ -290,3 +304,92 @@ def disclosed_fields(package, recipient_organization) -> set:
         if grant.is_currently_active():
             fields.update(grant.field_scope)
     return fields
+
+
+# ---------------------------------------------------------------------------
+# Change Requests — a critical, frozen package term may only ever change
+# through one of these, never a direct edit (spec section 16).
+# ---------------------------------------------------------------------------
+
+
+@transaction.atomic
+def request_change(package, field_name, proposed_new_value, reason, user, *, affected_relationships="", risk_impact="") -> ChangeRequest:
+    if not package.is_frozen:
+        raise AuthorizationDenied("Este paquete aún no está congelado — no se requiere una solicitud de cambio.")
+    frozen_current_value = str(package.frozen_snapshot.get(field_name, package.frozen_snapshot.get("roles", {}).get(field_name)))
+    change_request = ChangeRequest.objects.create(
+        package=package, field_name=field_name, frozen_current_value=frozen_current_value,
+        proposed_new_value=proposed_new_value, reason=reason, affected_relationships=affected_relationships,
+        risk_impact=risk_impact, requested_by=user, created_by=user,
+    )
+    package.is_on_hold = True
+    package.save(update_fields=["is_on_hold"])
+    audit.log(AuditEvent.Action.CHANGE_REQUEST, instance=change_request, actor=user, summary=f"Solicitud de cambio creada: {change_request}", reason=reason)
+    return change_request
+
+
+@transaction.atomic
+def approve_change_request(change_request: ChangeRequest, user, *, comment="") -> ChangeRequest:
+    if change_request.status != ChangeRequest.Status.PENDING:
+        raise AuthorizationDenied("Esta solicitud de cambio ya fue resuelta.")
+    required_capability = CHANGE_REQUEST_APPROVAL_CAPABILITY.get(change_request.field_name, "APPROVE_ROLE_CHANGE")
+    if not has_capability(user, required_capability, package=change_request.package):
+        raise AuthorizationDenied("No tiene permiso para aprobar esta solicitud de cambio.")
+
+    change_request.status = ChangeRequest.Status.APPROVED
+    change_request.decided_by = user
+    change_request.decided_at = timezone.now()
+    change_request.decision_comment = comment
+    change_request.save()
+
+    package = change_request.package
+    if change_request.field_name == "visibility_mode":
+        package.visibility_mode = change_request.proposed_new_value
+        package.visibility_mode_version += 1
+        audit.log(AuditEvent.Action.VISIBILITY_MODE_CHANGE, instance=package, actor=user, summary=f"Modo de visibilidad cambiado: {package}")
+    else:
+        package.frozen_snapshot.setdefault("roles", {})[change_request.field_name] = change_request.proposed_new_value
+    package.is_on_hold = False
+    package.save()
+
+    audit.log(AuditEvent.Action.CHANGE_REQUEST, instance=change_request, actor=user, summary=f"Solicitud de cambio aprobada: {change_request}")
+    return change_request
+
+
+@transaction.atomic
+def reject_change_request(change_request: ChangeRequest, user, *, comment="") -> ChangeRequest:
+    if change_request.status != ChangeRequest.Status.PENDING:
+        raise AuthorizationDenied("Esta solicitud de cambio ya fue resuelta.")
+    change_request.status = ChangeRequest.Status.REJECTED
+    change_request.decided_by = user
+    change_request.decided_at = timezone.now()
+    change_request.decision_comment = comment
+    change_request.save()
+    package = change_request.package
+    package.is_on_hold = False
+    package.save(update_fields=["is_on_hold"])
+    audit.log(AuditEvent.Action.CHANGE_REQUEST, instance=change_request, actor=user, summary=f"Solicitud de cambio rechazada: {change_request}")
+    return change_request
+
+
+# ---------------------------------------------------------------------------
+# Risk flags — foundation only (spec section 17). Records risk and may
+# trigger review/hold; never declares legality or approves an opaque
+# transaction.
+# ---------------------------------------------------------------------------
+
+
+@transaction.atomic
+def raise_risk_flag(package, level, indicator_codes, notes="", user=None) -> RiskFlag:
+    flag = RiskFlag.objects.create(package=package, level=level, indicator_codes=indicator_codes, notes=notes, raised_by=user, created_by=user)
+    audit.log(AuditEvent.Action.RISK_FLAG, instance=flag, actor=user, summary=f"Señal de riesgo: {flag}")
+    return flag
+
+
+@transaction.atomic
+def resolve_risk_flag(flag: RiskFlag, user) -> RiskFlag:
+    flag.resolved_at = timezone.now()
+    flag.resolved_by = user
+    flag.save()
+    audit.log(AuditEvent.Action.RISK_FLAG, instance=flag, actor=user, summary=f"Señal de riesgo resuelta: {flag}")
+    return flag

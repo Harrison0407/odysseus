@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>{{ building.name }}</h3>
+<p class="text-muted">
+    {{ building.family.display_name|default:"—" }}
+    {% if building.building_number %} · Edificio físico {{ building.building_number }}{% endif %}
+</p>
+<a class="btn btn-outline-secondary btn-sm mb-3" href="{% if building.family %}{% url 'projects:family-detail' building.family.pk %}{% else %}{% url 'projects:family-list' %}{% endif %}">&larr; Volver</a>
+
+{% for floor in floors %}
+<div class="card mb-3">
+    <div class="card-header">{{ floor.name }}</div>
+    <div class="table-responsive">
+    <table class="table table-sm bg-white mb-0">
+        <thead><tr><th>Unidad</th><th>Código permanente</th><th>Área interna</th><th>Terraza</th><th>Total</th><th>Hab.</th><th>Baños</th></tr></thead>
+        <tbody>
+        {% for unit in floor.units.all %}
+            <tr>
+                <td><a href="{% url 'projects:unit-detail' unit.pk %}">{{ unit.name }}{% if unit.is_penthouse %} <span class="badge bg-warning text-dark">PH</span>{% endif %}</a></td>
+                <td><code>{{ unit.permanent_code }}</code></td>
+                <td>{{ unit.internal_area_sqm|default:"—" }} m²</td>
+                <td>{{ unit.terrace_area_sqm|default:"—" }} m²</td>
+                <td>{{ unit.total_area_sqm|default:"—" }} m²</td>
+                <td>{{ unit.bedrooms_label|default:"—" }}</td>
+                <td>{{ unit.bathrooms|default:"—" }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% empty %}
+<p class="text-muted">Sin pisos registrados.</p>
+{% endfor %}
+
+{% if areas %}
+<div class="card mb-3">
+    <div class="card-header">Áreas comunes</div>
+    <ul class="list-group list-group-flush">
+        {% for area in areas %}<li class="list-group-item">{{ area.name }}</li>{% endfor %}
+    </ul>
+</div>
+{% endif %}
+{% endblock %}

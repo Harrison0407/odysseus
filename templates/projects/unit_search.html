@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Buscar unidad</h3>
+<form method="get" class="row g-2 mb-3">
+    <div class="col-12 col-md-5">{{ form.q }}</div>
+    <div class="col-12 col-md-4">{{ form.family }}</div>
+    <div class="col-auto"><button class="btn btn-primary btn-sm" type="submit">Buscar</button></div>
+</form>
+
+<div class="table-responsive">
+<table class="table table-sm table-striped bg-white">
+    <thead><tr><th>Código permanente</th><th>Edificio</th><th>Unidad</th><th>Tipo</th></tr></thead>
+    <tbody>
+    {% for unit in units %}
+        <tr>
+            <td><a href="{% url 'projects:unit-detail' unit.pk %}"><code>{{ unit.permanent_code }}</code></a></td>
+            <td>{{ unit.building }}</td>
+            <td>{{ unit.name }}</td>
+            <td>{{ unit.bedrooms_label|default:"—" }}</td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="4" class="text-muted">Sin resultados.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

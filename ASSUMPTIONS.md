@@ -282,3 +282,64 @@ instead, exactly as required, and is **not** listed here as a resolved assumptio
   entity registry in `apps.labels.services` including it), and a
   physical dispatch label could be generated today via a direct link
   if one were added to a future dispatch-specific screen.
+
+## Physical property / field operations release
+
+- **A31. Building family → physical building assignment is read from
+  the site-plan legend in `Buildings Plans Main.pdf`, not invented.**
+  That document's numbered building index (Building/Bldg.Code/Type/
+  Apts. columns) gives an explicit building-number list per family:
+  ARENA T1 = {1,2,3,4,9,10,11,12} (exactly the 8 named in the release
+  instruction — cross-confirms the source), MARE B =
+  {12,14,16,19,21,23,24,25}, SOLE (no penthouse) = {13,17,22}, SOLE PH
+  = {15,18,20}, SOLE 26 = {26}, PALMERA = 1 (a single hotel-style
+  building, visually separate from the numbered residential grid).
+  Apartment counts per building (34/20/20/16/40/104 respectively)
+  independently match the per-floor unit template in `DT Beach
+  Building Apartments.xlsx.pdf`, which cross-validates both documents
+  against each other rather than trusting either alone.
+- **A32. The apartment floor-template in the source spreadsheet is
+  applied uniformly to every physical building sharing a type, since
+  the source gives one template per type, not one per individual
+  building number.** E.g. all 8 ARENA T1 buildings receive the same
+  34-unit-per-building layout. This is the only way to populate 24
+  physical buildings from a source that itself only tabulates 6
+  representative floor plans (one per building type) — documented
+  here rather than silently presented as if each building had its own
+  independently-sourced plan.
+- **A33. The four illustrative permanent-code examples in the release
+  text were reconciled against the imported data — 3 of 4 matched
+  exactly; the 4th did not, and is treated as illustrative shorthand,
+  not a literal fact.** `ARENA-T1-B11-A3`, `ARENA-T1-B12-A3`, and
+  `MARE-B-B12-C4` all resolve to real imported units (confirmed by
+  test `test_known_examples_resolve_to_real_units`). `SOLE-PH-B03-A5`
+  does not, because the site-plan legend gives SOLE PH's real building
+  numbers as 15/18/20, not 3 — since the other three examples
+  independently corroborate the site-plan-derived roster, "B03" is
+  treated as a format illustration rather than evidence of a real
+  building 3 under SOLE PH that the source documents don't otherwise
+  support (core principle 4.3 — never invent a physical building
+  assignment).
+- **A34. `Unit.permanent_code` is unique across the whole system, not
+  scoped per organization.** This pilot has exactly one real tenant
+  organization; true multi-tenant per-organization scoping would need
+  a direct `organization` FK on `Unit` (today it's reached via
+  `building.project.organization`) purely to support two *different*
+  organizations coincidentally importing identically-named building
+  developments — an edge case with no real-world instance in this
+  system. Global uniqueness is the more literal reading of the
+  release's own instruction ("the complete physical identifier must
+  always remain unique") and was verified as correct for the single
+  real organization; noted here since it was discovered as a genuine
+  edge case while cleaning up leftover multi-organization scratch data
+  in the local dev database during this session's own live-HTTP
+  validation (not a defect found in delivered code — no test exercises
+  two organizations importing the same building family).
+- **A35. `import_buildings_and_units --organization <name>` was added
+  as an explicit, optional flag (defaulting to `Organization.objects
+  .first()`, matching every other bootstrap command's existing
+  convention) after this session's own live validation showed
+  `.first()` is non-deterministic once more than one `Organization` row
+  exists (Django orders by PK — a random UUID — when no explicit
+  ordering is defined).** This mirrors the `--org-name` option already
+  present on `seed_delivery_demo_data`, not a new pattern.

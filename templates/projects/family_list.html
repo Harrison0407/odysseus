@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center">
+    <h3>Edificios y Unidades</h3>
+    <a class="btn btn-outline-secondary btn-sm" href="{% url 'projects:unit-search' %}">Buscar unidad</a>
+</div>
+<div class="row g-3 mt-1">
+    {% for row in rows %}
+    <div class="col-6 col-md-4 col-lg-3">
+        <a href="{% url 'projects:family-detail' row.family.pk %}" class="text-decoration-none">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <div class="fw-bold fs-5">{{ row.family.display_name }}</div>
+                    <div class="text-muted small">{{ row.family.project.name }}</div>
+                    <div class="small mt-2">{{ row.building_count }} edificio(s) · {{ row.unit_count }} unidad(es)</div>
+                </div>
+            </div>
+        </a>
+    </div>
+    {% empty %}
+    <p class="text-muted">Sin familias de edificio activas.</p>
+    {% endfor %}
+</div>
+{% endblock %}

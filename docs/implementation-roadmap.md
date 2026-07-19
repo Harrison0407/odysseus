@@ -150,6 +150,19 @@ fixture through real HTTP requests against a running dev server — see
 All four Priority 1 features are now complete. See
 `docs/FINAL_VALIDATION_REPORT.md` for the consolidated system status.
 
+## Physical property / field operations release (added in a later session)
+
+32. ~~Physical building/floor/apartment hierarchy~~ — **Done.**
+    `BuildingFamily` (new, ADR-033) + extended `Building`/`Floor`/`Unit`,
+    idempotent `import_buildings_and_units` command (transcribed from
+    the 3 supplied source PDFs), `/propiedades/` screens.
+33. Drawing and floor-plan register — in progress.
+34. Order destination allocation and purchased spares — pending.
+35. Field issue tracking — pending.
+36. Lawson training and reference installations — pending.
+37. Apartment walkthroughs and corrective actions — pending.
+38. Unclassified Evidence Inbox — pending.
+
 ## Explicitly out of scope for any near-term increment
 
 Local OCR execution, automated machine translation, QuickBooks live

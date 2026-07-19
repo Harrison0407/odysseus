@@ -104,6 +104,16 @@
 
 ## Persona → default landing dashboard
 
+## Physical property / field operations release (added in a later session)
+
+| Route | View | Notes |
+|---|---|---|
+| `/propiedades/` | `apps.projects.views.building_family_list` | Active building-family catalog (org + project scoped), building/unit counts |
+| `/propiedades/familias/<id>/` | `building_family_detail` | Physical buildings within a family |
+| `/propiedades/edificios/<id>/` | `building_detail` | Floors and units within one physical building, common areas |
+| `/propiedades/unidades/` | `unit_search` | Search/filter by permanent code, apartment number, or family |
+| `/propiedades/unidades/<id>/` | `unit_detail` | Unit detail — measurements, and (extended in later milestones) linked drawings/allocations/issues/walkthroughs |
+
 | Role code | Dashboard template |
 |---|---|
 | `compras` | `core/dashboard_compras.html` |

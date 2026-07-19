@@ -2,6 +2,30 @@
 
 Newest first.
 
+## ADR-033 — BuildingFamily is a new grouping layer above the pre-existing Building model, not a parallel hierarchy; permanent unit codes are stored, not derived
+**Decision:** `BuildingFamily` (new) sits between `Project` and the
+pre-existing `Building` model (`Building.family`, nullable for backward
+compatibility with rows created before this release). `Unit` gained a
+stored `permanent_code` field, generated once at creation
+(`apps.projects.services.build_permanent_code`) and never regenerated —
+it is a plain column, not a computed property, specifically so it
+survives a later correction to the unit's floor/building assignment
+without changing. The idempotent import
+(`import_buildings_and_units`) matches existing rows by this code.
+**Why:** `Project`/`Building`/`Floor`/`Unit`/`Area` already modeled
+exactly "project → physical building → floor → apartment" — the
+release asked for one more layer above Building (family/type grouping
+like "ARENA T1" spanning 8 physical buildings), not a replacement
+hierarchy. Extending the existing models in place, rather than
+introducing a second building-hierarchy model set, keeps this the one
+place `Delivery`/`InstallationRecord`/`MaterialRequest`/kits already
+point to (`apps.workflow.services.resolve_project` was extended with a
+`unit`/`building` fallback rather than duplicated). Storing the
+permanent code as a plain field (not a `@property` computed from
+current FKs) is what makes "must remain unchanged throughout
+construction... occupancy... maintenance" actually true even if a data
+entry mistake in the building/floor assignment is corrected later.
+
 ## ADR-032 — QR labels use one small entity registry instead of eight bespoke implementations; a scan only ever forwards into an existing, already-permission-checked page
 **Decision:** `apps.labels.services._ENTITY_REGISTRY` maps each
 supported entity type's model name to three pure functions: how to

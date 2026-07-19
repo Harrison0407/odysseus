@@ -667,3 +667,56 @@ documented order.
     empty test database; `manage.py check` and `makemigrations --check`
     both clean. This closes the last of the four Priority 1 features
     from the one-shot completion run.
+
+## Physical property / field operations release (one-shot, resumed from e9c24fd-descendant baseline 4440b8a)
+
+41. **Physical building/floor/apartment hierarchy.** Read all 3 supplied
+    source PDFs directly (`imports/buildings/`): the small "DT Beach
+    Building Apartments.xlsx.pdf" gave a real, structured per-building
+    floor/apartment template (floor, letter, apartment number, internal/
+    terrace/total area, bedrooms, bathrooms, service room) for MARE B,
+    SOLE B, SOLE A (PH), SOLE 26, ARENA T1, and PALMERA; the large
+    "Buildings Plans Main.pdf" gave a numbered site-plan building index
+    confirming exactly which physical building numbers belong to each
+    family (ARENA T1 = 1,2,3,4,9,10,11,12 — independently matching the
+    8 buildings named in the governing instruction). `BuildingFamily`
+    (new model, ADR-033) sits above the pre-existing `Building` model
+    (extended: `family`, `building_number`); `Unit` gained a stored,
+    never-regenerated `permanent_code` plus real measurement fields.
+    `apps.projects.services.import_physical_property_master` is fully
+    idempotent (matches by `permanent_code`) with a `--dry-run` mode;
+    `import_buildings_and_units --organization <name>` seeds it.
+    Imported 684 real units across 24 physical buildings (verified
+    against the source: e.g. `ARENA-T1-B11-A3`, `ARENA-T1-B12-A3`,
+    `MARE-B-B12-C4`, and `PALMERA-417` — 3 of the release's own 4
+    illustrative example codes resolved to genuine imported units,
+    cross-confirming the two source documents agree with each other;
+    see A31-A35 for the one example that didn't and why). MARE A/
+    ARENA T2/ARENA T3 exist as inactive catalog entries with no
+    buildings yet, exactly as instructed. `apps.workflow.services
+    .resolve_project` was extended with `unit`/`building` fallbacks so
+    the existing project-isolation mechanism (`user_can_access_project`)
+    covers the new models without a second permission engine.
+    `/propiedades/` family catalog → building detail → unit detail →
+    search screens, linked from the main nav. **A real bug was found
+    and fixed while live-validating this milestone against a
+    multi-organization dev database:** `import_buildings_and_units`
+    used `Organization.objects.first()` (matching existing precedent in
+    `import_live_container_fixture.py`), which is non-deterministic
+    once more than one `Organization` row exists (Django orders by
+    UUID PK, not creation order, absent an explicit ordering) — added
+    an optional `--organization <name>` flag (A35), matching the
+    pattern `seed_delivery_demo_data` already established. 20 new tests
+    (`tests/test_property_master.py`), covering permanent-code format
+    for both the building-segment and no-building-segment cases,
+    full-import counts, idempotency, dry-run (commits nothing), the
+    known-example cross-check, global code uniqueness, the inactive-
+    family catalog-only state, the exact Arena T1 building roster, the
+    real floor-1-has-no-unit-D quirk, and cross-organization/cross-
+    project HTTP isolation (404, management-role bypass, explicit
+    `UserProjectAccess` grant) — 266/266 passing (246 pre-existing + 20
+    new). Verified migrations apply cleanly from an empty database;
+    `manage.py check`/`makemigrations --check` both clean; live HTTP
+    walkthrough via a real browser session confirmed the family
+    catalog, building detail (showing real permanent codes), and unit
+    search all render correctly against the imported data.

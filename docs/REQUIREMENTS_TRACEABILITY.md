@@ -159,6 +159,12 @@ submission caught gracefully (no second row) → Markeris (no project
 access) denied both direct-URL access and any trace in the list view.
 Full transcript in `docs/implementation-log.md`.
 
+## Physical property / field operations release (added in a later session)
+
+| Capability | Module(s) | DB records | UI | Test(s) | Status |
+|---|---|---|---|---|---|
+| Physical building/floor/apartment hierarchy | `apps.projects` | `BuildingFamily` (new), `Building`/`Floor`/`Unit` (extended, ADR-033) | `/propiedades/` catalog, family/building/unit detail, search | `tests/test_property_master.py` (20 tests) | Done |
+
 ## Explicitly out of scope for this delivery (see `KNOWN_LIMITATIONS.md`)
 
 Local OCR execution, automated translation, CONFOTUR government submission

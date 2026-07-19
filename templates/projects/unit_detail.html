@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>{{ unit.building }} / {{ unit.name }}{% if unit.is_penthouse %} <span class="badge bg-warning text-dark">Penthouse</span>{% endif %}</h3>
+<p class="text-muted"><code>{{ unit.permanent_code }}</code></p>
+<a class="btn btn-outline-secondary btn-sm mb-3" href="{% url 'projects:building-detail' unit.building.pk %}">&larr; Volver al edificio</a>
+
+<div class="card mb-3">
+    <div class="card-header">Detalle de la unidad</div>
+    <div class="card-body">
+        <table class="table table-sm mb-0">
+            <tr><th>Piso</th><td>{{ unit.floor|default:"—" }}</td></tr>
+            <tr><th>Letra</th><td>{{ unit.apartment_letter|default:"—" }}</td></tr>
+            <tr><th>Número de apartamento</th><td>{{ unit.apartment_number|default:"—" }}</td></tr>
+            <tr><th>Área interna</th><td>{{ unit.internal_area_sqm|default:"—" }} m²</td></tr>
+            <tr><th>Terraza</th><td>{{ unit.terrace_area_sqm|default:"—" }} m²</td></tr>
+            <tr><th>Área total</th><td>{{ unit.total_area_sqm|default:"—" }} m²</td></tr>
+            <tr><th>Habitaciones</th><td>{{ unit.bedrooms_label|default:"—" }}</td></tr>
+            <tr><th>Baños</th><td>{{ unit.bathrooms|default:"—" }}</td></tr>
+            <tr><th>Cuarto de servicio</th><td>{{ unit.has_service_room|yesno:"Sí,No,Desconocido" }}</td></tr>
+            <tr><th>Referencia de origen</th><td class="small text-muted">{{ unit.source_row_reference|default:"—" }}</td></tr>
+        </table>
+    </div>
+</div>
+
+{% endblock %}

@@ -88,6 +88,12 @@ def resolve_project(target):
     inspection = getattr(target, "inspection", None)  # PunchListItem -> InspectionRecord
     if inspection is not None:
         return resolve_project(inspection)
+    unit = getattr(target, "unit", None)  # FieldIssue/Walkthrough/TrainingSession -> Unit -> Building -> Project
+    if unit is not None:
+        return resolve_project(unit)
+    building = getattr(target, "building", None)  # Unit/Floor/Area -> Building -> Project
+    if building is not None:
+        return resolve_project(building)
     return None
 
 

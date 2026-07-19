@@ -8,17 +8,17 @@ carrier/customs documentation and the internal operational cargo truth
 are modeled as two separate, explicitly reconciled views — never
 merged, never silently edited into agreement.**
 
-This is a staged delivery of a very large governing specification
-(`DT_Beach_Supply_Control_Fable5_FINAL_LOCKED_PROMPT.md`, one directory
-above `Application/`). The Priority 0 vertical slice described below is
-genuinely implemented, tested, and validated against a real production
-Docker stack. What is not yet built is listed honestly in
-`docs/KNOWN_LIMITATIONS.md` — please read that file before assuming any
-capability beyond what's below.
+This is a staged delivery of a large governing specification. The implemented
+baseline now includes the original Priority 0 vertical slice and subsequent
+milestones through **Controlled Transparency, Commercial Confidentiality &
+Authorization Foundation**. Fresh Gate 0 verification passed all 455 tests with
+clean migrations. What is not yet built is listed honestly in
+`docs/KNOWN_LIMITATIONS.md`; the official milestone order is governed by
+`docs/MARKETMATCH_ARCHITECTURE_RECONCILIATION_AND_ROADMAP.md`.
 
 ## What's implemented
 
-- Full canonical data model: 20 Django apps, clean from an empty database (PostgreSQL and SQLite both verified).
+- Full canonical data model across 27 Django app directories, clean from an empty database (PostgreSQL and SQLite both verified).
 - Multilingual document upload with SHA-256 provenance and duplicate detection.
 - The dual-manifest engine (Official Carrier Summary vs. Internal Operational Manifest) with an official-vs-operational variance matrix, demonstrated against the real supplied live-container fixture (BL MEDUWY575021 / container TCNU8926924).
 - Ledger-based inventory (on-hand quantity always derived from posted movements, never edited directly).
@@ -37,16 +37,16 @@ capability beyond what's below.
 
 Start with these, in order:
 
-1. `docs/SOURCE_DOCUMENT_ANALYSIS.md` — what was actually found in the supplied source documents.
-2. `docs/BUSINESS_REQUIREMENTS.md` — interview pain points converted into enforceable behavior.
-3. `docs/ARCHITECTURE.md` and `docs/DATA_MODEL.md` — how it's built.
-4. `docs/OFFICIAL_VS_OPERATIONAL_MANIFEST_ANALYSIS.md` — the core architectural decision, explained against the real fixture.
-5. `docs/REQUIREMENTS_TRACEABILITY.md` — what's Done vs. Modeled vs. Planned, honestly.
-6. `docs/KNOWN_LIMITATIONS.md` — what is not yet built.
-7. `docs/FINAL_VALIDATION_REPORT.md` — exactly what was tested and how.
-8. `docs/USER_GUIDE_ES.md` — end-user quick-start guide (Spanish).
-9. `docs/DEPLOYMENT.md` and `docs/BACKUP_RESTORE.md` — running it in production.
-10. `ASSUMPTIONS.md` — every conservative choice made where the spec left a minor point unresolved.
+1. `DT_BEACH_CURRENT_STATE.md` — fresh repository, validation, milestone, and handoff state.
+2. `docs/MARKETMATCH_ARCHITECTURE_RECONCILIATION_AND_ROADMAP.md` — approved architectural decisions and official milestone order.
+3. `DT_BEACH_SOURCE_OF_TRUTH_INDEX.md` — conflict-resolution and evidence hierarchy.
+4. `docs/SOURCE_DOCUMENT_ANALYSIS.md` — what was actually found in the supplied source documents.
+5. `docs/BUSINESS_REQUIREMENTS.md` — interview pain points converted into enforceable behavior.
+6. `docs/ARCHITECTURE.md` and `docs/DATA_MODEL.md` — how it is built.
+7. `docs/REQUIREMENTS_TRACEABILITY.md` — Done vs. Modeled vs. Planned.
+8. `docs/KNOWN_LIMITATIONS.md` — what is not yet built or not yet evidenced.
+9. `docs/FINAL_VALIDATION_REPORT.md` — historical production validation evidence.
+10. `ASSUMPTIONS.md` — conservative decisions made where source material was unresolved.
 
 ## Local development
 
@@ -74,7 +74,7 @@ Visit `http://localhost:8000/`. Pilot user passwords are printed once by
 ```bash
 pytest
 ```
-246 tests, covering the live-container fixture import, document
+455 tests, covering the live-container fixture import, document
 upload/duplicate-detection/authorization, the receiving/inventory ledger,
 object-level permission scoping, gate controls and formal handoffs,
 delivery/installation/inspection/final acceptance, landed-cost
@@ -82,6 +82,19 @@ allocation, CONFOTUR reconciliation, tool custody, cycle counts, storage
 capacity/suitability, external storage comparison, supplier claims, and
 QR labels/controlled scanning. See `docs/REQUIREMENTS_TRACEABILITY.md`
 for exactly what each area's tests prove.
+
+Gate 0 fresh result: **455 passed, 0 failed**. Migrations were clean.
+
+## Current milestone handoff
+
+Latest completed product milestone:
+**Controlled Transparency, Commercial Confidentiality & Authorization Foundation**.
+
+Exact next action:
+**Milestone 1 — Configurable Procurement Gates A1–A6**.
+
+Milestone 1 is planned and approved; it has not been started by the Gate 0
+documentation reconciliation.
 
 ## Production deployment
 

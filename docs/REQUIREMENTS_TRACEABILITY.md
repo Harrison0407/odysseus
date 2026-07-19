@@ -7,6 +7,15 @@ manual. **Planned** = intentionally deferred past this delivery (see
 delivery per `ASSUMPTIONS.md` A1, not a claim that all 38 spec sections
 are production-complete).
 
+Gate 0 fresh verification (2026-07-19): **455 tests collected, 455 passed,
+0 failed; migrations clean.** Historical milestone counts below are retained
+where they describe the evidence available at that point in the delivery.
+
+The latest completed product milestone is **Controlled Transparency,
+Commercial Confidentiality & Authorization Foundation**. The exact next action
+is **Milestone 1 — Configurable Procurement Gates A1–A6**. A1–A6 are planned,
+not implemented; `ProcurementPackage.Status` is not evidence of gate execution.
+
 ## Priority 0 capabilities (spec section 5)
 
 | Capability | Module(s) | DB records | UI | Test(s) | Status |
@@ -21,7 +30,7 @@ are production-complete).
 | Location-based ledger inventory | `apps.inventory` | `InventoryLot`, `InventoryMovement` | `/almacen/ubicaciones/` | `test_onhand_quantity_is_derived_from_ledger...` | Done |
 | Material requests, dispatch, project acceptance, returns | `apps.requests` | `MaterialRequest`, `Dispatch`, `Delivery`, `ProjectReceipt` | `/solicitudes/` list/create/detail, reserve/dispatch actions | 40 tests (`tests/test_delivery_installation_acceptance.py`) | Done — see "Delivery, Installation, Inspection, and Final Acceptance milestone" section below |
 | Complex product kits and component completeness | `apps.items` | `AssemblyDefinition`, `KitDefinition`, `KitInstance` | none yet | `test_quartz_slab_and_fabricated_top_are_distinct_identities` | Modeled |
-| Landed cost | `apps.cost` | `CostDocument`, `CostAllocationRun`, `LandedCostVersion` | `/costos/` list/detail | manual verification | Modeled; allocation-run UI (triggering a calculation) is **Planned** |
+| Landed cost | `apps.cost` | `CostDocument`, `CostAllocationRun`, `LandedCostVersion` | `/costos/` list/detail and `/costos/embarque/<id>/` allocation/calculation workflow | `tests/test_cost_allocation.py` (14 tests) | Done for allocation, calculation, versioning and finalization; dedicated CostDocument/CostCharge creation UI remains unbuilt |
 | Dashboards and responsibility queues | `apps.core` | — | persona dashboards (6 variants) | manual verification | Done |
 | Historical import | `apps.shipments` mgmt command | — | `import_live_container_fixture` | `test_live_container_fixture.py` (9 tests) | Done for the live fixture; general-purpose "any historical shipment" importer is **Planned** |
 | Self-contained HTML snapshot and secure share links | `apps.reports` | `ReportVersion`, `SecureShareLink`, `ShareSnapshot` | snapshot download, share view | manual verification (validated live in the production Docker stack) | Done |
@@ -40,7 +49,7 @@ are production-complete).
 | Link prior-site evidence to earlier fulfillment | `PriorFulfillmentEvidence` modeled; no prior-fulfillment claim exists in this particular fixture (none of the 5 POs claimed prior receipt), so this path has model coverage but no fixture-driven test yet — **Modeled** |
 | Treat replacements/corrective cargo separately from normal purchases | `test_replacement_cargo_not_counted_as_new_purchase` (2 `ReplacementCase` records) |
 | Show remaining open balances | Same as carryover test above |
-| Generate Manuel's receiving manifest | `ReceivingPlan`/`ReleasePacket` modeled; the dedicated "detailed internal receiving manifest" print view (spec 13A.8, 10-section layout) is **Planned** — today Manuel would use the shipment detail page's internal-manifest panel, which has the data but not that exact document layout |
+| Generate Manuel's receiving manifest | Done through `apps.reports.views.receiving_manifest_snapshot`; `tests/test_receiving_manifest_snapshot.py` (4 tests), live-validated against the 11-line MEDUWY575021 fixture. The exact original spec section ordering remains unconfirmed as documented in `ASSUMPTIONS.md` A16. |
 | Reconcile package/weight/CBM/cost without double counting | Shipment detail "Reconciliación de totales" panel; verified live to show 520/22500kg/40cbm official vs. computed internal totals |
 | Flag cargo not clearly represented for Customs & Logistics | `test_unattributed_cargo_flagged_for_customs_review` (3 flagged lines, each with a `CustomsReviewDecision`) |
 

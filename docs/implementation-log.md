@@ -1257,3 +1257,48 @@ documented order.
     the hold and applying the change, and a fully unrelated
     cross-organization user receiving 404 on the package detail page
     with no trace of the package's existence in their own package list.
+
+## Gate 0 — Baseline & Documentation Reconciliation
+
+51. **Completed Gate 0 as a documentation-only repository reconciliation.**
+    Read the approved governing roadmap at
+    `docs/MARKETMATCH_ARCHITECTURE_RECONCILIATION_AND_ROADMAP.md` and retained
+    its milestone order and architecture decisions without redesign. Fresh Git
+    evidence established branch
+    `integration/dt-beach-supply-control-1.0.0`, pre-reconciliation HEAD
+    `5cd0df64edc5baf89a0e3e4e3efe8e1fc78d0b2c`, upstream
+    `origin/integration/dt-beach-supply-control-1.0.0`, and ahead/behind `0/0`
+    after fetching. The initial working tree was clean with no tracked changes
+    and no untracked files; a push dry-run reported `Everything up-to-date`.
+
+    Migration verification passed: `manage.py check` found no issues,
+    `makemigrations --check --dry-run` found no model changes,
+    `migrate --check` found no unapplied migrations, and every migration in
+    `showmigrations --plan` was applied. The full regression suite collected
+    455 tests and passed **455/455** with zero failures in 71.78 seconds.
+
+    Reconciled `README.md`, `DT_BEACH_CURRENT_STATE.md`,
+    `DT_BEACH_SOURCE_OF_TRUTH_INDEX.md`, `REQUIREMENTS_TRACEABILITY.md`, and
+    `KNOWN_LIMITATIONS.md` to the fresh evidence. The primary corrected drift
+    was the recorded HEAD (`8b7e102` → verified pre-Gate-0 `5cd0df6`), the
+    evidence-package state (already tracked, not untracked), the README's
+    historical 20-app/246-test counts (27 app directories/455 passing tests),
+    and stale traceability statements that still called the landed-cost UI and
+    receiving manifest planned after their later implementation.
+
+    Evidence-package disposition: retained and committed
+    `DT_BEACH_CURRENT_STATE.md`, `DT_BEACH_SOURCE_OF_TRUTH_INDEX.md`,
+    `Fable Interactive Plans Final Report 90874ed.md`,
+    `Fable Property Master Final Report 69f89a3.md`, and
+    `Git Evidence 90874ed.txt`; committed the newly supplied governing roadmap
+    in `docs/`. No evidence was deleted, ignored, relocated, or archived.
+
+    `ASSUMPTIONS.md`, `architecture-decisions.md`, and `SECURITY.md` required no
+    factual change. No application code, migrations, behavior, templates, or
+    tests changed. Gate 0 ends with one documentation-only commit pushed to the
+    configured upstream and a clean working tree.
+
+    Latest completed product milestone remains **Controlled Transparency,
+    Commercial Confidentiality & Authorization Foundation**. Exact next action:
+    **Milestone 1 — Configurable Procurement Gates A1–A6**. Milestone 1 was not
+    started during Gate 0.

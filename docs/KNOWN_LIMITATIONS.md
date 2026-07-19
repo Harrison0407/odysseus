@@ -4,6 +4,48 @@ Honest, current list. This is a staged delivery of an intentionally very
 large specification (`ASSUMPTIONS.md` A1) — this file exists so nothing
 is silently claimed to be done when it isn't.
 
+## Gate 0 current limitation summary and roadmap disposition
+
+Fresh Gate 0 validation on 2026-07-19 passed **455/455 tests** with clean
+migrations. The latest completed product milestone remains **Controlled
+Transparency, Commercial Confidentiality & Authorization Foundation**.
+
+The exact next action is **Milestone 1 — Configurable Procurement Gates
+A1–A6**. Those gates are approved and planned but are not implemented. The
+existing `ProcurementPackage.Status` is a separate state machine and must not
+be represented as A1–A6 gate execution.
+
+Current unresolved limitations, grouped by official roadmap disposition:
+
+- **Milestone 1:** configurable, versioned A1–A6 gate definitions, evidence
+  schemas, progression, exceptions, expiry/revocation, and live validation.
+- **Milestone 2:** complete `es`/`en`/`zh-Hans` internationalization
+  foundation; OCR and automated translation engines remain deferred until the
+  authorized-projection and localization boundaries are complete.
+- **Milestone 3:** package-aware generic API plus centralized authorized
+  commercial search, autocomplete, exports, reports, QR projections, and
+  notifications. Their current non-disclosure is partly because no integration
+  exists, not proof that every future path is hardened.
+- **Milestone 4:** dependency/secret scanning in CI, backup encryption,
+  shared/global rate limiting when topology requires it, production
+  observability, audit immutability/retention/tamper evidence, repository-wide
+  endpoint authorization evidence, and pixel-level device validation.
+- **Later milestones:** operational payment legs reconciled to QuickBooks,
+  legally approved standard customs workflows, and an Asset Passport registry.
+  QuickBooks remains the financial source of truth; custody of money and
+  unapproved regulated finance remain outside scope.
+- **Missing source:** ARENA T1, MARE B, SOLE, SOLE PH, and SOLE 26 have no
+  supplied reliable individual apartment plans. They must remain `Missing
+  Source`; this is an accurate data state, not permission to invent layouts.
+- **Needs evidence or demand:** audit guarantees below the application layer,
+  universal authorization coverage, performance/capacity decomposition,
+  physical sample custody, a generalized historical importer, complex kits UI,
+  and receiving-plan subrecord UI.
+
+The detailed sections below preserve the historical delivery ledger, completed
+items, residual caveats, and defect record. A struck-through item means it was
+completed later; it is not a current open limitation.
+
 ## Not yet built (UI)
 
 1. ~~Gate-blocking UI~~ — **Done in the Gate Controls milestone.** Every

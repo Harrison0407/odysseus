@@ -8,7 +8,23 @@ This document defines the source-of-truth hierarchy for DT Beach Supply Control.
 
 When sources conflict, the priority and resolution rules in this document must be followed.
 
-## Source Priority
+## Repository And Documentation Reconciliation Priority
+
+For implementation status and repository-state claims, use this order:
+
+1. Current repository code, migrations, tests, and fresh terminal evidence.
+2. Approved architectural and operational documents, led by
+   `docs/MARKETMATCH_ARCHITECTURE_RECONCILIATION_AND_ROADMAP.md`.
+3. Current repository documentation.
+4. Harrison's explicit decisions.
+5. Historical planning and milestone documents.
+6. Clearly identified assumptions.
+
+Plans and documentation are never evidence of implementation by themselves.
+Always distinguish requested, planned, reported implemented, verified
+implemented, live validated, and deployed.
+
+## Operational Data Source Priority
 
 ### 1. Approved and Signed Source Documents
 
@@ -48,13 +64,29 @@ Active branch:
 
 `integration/dt-beach-supply-control-1.0.0`
 
-Current verified baseline:
+Gate 0 verified pre-reconciliation HEAD:
+
+`5cd0df64edc5baf89a0e3e4e3efe8e1fc78d0b2c`
+
+Latest application-behavior commit:
 
 `58889c8`
 
 Tests:
 
 `455/455 passing`
+
+Migrations:
+
+`clean` — no model changes and no unapplied migrations.
+
+Ahead / behind after fetch:
+
+`0 / 0`
+
+The commits after `58889c8` through Gate 0 are documentation-only and do not
+change application behavior. The Gate 0 completion commit is the commit
+containing this revision.
 
 Application behavior is authoritative only when:
 

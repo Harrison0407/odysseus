@@ -1,4 +1,4 @@
-"""Focused Node-backed tests for the visible MarketMatch Calls pilot UI."""
+"""Focused Node-backed tests for the visible MarketMatch Capture pilot UI."""
 
 import json
 import shutil
@@ -572,10 +572,10 @@ def test_library_save_controls_are_explicit_and_unavailable_before_success():
         'id="calls-save-status"',
         'for="calls-save-title"',
         'aria-live="polite"',
-        'Save to Library',
+        'Save Capture to Library',
     )
     assert all(marker in INDEX for marker in required)
-    assert '<div id="calls-save" class="calls-save" hidden>' in INDEX
+    assert '<section id="calls-save" class="calls-card calls-save"' in INDEX
     assert 'id="calls-save-btn" class="calls-button calls-button-primary" disabled' in INDEX
     result = _run_node(
         """
@@ -596,7 +596,7 @@ def test_document_save_request_reuses_owner_scoped_json_contract_and_complete_co
     result = _run_node(
         """
         import {
-          buildCallsDocumentContent, defaultCallsDocumentTitle,
+          buildCaptureDocumentContent, defaultCallsDocumentTitle,
           requestCallsDocumentSave,
         } from 'CALLS_MODULE';
         const transcript = '<b>Complete transcript</b>';
@@ -625,10 +625,12 @@ def test_document_save_request_reuses_owner_scoped_json_contract_and_complete_co
         console.log(JSON.stringify({
           saved,
           defaultTitle: defaultCallsDocumentTitle(createdAt),
-          directContent: buildCallsDocumentContent(transcription, createdAt),
-          silenceContent: buildCallsDocumentContent(
-            { duration_ms: 1000, transcript_text: '', segments: [] }, createdAt,
-          ),
+          directContent: buildCaptureDocumentContent({
+            title: 'Calls Persistence Test', result: transcription, createdAt,
+          }),
+          silenceContent: buildCaptureDocumentContent({
+            title: 'Silence', result: { duration_ms: 1000, transcript_text: '', segments: [] }, createdAt,
+          }),
           request: {
             url: captured.url,
             method: captured.options.method,
@@ -643,7 +645,7 @@ def test_document_save_request_reuses_owner_scoped_json_contract_and_complete_co
     )
     request = result["request"]
     assert result["saved"] == {"id": "doc-123"}
-    assert result["defaultTitle"] == "Call transcript — 2026-07-18 14:05"
+    assert result["defaultTitle"] == "Capture — 2026-07-18 14:05"
     assert request["url"] == "/api/document"
     assert request["method"] == "POST"
     assert request["credentials"] == "same-origin"
@@ -656,7 +658,8 @@ def test_document_save_request_reuses_owner_scoped_json_contract_and_complete_co
     content = request["body"]["content"]
     assert "AI-generated transcript" in content
     assert "Review before relying" in content
-    assert "Source: MarketMatch Calls" in content
+    assert "Source: MarketMatch Capture" in content
+    assert "Capture title: Calls Persistence Test" in content
     assert "Created: 2026-07-18 14:05" in content
     assert "Duration: 01:02:03.456" in content
     assert "<b>Complete transcript</b>" in content
@@ -783,7 +786,7 @@ def test_save_failure_is_safe_preserves_transcript_and_supports_copy():
     assert result["copied"] == "Keep this transcript"
     assert result["rendered"] == ["Keep this transcript"]
     assert result["requestNumber"] == 2
-    assert result["saveStatuses"][-1] == ["error", "The transcript could not be saved. Please try again."]
+    assert result["saveStatuses"][-1] == ["error", "The Capture could not be saved. Please try again."]
     assert [code for code, _ in result["directErrors"]] == [
         "DOCUMENT_HTTP_401", "DOCUMENT_HTTP_403", "DOCUMENT_HTTP_413",
         "DOCUMENT_HTTP_422", "DOCUMENT_MALFORMED_RESPONSE",
@@ -889,7 +892,7 @@ def test_saved_history_request_is_owner_implicit_bounded_and_marker_filtered():
         """
     )
     request = result["request"]
-    assert request["url"] == "/api/documents/library?search=MarketMatch+Calls+Transcript&sort=recent&offset=0&limit=20"
+    assert request["url"] == "/api/documents/library?search=MarketMatch&sort=recent&offset=0&limit=20"
     assert request["method"] == "GET"
     assert request["credentials"] == "same-origin"
     assert request["hasHeaders"] is False
@@ -1009,8 +1012,8 @@ def test_history_failures_are_fixed_safe_and_do_not_break_calls_features():
     assert result["copied"] == "Still works"
     assert result["saved"] is True
     assert result["statuses"] == [
-        "Saved transcripts could not be loaded. Please try again.",
-        "Saved transcripts could not be loaded. Please try again.",
+        "Saved Captures could not be loaded. Please try again.",
+        "Saved Captures could not be loaded. Please try again.",
     ]
 
 
@@ -1095,7 +1098,7 @@ def test_history_open_uses_existing_document_module_and_accessible_safe_ui():
         'id="calls-history-status"',
         'id="calls-history-empty"',
         'id="calls-history-list"',
-        'aria-label="Saved Calls transcripts"',
+        'aria-label="Saved Captures"',
         'aria-live="polite"',
     )
     assert all(marker in INDEX for marker in required)
@@ -1427,3 +1430,244 @@ def test_analysis_lifecycle_aborts_and_ignores_stale_results_without_losing_tran
     assert result["staleRendered"] == []
     assert result["aborted"][:4] == [True, True, True, True]
     assert "render-current" in result["events"]
+
+
+def test_capture_visible_rename_session_details_and_clear_reset():
+    assert '<span class="grow">Capture</span>' in INDEX
+    assert 'aria-label="Open Capture"' in INDEX
+    assert 'aria-label="Close Capture"' in INDEX
+    assert '>Calls<' not in INDEX
+    assert (
+        'Record meetings, walkthroughs, voice notes and field observations. '
+        'Add photographs and videos, transcribe speech locally and preserve selected records in Library.'
+    ) in INDEX
+    for marker in (
+        'id="calls-capture-details-heading">Capture details',
+        'id="calls-save-title"',
+        'id="calls-capture-type"',
+        'id="calls-capture-notes"',
+        'id="calls-capture-created"',
+        'id="calls-capture-status"',
+        'id="calls-history-heading">Saved Captures',
+        'id="calls-timeline-heading">Capture timeline',
+        'id="calls-save-heading">Save Capture to Library',
+    ):
+        assert marker in INDEX
+    for capture_type in (
+        "Meeting", "Field Observation", "Walkthrough", "Training", "Voice Note",
+        "Supplier Conversation", "Other",
+    ):
+        assert f"<option>{capture_type}</option>" in INDEX
+
+    result = _run_node(
+        """
+        import { createCallsController, defaultCallsDocumentTitle } from 'CALLS_MODULE';
+        const rendered = [];
+        const statuses = [];
+        const fixed = new Date(2026, 6, 19, 9, 7).getTime();
+        const view = {
+          renderCaptureDetails(value) { rendered.push({ title: value.title, type: value.type, notes: value.notes }); },
+          setSaveStatus(message, kind) { statuses.push([kind, message]); },
+          setCaptureSaveReady() {}, setSaved() {}, renderTimeline() {}, renderCaptureMedia() {},
+          setMediaStatus() {}, setCaptureStatus() {}, clearResult() {}, clearSave() {}, clearAnalysis() {},
+          setAnalysisBusy() {}, setSaveBusy() {}, setRecordingState() {}, clearRecording() {}, reset() {},
+        };
+        const controller = createCallsController({ view, now: () => fixed });
+        const edited = controller.updateCaptureDetails({
+          title: '  Site walk  ', type: 'Walkthrough', notes: '<b>Safe note</b>',
+        });
+        const emptySave = await controller.saveToLibrary('   ');
+        controller.reset();
+        console.log(JSON.stringify({
+          defaultTitle: defaultCallsDocumentTitle(new Date(fixed)), edited, emptySave,
+          reset: rendered.at(-1), statuses,
+        }));
+        """
+    )
+    assert result["defaultTitle"] == "Capture — 2026-07-19 09:07"
+    assert result["edited"]["type"] == "Walkthrough"
+    assert result["edited"]["notes"] == "<b>Safe note</b>"
+    assert result["emptySave"] is False
+    assert result["reset"] == {
+        "title": "Capture — 2026-07-19 09:07", "type": "Meeting", "notes": "",
+    }
+    assert ["error", "Enter a Capture title before saving."] in result["statuses"]
+
+
+def test_capture_photo_video_validation_and_transient_fingerprint():
+    result = _run_node(
+        """
+        import {
+          MAX_CAPTURE_PHOTO_BYTES, MAX_CAPTURE_VIDEO_BYTES,
+          captureMediaFingerprint, validateCaptureMediaFile,
+        } from 'CALLS_MODULE';
+        const file = (name, size, type, lastModified = 7) => ({ name, size, type, lastModified });
+        const photo = file('site.jpg', 100, 'image/jpeg');
+        console.log(JSON.stringify({
+          photo: validateCaptureMediaFile(photo, 'photo'),
+          png: validateCaptureMediaFile(file('site.png', MAX_CAPTURE_PHOTO_BYTES, 'image/png'), 'photo'),
+          webp: validateCaptureMediaFile(file('site.webp', 1, 'image/webp'), 'photo'),
+          badPhoto: validateCaptureMediaFile(file('site.gif', 1, 'image/gif'), 'photo'),
+          largePhoto: validateCaptureMediaFile(file('site.jpg', MAX_CAPTURE_PHOTO_BYTES + 1, 'image/jpeg'), 'photo'),
+          mp4: validateCaptureMediaFile(file('walk.mp4', 1, 'video/mp4'), 'video'),
+          webm: validateCaptureMediaFile(file('walk.webm', 1, 'video/webm'), 'video'),
+          mov: validateCaptureMediaFile(file('walk.mov', MAX_CAPTURE_VIDEO_BYTES, 'video/quicktime'), 'video'),
+          badVideo: validateCaptureMediaFile(file('walk.avi', 1, 'video/x-msvideo'), 'video'),
+          largeVideo: validateCaptureMediaFile(file('walk.mp4', MAX_CAPTURE_VIDEO_BYTES + 1, 'video/mp4'), 'video'),
+          empty: validateCaptureMediaFile(file('empty.jpg', 0, 'image/jpeg'), 'photo'),
+          fingerprint: captureMediaFingerprint(photo),
+          sameFingerprint: captureMediaFingerprint({ ...photo }) === captureMediaFingerprint(photo),
+        }));
+        """
+    )
+    assert result["photo"] == result["png"] == result["webp"] == {"ok": True}
+    assert result["mp4"] == result["webm"] == result["mov"] == {"ok": True}
+    assert result["badPhoto"]["code"] == "MEDIA_TYPE_UNSUPPORTED"
+    assert result["largePhoto"]["code"] == "MEDIA_TOO_LARGE"
+    assert result["badVideo"]["code"] == "MEDIA_TYPE_UNSUPPORTED"
+    assert result["largeVideo"]["code"] == "MEDIA_TOO_LARGE"
+    assert result["empty"]["code"] == "MEDIA_EMPTY"
+    assert result["sameFingerprint"] is True
+    assert "site.jpg" in result["fingerprint"]
+
+
+def test_capture_media_lifecycle_timeline_and_in_memory_only_save():
+    result = _run_node(
+        """
+        import { createCallsController } from 'CALLS_MODULE';
+        const revoked = [];
+        const timelines = [];
+        const mediaRenders = [];
+        const statuses = [];
+        const requests = [];
+        const view = {
+          renderCaptureMedia(kind, items) {
+            mediaRenders.push([kind, items.map(({ name, caption, url }) => ({ name, caption, url }))]);
+          },
+          renderTimeline(items) { timelines.push(items.map((item) => item.message)); },
+          setMediaStatus(kind, message, state) { statuses.push([kind, state, message]); },
+          setCaptureSaveReady() {}, setSaved() {}, setSaveStatus() {}, setSaveBusy() {},
+          renderCaptureDetails() {}, setCaptureStatus() {}, setHistoryLoading() {},
+          clearResult() {}, clearSave() {}, clearAnalysis() {}, setAnalysisBusy() {},
+          setRecordingState() {}, clearRecording() {}, reset() {},
+        };
+        const fetchImpl = async (url, options) => {
+          requests.push({ url, method: options.method, body: JSON.parse(options.body) });
+          return { ok: true, status: 200, json: async () => ({ id: 'capture-doc' }) };
+        };
+        const controller = createCallsController({
+          view, fetchImpl, now: () => new Date(2026, 6, 19, 10, 0).getTime(),
+          createObjectURL: (file) => `blob:preview-${file.name}`,
+          revokeObjectURL: (url) => revoked.push(url),
+        });
+        controller.updateCaptureDetails({
+          title: 'Capture Test', type: 'Field Observation', notes: '<b>Review facade</b>',
+        });
+        const photo = { name: 'facade.jpg', size: 123, type: 'image/jpeg', lastModified: 1 };
+        const video = { name: 'walk.mp4', size: 456, type: 'video/mp4', lastModified: 2 };
+        const photoAdded = controller.addCaptureMedia('photo', photo);
+        const duplicate = controller.addCaptureMedia('photo', { ...photo });
+        const videoAdded = controller.addCaptureMedia('video', video);
+        controller.updateMediaCaption('photo', 'capture-media-1', '<img src=x> Front elevation');
+        controller.updateMediaCaption('video', 'capture-media-2', 'Walkthrough clip');
+        const saved = await controller.saveToLibrary('  Capture Test  ');
+        const photoRemoved = controller.removeCaptureMedia('photo', 'capture-media-1');
+        controller.onPanelHidden();
+        console.log(JSON.stringify({
+          photoAdded, duplicate, videoAdded, saved, photoRemoved, revoked, timelines,
+          mediaRenders, statuses, requests,
+        }));
+        """
+    )
+    assert result["photoAdded"] is True
+    assert result["duplicate"] is False
+    assert result["videoAdded"] is True
+    assert result["saved"] is True
+    assert result["photoRemoved"] is True
+    assert sorted(result["revoked"]) == ["blob:preview-facade.jpg", "blob:preview-walk.mp4"]
+    assert len(result["requests"]) == 1
+    request = result["requests"][0]
+    assert request["url"] == "/api/document"
+    assert request["method"] == "POST"
+    assert request["body"]["title"] == "Capture Test"
+    content = request["body"]["content"]
+    assert "# MarketMatch Capture" in content
+    assert "Capture title: Capture Test" in content
+    assert "Capture type: Field Observation" in content
+    assert "&lt;b&gt;Review facade&lt;/b&gt;" in content
+    assert "facade.jpg" in content and "Front elevation" in content
+    assert "walk.mp4" in content and "Walkthrough clip" in content
+    assert "Visual media was not persisted with this Capture." in content
+    assert "blob:preview" not in content
+    assert "data:" not in content
+    assert "analysis" not in content.lower()
+    latest_timeline = result["timelines"][-1]
+    assert latest_timeline.count("Photo added.") == 1
+    assert latest_timeline.count("Video added.") == 1
+    assert "Capture saved to Library." in latest_timeline
+    assert "Attachment removed." in latest_timeline
+    assert any(state == "error" and "already" in message for _, state, message in result["statuses"])
+
+
+def test_capture_history_accepts_new_and_legacy_markers_without_title_filtering():
+    result = _run_node(
+        """
+        import { buildCaptureDocumentContent, filterCallsHistoryDocuments } from 'CALLS_MODULE';
+        const capturePreview = buildCaptureDocumentContent({
+          notes: 'New capture', createdAt: new Date(0), captureType: 'Meeting',
+        });
+        const legacyPreview = [
+          '# MarketMatch Calls Transcript', '',
+          '**AI-generated transcript. Review before relying on it for operational decisions.**', '',
+          'Source: MarketMatch Calls', '', '## Transcript', '', 'Legacy',
+        ].join('\\n');
+        const documents = [
+          { id: 'new', title: 'Window Installation Review', preview: capturePreview },
+          { id: 'old', title: 'Site Coordination July 18', preview: legacyPreview },
+          { id: 'ordinary', title: 'Call notes', preview: '# MarketMatch Capture notes only' },
+          { id: 'new', title: 'Duplicate', preview: capturePreview },
+        ];
+        console.log(JSON.stringify(filterCallsHistoryDocuments({ documents })));
+        """
+    )
+    assert [item["id"] for item in result] == ["new", "old"]
+    assert [item["title"] for item in result] == [
+        "Window Installation Review", "Site Coordination July 18",
+    ]
+
+
+def test_capture_media_dom_privacy_timeline_hooks_and_analysis_boundary():
+    for marker in (
+        'id="calls-photo-input"',
+        'accept="image/jpeg,image/png,image/webp"',
+        'id="calls-video-input"',
+        'accept="video/mp4,video/webm,video/quicktime"',
+        'capture="environment"',
+        'Photos and videos in this pilot remain in memory and are not saved.',
+        'Current AI analysis uses the transcript only. Photo and video interpretation is not included yet.',
+    ):
+        assert marker in INDEX
+    for source_marker in (
+        "preview.controls = true",
+        "preview.preload = 'metadata'",
+        "setElementText(name, media.name)",
+        "setElementText(message, event.message)",
+        "addTimelineEvent('Recording started.')",
+        "addTimelineEvent('Recording stopped.')",
+        "addTimelineEvent('Transcription completed.')",
+        "addTimelineEvent('Transcript analysis generated.')",
+        "addTimelineEvent('Capture saved to Library.')",
+    ):
+        assert source_marker in SOURCE
+    assert "preview.autoplay" not in SOURCE
+    assert "/api/upload" not in SOURCE
+    assert "FormData" not in SOURCE
+    assert "localStorage" not in SOURCE
+    assert "sessionStorage" not in SOURCE
+    assert "indexedDB" not in SOURCE
+    assert "caches.open" not in SOURCE
+    assert "FileReader" not in SOURCE
+    assert "readAsDataURL" not in SOURCE
+    assert "console.log" not in SOURCE
+    assert "console.error" not in SOURCE
+    assert "JSON.stringify({ transcript })" in SOURCE

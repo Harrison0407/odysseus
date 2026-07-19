@@ -246,33 +246,61 @@
     setTimeout(function(){var l=document.getElementById('app-loader');if(l){l.style.opacity='0';setTimeout(function(){l.remove()},300)}},5000);
   })();
   </script>
-  <!-- MarketMatch Calls transcription pilot -->
+  <!-- MarketMatch Capture pilot (internal Calls identifiers remain for compatibility) -->
   <div id="calls-modal" class="modal hidden" aria-hidden="true">
     <div class="modal-content calls-modal-content" role="dialog" aria-modal="true" aria-labelledby="calls-title">
       <div class="modal-header">
         <h4 id="calls-title">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:6px"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.69 2.8a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.33 1.84.56 2.8.69A2 2 0 0 1 22 16.92z"/></svg>Calls
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:6px"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.69 2.8a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.33 1.84.56 2.8.69A2 2 0 0 1 22 16.92z"/></svg>Capture
         </h4>
-        <button type="button" class="close-btn" id="calls-close-btn" aria-label="Close Calls">✖</button>
+        <button type="button" class="close-btn" id="calls-close-btn" aria-label="Close Capture">✖</button>
       </div>
       <div class="modal-body calls-modal-body">
-        <p class="calls-intro">Transcribe one call locally. Audio stays in memory only; a transcript is saved to Library only when you explicitly choose to save it.</p>
+        <p class="calls-intro">Record meetings, walkthroughs, voice notes and field observations. Add photographs and videos, transcribe speech locally and preserve selected records in Library.</p>
+
+        <section class="calls-card calls-capture-details" aria-labelledby="calls-capture-details-heading">
+          <h2 id="calls-capture-details-heading">Capture details</h2>
+          <div class="calls-details-grid">
+            <label class="calls-field calls-field-wide" for="calls-save-title">
+              <span>Capture title</span>
+              <input id="calls-save-title" class="calls-save-title" type="text" maxlength="200" autocomplete="off" aria-describedby="calls-capture-status">
+            </label>
+            <label class="calls-field" for="calls-capture-type">
+              <span>Capture type</span>
+              <select id="calls-capture-type">
+                <option>Meeting</option>
+                <option>Field Observation</option>
+                <option>Walkthrough</option>
+                <option>Training</option>
+                <option>Voice Note</option>
+                <option>Supplier Conversation</option>
+                <option>Other</option>
+              </select>
+            </label>
+            <label class="calls-field calls-field-wide" for="calls-capture-notes">
+              <span>General notes (optional)</span>
+              <textarea id="calls-capture-notes" maxlength="4000" rows="3" aria-describedby="calls-capture-status"></textarea>
+            </label>
+          </div>
+          <p id="calls-capture-created" class="calls-file-details"></p>
+          <p id="calls-capture-status" class="calls-status" role="status" aria-live="polite">Capture is ready.</p>
+        </section>
 
         <section class="calls-card calls-history-card" aria-labelledby="calls-history-heading">
           <div class="calls-history-header">
             <div>
-              <h2 id="calls-history-heading">Saved transcripts</h2>
-              <p class="calls-requirements">A read-only view of your MarketMatch Calls transcripts in Library.</p>
+              <h2 id="calls-history-heading">Saved Captures</h2>
+              <p class="calls-requirements">A read-only view of your MarketMatch Capture records and earlier saved transcripts in Library.</p>
             </div>
             <button type="button" id="calls-history-refresh-btn" class="calls-button">Refresh history</button>
           </div>
-          <p id="calls-history-status" class="calls-status" role="status" aria-live="polite">Open Calls to load saved transcripts.</p>
-          <p id="calls-history-empty" class="calls-empty-result" hidden>No saved Calls transcripts were found.</p>
-          <ul id="calls-history-list" class="calls-history-list" aria-label="Saved Calls transcripts" hidden></ul>
+          <p id="calls-history-status" class="calls-status" role="status" aria-live="polite">Open Capture to load saved records.</p>
+          <p id="calls-history-empty" class="calls-empty-result" hidden>No saved Captures were found.</p>
+          <ul id="calls-history-list" class="calls-history-list" aria-label="Saved Captures" hidden></ul>
         </section>
 
         <section class="calls-card calls-recording-card" aria-labelledby="calls-recording-heading">
-          <h2 id="calls-recording-heading">Microphone</h2>
+          <h2 id="calls-recording-heading">Voice — Microphone</h2>
           <p id="calls-recording-requirements" class="calls-requirements">Record in this browser, then review the generated canonical mono 16 kHz PCM WAV before transcription. Microphone access starts only when you choose Start recording.</p>
           <div id="calls-recording-indicator" class="calls-recording-indicator" role="status" aria-live="polite" hidden>
             <span class="calls-recording-dot" aria-hidden="true"></span>
@@ -288,13 +316,13 @@
           <audio id="calls-recording-preview" class="calls-recording-preview" controls preload="metadata" aria-label="Recorded microphone audio preview" hidden></audio>
           <div class="calls-actions">
             <button type="button" id="calls-record-submit-btn" class="calls-button calls-button-primary" disabled>Transcribe recorded audio</button>
-            <button type="button" id="calls-record-clear-btn" class="calls-button" disabled>Clear</button>
+            <button type="button" id="calls-record-clear-btn" class="calls-button" disabled>Clear Capture</button>
           </div>
           <p id="calls-recording-status" class="calls-status" role="status" aria-live="polite">Start a recording when you are ready.</p>
         </section>
 
         <section class="calls-card" aria-labelledby="calls-upload-heading">
-          <h2 id="calls-upload-heading">Canonical WAV</h2>
+          <h2 id="calls-upload-heading">Voice — Canonical WAV</h2>
           <p id="calls-requirements" class="calls-requirements">Choose a mono 16 kHz signed 16-bit PCM <code>.wav</code> file, up to 20 MiB. This pilot does not convert other audio formats.</p>
           <label class="calls-file-label" for="calls-file-input">Select WAV file</label>
           <input id="calls-file-input" class="calls-file-input" type="file" accept=".wav" aria-describedby="calls-requirements calls-file-details">
@@ -302,7 +330,7 @@
           <div class="calls-actions">
             <button type="button" id="calls-submit-btn" class="calls-button calls-button-primary" disabled>Transcribe</button>
             <button type="button" id="calls-cancel-btn" class="calls-button" hidden>Cancel</button>
-            <button type="button" id="calls-reset-btn" class="calls-button" disabled>Clear</button>
+            <button type="button" id="calls-reset-btn" class="calls-button" disabled>Clear Capture</button>
           </div>
           <p id="calls-status" class="calls-status" role="status" aria-live="polite">Select a canonical WAV file to begin.</p>
         </section>
@@ -322,10 +350,10 @@
             <ol id="calls-segments" class="calls-segments"></ol>
           </div>
           <div id="calls-analysis" class="calls-analysis" aria-labelledby="calls-analysis-heading" hidden>
-            <h3 id="calls-analysis-heading">Call analysis</h3>
-            <p class="calls-requirements">Generate an AI-produced draft from this transcript for review. Analysis stays in memory and is not saved to Library.</p>
+            <h3 id="calls-analysis-heading">Transcript analysis</h3>
+            <p class="calls-requirements">Current AI analysis uses the transcript only. Photo and video interpretation is not included yet. Analysis stays in memory and is not saved to Library.</p>
             <div class="calls-actions">
-              <button type="button" id="calls-analysis-generate-btn" class="calls-button calls-button-primary" disabled>Generate call analysis</button>
+              <button type="button" id="calls-analysis-generate-btn" class="calls-button calls-button-primary" disabled>Generate transcript analysis</button>
               <button type="button" id="calls-analysis-regenerate-btn" class="calls-button" disabled hidden>Regenerate analysis</button>
               <button type="button" id="calls-analysis-copy-btn" class="calls-button" disabled hidden>Copy analysis</button>
             </div>
@@ -349,16 +377,44 @@
               </section>
             </div>
           </div>
-          <div id="calls-save" class="calls-save" hidden>
-            <h3>Save transcript</h3>
-            <p class="calls-requirements">Saving is optional. The transcript will be stored as an AI-generated document in your existing Library; audio is not saved.</p>
-            <label class="calls-save-label" for="calls-save-title">Document title</label>
-            <input id="calls-save-title" class="calls-save-title" type="text" autocomplete="off" aria-describedby="calls-save-status" disabled>
-            <div class="calls-actions">
-              <button type="button" id="calls-save-btn" class="calls-button calls-button-primary" disabled>Save to Library</button>
-            </div>
-            <p id="calls-save-status" class="calls-status" role="status" aria-live="polite"></p>
+        </section>
+
+        <section class="calls-card" aria-labelledby="calls-photos-heading">
+          <h2 id="calls-photos-heading">Photos</h2>
+          <p class="calls-requirements">JPEG, PNG or WebP, up to 20 MiB each. Photos remain in memory and are not uploaded.</p>
+          <label class="calls-file-label" for="calls-photo-input">Add photo</label>
+          <input id="calls-photo-input" class="calls-file-input" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="calls-photo-status">
+          <label class="calls-file-label calls-camera-label" for="calls-photo-camera-input">Take photo with camera</label>
+          <input id="calls-photo-camera-input" class="calls-file-input" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" aria-describedby="calls-photo-status">
+          <p id="calls-photo-status" class="calls-status" role="status" aria-live="polite">No photos added.</p>
+          <ul id="calls-photo-list" class="calls-media-list" aria-label="Capture photographs"></ul>
+        </section>
+
+        <section class="calls-card" aria-labelledby="calls-videos-heading">
+          <h2 id="calls-videos-heading">Videos</h2>
+          <p class="calls-requirements">MP4, WebM or QuickTime, up to 100 MiB each. Videos remain in memory and are not uploaded or analyzed.</p>
+          <label class="calls-file-label" for="calls-video-input">Add video</label>
+          <input id="calls-video-input" class="calls-file-input" type="file" accept="video/mp4,video/webm,video/quicktime" aria-describedby="calls-video-status">
+          <label class="calls-file-label calls-camera-label" for="calls-video-camera-input">Record video with camera</label>
+          <input id="calls-video-camera-input" class="calls-file-input" type="file" accept="video/mp4,video/webm,video/quicktime" capture="environment" aria-describedby="calls-video-status">
+          <p id="calls-video-status" class="calls-status" role="status" aria-live="polite">No videos added.</p>
+          <ul id="calls-video-list" class="calls-media-list" aria-label="Capture videos"></ul>
+        </section>
+
+        <section class="calls-card" aria-labelledby="calls-timeline-heading">
+          <h2 id="calls-timeline-heading">Capture timeline</h2>
+          <p class="calls-requirements">A chronological in-memory activity view for this Capture.</p>
+          <ol id="calls-timeline-list" class="calls-timeline-list" aria-live="polite"></ol>
+        </section>
+
+        <section id="calls-save" class="calls-card calls-save" aria-labelledby="calls-save-heading">
+          <h2 id="calls-save-heading">Save Capture to Library</h2>
+          <p class="calls-requirements">Saving is explicit. The textual Capture record is stored in Library; audio, photos and videos are not saved.</p>
+          <p class="calls-media-persistence-notice">Photos and videos in this pilot remain in memory and are not saved.</p>
+          <div class="calls-actions">
+            <button type="button" id="calls-save-btn" class="calls-button calls-button-primary" disabled>Save Capture to Library</button>
           </div>
+          <p id="calls-save-status" class="calls-status" role="status" aria-live="polite">Add notes, media or a transcript before saving.</p>
         </section>
       </div>
     </div>
@@ -1004,13 +1060,13 @@
           </svg>
           <span class="grow">Gallery</span>
         </div>
-        <div class="list-item" id="tool-calls-btn" role="button" tabindex="0" aria-label="Open Calls transcription">
+        <div class="list-item" id="tool-calls-btn" role="button" tabindex="0" aria-label="Open Capture">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
             style="flex-shrink:0;opacity:0.5;" aria-hidden="true">
             <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.69 2.8a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.33 1.84.56 2.8.69A2 2 0 0 1 22 16.92z"/>
           </svg>
-          <span class="grow">Calls</span>
+          <span class="grow">Capture</span>
         </div>
         <div class="list-item" id="tool-library-btn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;opacity:0.5;">

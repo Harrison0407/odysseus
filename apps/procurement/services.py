@@ -321,3 +321,58 @@ def freeze_package(package, user, *, incoterm="", currency="USD", payment_terms=
     package.save()
     audit.log(AuditEvent.Action.PACKAGE_FREEZE, instance=package, actor=user, summary=f"Paquete congelado: {package}")
     return package
+
+
+# ---------------------------------------------------------------------------
+# Client-safe verification assertions and site aliases (spec sections 7-8)
+# ---------------------------------------------------------------------------
+
+
+def client_safe_site_alias(party, package) -> str:
+    """A package-scoped alias (e.g. "Verified Production Site 1") that
+    never reveals the source Party and is never a globally stable
+    correlation identifier — the same real factory may receive a
+    different alias number in a different package."""
+    from apps.governance.models import RoleAssignment
+
+    ordered_ids = list(
+        RoleAssignment.objects.filter(package=package, role_code__in=["production_factory", "production_site"])
+        .order_by("created_at").values_list("party_id", flat=True).distinct()
+    )
+    try:
+        index = ordered_ids.index(party.id) + 1
+    except ValueError:
+        index = len(ordered_ids) + 1
+    return f"Verified Production Site {index}"
+
+
+@transaction.atomic
+def create_verification_assertion(package, assertion_code, client_visible_wording, user, *, source_evidence_bundle=None,
+                                   source_party=None, valid_until=None) -> "VerificationAssertion":
+    from apps.audit.models import EvidenceBundle
+
+    from .models import VerificationAssertion
+
+    from apps.governance import services as governance_services
+
+    if not governance_services.has_capability(user, "CREATE_COMMERCIAL_DOCUMENT", package=package):
+        raise PackageError("No tiene permiso para crear aserciones de verificación en este paquete.")
+    if source_evidence_bundle is not None and source_evidence_bundle.status != EvidenceBundle.Status.VERIFIED:
+        raise PackageError("La aserción requiere un paquete de evidencia ya verificado, no solo cargado.")
+    assertion = VerificationAssertion.objects.create(
+        package=package, assertion_code=assertion_code, client_visible_wording=client_visible_wording,
+        source_evidence_bundle=source_evidence_bundle, source_party=source_party, verifier=user,
+        verified_at=timezone.now(), valid_until=valid_until, created_by=user,
+    )
+    audit.log(AuditEvent.Action.VERIFICATION_ASSERTION, instance=assertion, actor=user, summary=f"Aserción de verificación creada: {assertion}")
+    return assertion
+
+
+@transaction.atomic
+def revoke_verification_assertion(assertion: "VerificationAssertion", user) -> "VerificationAssertion":
+    assertion.is_revoked = True
+    assertion.revoked_at = timezone.now()
+    assertion.revoked_by = user
+    assertion.save()
+    audit.log(AuditEvent.Action.VERIFICATION_ASSERTION, instance=assertion, actor=user, summary=f"Aserción de verificación revocada: {assertion}")
+    return assertion

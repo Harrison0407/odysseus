@@ -166,6 +166,7 @@ Full transcript in `docs/implementation-log.md`.
 | Physical building/floor/apartment hierarchy | `apps.projects` | `BuildingFamily` (new), `Building`/`Floor`/`Unit` (extended, ADR-033) | `/propiedades/` catalog, family/building/unit detail, search | `tests/test_property_master.py` (20 tests) | Done |
 | Drawing and floor-plan register | `apps.drawings` (new app) | `Drawing` (ADR-034) | `/planos/` list/detail, linked from building/unit detail | `tests/test_drawing_register.py` (12 tests) | Done — graphical/spatial floor-plan schematic explicitly not built (A39) |
 | Order destination allocation and purchased spares | `apps.procurement` (extended) | `OrderLineAllocation`, `PurchasedSpare` (new, ADR-035); `PurchaseOrderLine.required_quantity`, `InventoryLot.purchased_spare` (extended) | `/compras/lineas/<id>/asignacion/`, `/compras/asignaciones/`, `/compras/repuestos/` | `tests/test_order_allocation_spares.py` (20 tests) | Done — PO-approval block is a visible warning, not a hard gate (A40, no existing PO-approval transition to attach to) |
+| Field issue reporting and corrective-action tracking | `apps.fieldissues` (new app) | `FieldIssue`, `FieldIssueEvidence`, `IssueCategory` (ADR-036) | `/incidencias/` report/list/detail, filtered dashboard views | `tests/test_field_issues.py` (20 tests) | Done — full lifecycle including reject/resubmit/reinspection live-validated end to end |
 
 ## Explicitly out of scope for this delivery (see `KNOWN_LIMITATIONS.md`)
 

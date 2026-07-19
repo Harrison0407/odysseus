@@ -59,6 +59,18 @@
                 <li class="nav-item"><a class="nav-link" href="{% url 'claims:list' %}">{% trans "Reclamos" %}</a></li>
                 <li class="nav-item"><a class="nav-link" href="{% url 'projects:family-list' %}">{% trans "Edificios y Unidades" %}</a></li>
                 <li class="nav-item"><a class="nav-link" href="{% url 'drawings:list' %}">{% trans "Planos" %}</a></li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" id="incidenciasDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        {% trans "Incidencias de Campo" %}
+                    </a>
+                    <ul class="dropdown-menu" aria-labelledby="incidenciasDropdown">
+                        <li><a class="dropdown-item" href="{% url 'fieldissues:report' %}">{% trans "Reportar incidencia" %}</a></li>
+                        <li><a class="dropdown-item" href="{% url 'fieldissues:list' %}">{% trans "Todas" %}</a></li>
+                        <li><a class="dropdown-item" href="{% url 'fieldissues:list' %}?view=reported-by-me">{% trans "Reportadas por mí" %}</a></li>
+                        <li><a class="dropdown-item" href="{% url 'fieldissues:list' %}?view=assigned-to-me">{% trans "Asignadas a mí" %}</a></li>
+                        <li><a class="dropdown-item" href="{% url 'fieldissues:list' %}?view=awaiting-verification">{% trans "Pendiente de verificación" %}</a></li>
+                    </ul>
+                </li>
                 <li class="nav-item"><a class="nav-link" href="{% url 'workflow:inbox' %}">{% trans "Flujo y Entregas" %}</a></li>
             </ul>
             <span class="navbar-text text-white me-3">{{ user.get_full_name|default:user.username }}</span>

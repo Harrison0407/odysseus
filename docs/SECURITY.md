@@ -165,6 +165,48 @@
   Fixed and covered by a regression test
   (`tests/test_storage_suitability.py::TestLotDetailIsolation`).
 
+## Physical property / field operations release (added in a later session)
+
+- **Building/floor/unit/drawing/allocation/field-issue access is
+  organization- and project-scoped the same way as everywhere else in
+  this system** — every detail view does a direct
+  `get_object_or_404(..., <path>__organization=request.user.profile
+  .organization)` lookup (never a bare `pk=pk` fetch followed by a
+  permission check after the fact) plus
+  `apps.workflow.services.user_can_access_project` for project-level
+  isolation, with the same management-role bypass used throughout.
+  Verified by `tests/test_property_master.py`,
+  `tests/test_drawing_register.py`, `tests/test_order_allocation_spares.py`,
+  and `tests/test_field_issues.py` (cross-organization → 404;
+  no-project-access → 404; explicit `UserProjectAccess` grant → 200;
+  management role → 200 without a grant).
+- **`Unit.permanent_code` is generated once and never regenerated** —
+  the identifier a QR label, order allocation, drawing link, or field
+  issue points at cannot silently change out from under it later.
+- **A drawing revision is always a new row** — `supersede_drawing`
+  never edits `source_document` (or anything else) on the prior
+  `Drawing`; any historical FK elsewhere keeps pointing at the exact
+  revision it referenced, verified by a dedicated test
+  (`test_historical_reference_to_old_drawing_is_never_silently_replaced`).
+- **Purchased-spare confirmation and drawing approval both require
+  the same senior-authorization permission** (`can_override_gates`) —
+  neither can be triggered by an ordinary user, verified by dedicated
+  unauthorized-attempt tests in both test files.
+- **Field-issue closure cannot be granted by completing the work.**
+  `verify_and_close_issue` re-checks `can_override_gates`
+  unconditionally, including in the specific test scenario where the
+  same user who performed the correction attempts to also close it
+  without holding that permission (denied).
+- **A rejected field-issue correction's evidence and comments are
+  never deleted** — resubmission only ever adds new evidence and
+  starts a new verification cycle, verified by a dedicated test
+  asserting the original "after" evidence row still exists post-
+  rejection.
+- **Duplicate-submission protection**: `report_issue` returns the
+  existing row (not a new one) for an identical building+reporter+
+  title report within a 60-second window — verified by both a
+  service-level and an HTTP-level double-submit test.
+
 ## Known gaps (see `KNOWN_LIMITATIONS.md` for the full list)
 
 - No automated dependency vulnerability scan is wired into this delivery

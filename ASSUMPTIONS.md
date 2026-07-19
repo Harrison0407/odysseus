@@ -395,3 +395,34 @@ instead, exactly as required, and is **not** listed here as a resolved assumptio
   alter inventory... except via valid posted movements" and "a
   photo/scan/link must never authorize a consequential action by
   itself."
+- **A42. Field-issue closure authority reuses `can_override_gates`
+  rather than a new single-purpose permission flag.** The release asks
+  for "configurable roles and permissions, never hard-coded names" —
+  it does not require a dedicated "can verify field issues" flag
+  distinct from the senior-authorization concept already threaded
+  through every other approval-style action in this release (drawing
+  approval, purchased-spare confirmation). Reusing it keeps one
+  permission concept instead of proliferating near-identical boolean
+  role flags; a future policy wanting a narrower, issue-specific
+  permission can add one without changing the enforcement pattern.
+- **A43. "The verifier must be independent from the worker when
+  configured by policy" is satisfied at its stated minimum, not with a
+  hard `verifier != worker` block.** The release's own wording is
+  "at minimum, the worker must not automatically gain closure
+  permission merely by completing the work" — `verify_and_close_issue`
+  re-checks `can_override_gates` unconditionally regardless of who
+  performed the correction, so a plain worker without that permission
+  can never self-close. It does not additionally forbid a
+  permission-holder from closing their own work, since the spec frames
+  strict independence as policy-configurable ("when configured by
+  policy"), not a universal hard rule, and no such policy toggle was
+  otherwise specified. A future stricter policy could add a
+  `verifier_id != correction_performed_by_id` check without changing
+  this design.
+- **A44. `FieldIssue.category`/`item` reuse the existing configurable-
+  taxonomy pattern (`IssueCategory`, mirroring `DocumentType`) and the
+  existing `items.Item` catalog, rather than a hard-coded choices
+  list.** The release names example categories (windows, doors,
+  kitchens, ...) but the system already has an established convention
+  for "configurable taxonomy, never hard-coded into business logic" —
+  reusing it here avoids a second taxonomy mechanism.

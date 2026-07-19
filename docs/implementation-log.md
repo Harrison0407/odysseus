@@ -804,3 +804,49 @@ documented order.
     fixture PO line (`DT-BEACH804`, 40 units) confirmed a 30-unit
     allocation plus a 10-unit spare confirmation correctly reduced the
     unallocated badge to 0.
+44. **Field issue reporting and corrective-action tracking.** New
+    `apps.fieldissues` app (ADR-036): `FieldIssue` requires only
+    `building` at creation — floor/unit/room are all optional and
+    refinable later without touching the original `created_at`/
+    `created_by`. Full lifecycle
+    (REPORTED→ASSIGNED→IN_PROGRESS→CORRECTION_COMPLETED→
+    READY_FOR_VERIFICATION→VERIFIED_CLOSED, plus
+    RETURNED_FOR_CORRECTION→RESUBMITTED→REINSPECTION looping back)
+    implemented in `apps.fieldissues.services`, each transition
+    server-side guarded against running out of order. Comments reuse
+    the existing generic `apps.audit.Comment`; evidence reuses
+    `apps.audit.services.attach_evidence` wrapped by one new
+    `FieldIssueEvidence` (`stage`: before/during/after — the one piece
+    of metadata the generic `Attachment` doesn't carry).
+    `verify_and_close_issue` requires `can_override_gates` — the same
+    permission every other approval-style action in this release
+    uses — checked unconditionally regardless of who performed the
+    correction, so completing the work never grants closure authority
+    by itself (A42/A43). Closure is blocked without a corrective
+    description, a responsible party, a completion timestamp, before
+    evidence (or an authorized waiver reason), and after evidence.
+    `IssueCategory` mirrors the existing `DocumentType`
+    configurable-taxonomy pattern (A44). New `/incidencias/` report
+    form (mobile-first, only building required, direct photo capture)
+    and filtered dashboard views (reported-by-me, assigned-to-me/team,
+    overdue, awaiting correction/verification, rejected/reopened,
+    closed), linked from the main nav. 20 new tests
+    (`tests/test_field_issues.py`), covering mobile creation with only
+    a building, duplicate-click idempotency, evidence provenance
+    (including duplicate-content detection), assignment/reassignment,
+    correction blocked without before-evidence-or-waiver, closure
+    blocked without after-evidence, unauthorized closure attempt
+    (including by the same person who performed the correction),
+    full closure by an authorized independent verifier, rejection
+    preserving all prior evidence/history, resubmission adding new
+    evidence without erasing the old, a full reject→resubmit→
+    reinspection→verify cycle, cross-organization/cross-project HTTP
+    isolation, and a full HTTP report→list workflow with duplicate-
+    submission protection — 318/318 passing (298 pre-existing + 20
+    new). Verified migrations apply cleanly from an empty database.
+    Live HTTP walkthrough against the real imported ARENA T1 Building
+    11 confirmed the complete lifecycle end-to-end: reported → assigned
+    → in-progress → correction recorded with real before/after photo
+    uploads (SHA-256 hashed) → ready for verification → verified and
+    closed by Harrison — plus a genuine second-organization user denied
+    (404) on direct URL access to the issue.

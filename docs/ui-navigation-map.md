@@ -123,6 +123,12 @@
 | `/compras/asignaciones/<id>/reasignar/` (POST) | `allocation_reassign` | Closes the original allocation, creates a new one, preserves full history |
 | `/compras/asignaciones/` | `allocations_by_destination` | All active allocations grouped by building/unit |
 | `/compras/repuestos/` | `purchased_spares_list` | All confirmed purchased spares with ledger-derived received/available/reserved quantities |
+| `/incidencias/` | `apps.fieldissues.views.issue_list` | Filtered dashboards: reported-by-me, assigned-to-me/team, overdue, awaiting correction/verification, rejected/reopened, closed |
+| `/incidencias/reportar/` | `issue_report` | Mobile-first report form — only building is required |
+| `/incidencias/<id>/` | `issue_detail` | Full detail, evidence gallery by stage, all lifecycle action buttons |
+| `/incidencias/<id>/asignar/` (POST) | `issue_assign` | Assigns/reassigns to a user or department |
+| `/incidencias/<id>/en-progreso/`, `/corregir/`, `/listo-para-verificar/`, `/verificar-cerrar/`, `/rechazar/`, `/reenviar/`, `/reinspeccion/` (POST) | lifecycle actions | Each transition server-side guarded; closure requires `can_override_gates` regardless of who did the work |
+| `/incidencias/<id>/evidencia/` (POST) | `issue_add_evidence` | Before/during/after staged evidence upload, reusing the shared upload path |
 
 | Role code | Dashboard template |
 |---|---|

@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>{{ issue.title }}</h3>
+<p>
+    <span class="badge bg-secondary">{{ issue.get_status_display }}</span>
+    <span class="badge bg-info text-dark">{{ issue.get_priority_display }}</span>
+</p>
+<a class="btn btn-outline-secondary btn-sm mb-3" href="{% url 'fieldissues:list' %}">&larr; Volver a Incidencias</a>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <table class="table table-sm mb-0">
+            <tr><th>Edificio</th><td>{{ issue.building }}</td></tr>
+            <tr><th>Piso</th><td>{{ issue.floor|default:"—" }}</td></tr>
+            <tr><th>Unidad</th><td>{{ issue.unit|default:"—" }}</td></tr>
+            <tr><th>Ambiente/ubicación</th><td>{{ issue.room_or_location|default:"—" }}</td></tr>
+            <tr><th>Categoría</th><td>{{ issue.category|default:"—" }}</td></tr>
+            <tr><th>Descripción</th><td>{{ issue.description|default:"—" }}</td></tr>
+            <tr><th>Responsable</th><td>{{ issue.responsible_user|default:issue.responsible_department|default:"—" }}</td></tr>
+            <tr><th>Reportado por</th><td>{{ issue.created_by }} el {{ issue.created_at|date:"d/m/Y H:i" }}</td></tr>
+            <tr><th>Descripción de la corrección</th><td>{{ issue.correction_description|default:"—" }}</td></tr>
+            <tr><th>Corrección realizada por</th><td>{{ issue.correction_performed_by|default:"—" }}</td></tr>
+            <tr><th>Verificado por</th><td>{{ issue.verified_by|default:"—" }} {% if issue.verified_at %}({{ issue.verified_at|date:"d/m/Y H:i" }}){% endif %}</td></tr>
+        </table>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Evidencia</div>
+    <div class="card-body">
+        <div class="row">
+        {% for e in evidence %}
+            <div class="col-6 col-md-3 mb-2">
+                <div class="badge bg-secondary mb-1">{{ e.get_stage_display }}</div>
+                {% if e.document.current_version %}
+                <a href="{% url 'documents:download' e.document.pk e.document.current_version.pk %}" class="d-block small">{{ e.document.title }}</a>
+                {% endif %}
+            </div>
+        {% empty %}
+            <p class="text-muted">Sin evidencia adjunta.</p>
+        {% endfor %}
+        </div>
+        <form method="post" action="{% url 'fieldissues:add-evidence' issue.pk %}" enctype="multipart/form-data" class="row g-2 mt-2">
+            {% csrf_token %}
+            <div class="col-12 col-md-3">
+                <select name="stage" class="form-control form-control-sm">
+                    <option value="before">Antes</option>
+                    <option value="during">Durante</option>
+                    <option value="after">Después</option>
+                </select>
+            </div>
+            <div class="col-12 col-md-3">{{ upload_form.document_type }}</div>
+            <div class="col-12 col-md-3">{{ upload_form.title }}</div>
+            <div class="col-12 col-md-3">{{ upload_form.file }}</div>
+            <div class="col-12"><button class="btn btn-outline-primary btn-sm" type="submit">Adjuntar evidencia</button></div>
+        </form>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Acciones</div>
+    <div class="card-body d-flex flex-wrap gap-3">
+        {% if issue.status == "reported" or issue.status == "assigned" %}
+        <form method="post" action="{% url 'fieldissues:assign' issue.pk %}" class="row g-2">
+            {% csrf_token %}
+            <div class="col-auto">{{ assign_form.responsible_user }}</div>
+            <div class="col-auto">{{ assign_form.responsible_department }}</div>
+            <div class="col-auto"><button class="btn btn-primary btn-sm" type="submit">Asignar</button></div>
+        </form>
+        {% endif %}
+        {% if issue.status == "assigned" %}
+        <form method="post" action="{% url 'fieldissues:start-progress' issue.pk %}">
+            {% csrf_token %}<button class="btn btn-info btn-sm" type="submit">Marcar en progreso</button>
+        </form>
+        {% endif %}
+        {% if issue.status == "in_progress" or issue.status == "reinspection" %}
+        <form method="post" action="{% url 'fieldissues:record-correction' issue.pk %}" class="row g-2">
+            {% csrf_token %}
+            <div class="col-12"><textarea name="description" class="form-control form-control-sm" rows="2" placeholder="Descripción de la corrección" required></textarea></div>
+            <div class="col-12"><input type="text" name="before_evidence_waived_reason" class="form-control form-control-sm" placeholder="Razón si falta evidencia 'antes' (opcional)"></div>
+            <div class="col-12"><button class="btn btn-success btn-sm" type="submit">Registrar corrección</button></div>
+        </form>
+        {% endif %}
+        {% if issue.status == "correction_completed" %}
+        <form method="post" action="{% url 'fieldissues:mark-ready' issue.pk %}">
+            {% csrf_token %}<button class="btn btn-primary btn-sm" type="submit">Enviar a verificación</button>
+        </form>
+        {% endif %}
+        {% if issue.status == "ready_for_verification" or issue.status == "reinspection" %}
+        <form method="post" action="{% url 'fieldissues:verify-close' issue.pk %}" class="row g-2">
+            {% csrf_token %}
+            <div class="col-12"><textarea name="notes" class="form-control form-control-sm" rows="2" placeholder="Notas de verificación"></textarea></div>
+            <div class="col-12"><button class="btn btn-success btn-sm" type="submit">Verificar y cerrar</button></div>
+        </form>
+        <form method="post" action="{% url 'fieldissues:reject' issue.pk %}" class="row g-2">
+            {% csrf_token %}
+            <div class="col-12"><textarea name="reason" class="form-control form-control-sm" rows="2" placeholder="Razón del rechazo" required></textarea></div>
+            <div class="col-12"><button class="btn btn-danger btn-sm" type="submit">Rechazar corrección</button></div>
+        </form>
+        {% endif %}
+        {% if issue.status == "returned_for_correction" %}
+        <form method="post" action="{% url 'fieldissues:resubmit' issue.pk %}" class="row g-2">
+            {% csrf_token %}
+            <div class="col-12"><textarea name="description" class="form-control form-control-sm" rows="2" placeholder="Descripción de la nueva corrección" required></textarea></div>
+            <div class="col-12"><button class="btn btn-warning btn-sm" type="submit">Reenviar corrección</button></div>
+        </form>
+        {% endif %}
+        {% if issue.status == "resubmitted" %}
+        <form method="post" action="{% url 'fieldissues:mark-reinspection' issue.pk %}">
+            {% csrf_token %}<button class="btn btn-primary btn-sm" type="submit">Marcar para reinspección</button>
+        </form>
+        {% endif %}
+        {% if issue.status == "verified_closed" %}
+        <span class="text-muted">Incidencia verificada y cerrada.</span>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

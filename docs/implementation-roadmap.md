@@ -169,7 +169,11 @@ All four Priority 1 features are now complete. See
     quantity received/available/reserved always read from the existing
     inventory ledger, never a second balance. `/compras/lineas/<id>/
     asignacion/` + allocation/spares list screens.
-35. Field issue tracking — pending.
+35. ~~Field issue tracking~~ — **Done.** New `apps.fieldissues` app
+    (ADR-036): `FieldIssue` requires only `building`, everything else
+    refinable later; full lifecycle including reject/resubmit/
+    reinspection; closure requires `can_override_gates` regardless of
+    who performed the correction. `/incidencias/` screens.
 36. Lawson training and reference installations — pending.
 37. Apartment walkthroughs and corrective actions — pending.
 38. Unclassified Evidence Inbox — pending.

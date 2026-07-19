@@ -2,6 +2,29 @@
 
 Newest first.
 
+## ADR-036 — Field issues reuse Comment/Attachment-style provenance and the existing senior-authorization permission; before/after evidence gets one small stage-tagged wrapper
+**Decision:** `FieldIssue` (new `apps.fieldissues` app) requires only
+`building` at creation; every other location field (floor/unit/room)
+is optional and refinable later without touching `created_at`/
+`created_by`. Comments reuse the existing generic `apps.audit.Comment`
+model directly (no new comment model). Evidence reuses
+`apps.audit.services.attach_evidence` for the actual upload, wrapped by
+one new `FieldIssueEvidence` (`stage`: before/during/after) — the one
+piece of metadata the generic `Attachment` model doesn't carry that
+this feature's closure rule needs. `verify_and_close_issue` requires
+`can_override_gates`, the same permission every other approval-style
+action in this release already uses (drawing approval, purchased-spare
+confirmation).
+**Why:** Building-required-rest-optional matches "must be able to
+report quickly... refinable later without losing original provenance"
+directly. Reusing `Comment`/`attach_evidence` instead of building
+field-issue-specific equivalents keeps exactly one comment mechanism
+and one evidence-upload mechanism for the whole system. Reusing
+`can_override_gates` (rather than inventing `can_verify_field_issues`)
+keeps "closure authority must use configurable permissions, never
+hard-coded names" satisfied without a fourth near-identical permission
+flag (see ASSUMPTIONS A42/A43).
+
 ## ADR-035 — Purchased spares are an authorization record, not a second inventory balance; consumption is always a real ledger movement
 **Decision:** `PurchasedSpare` (new) records only the *authorization*
 (actor, permission, quantity, compatibility, reason, timestamp,

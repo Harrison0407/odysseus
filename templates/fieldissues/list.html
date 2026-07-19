@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center">
+    <h3>Incidencias de campo</h3>
+    <a class="btn btn-primary btn-sm" href="{% url 'fieldissues:report' %}">+ Reportar</a>
+</div>
+<div class="mb-3 d-flex flex-wrap gap-1">
+    <a class="btn btn-sm {% if not current_view %}btn-secondary{% else %}btn-outline-secondary{% endif %}" href="{% url 'fieldissues:list' %}">Todas</a>
+    <a class="btn btn-sm {% if current_view == 'reported-by-me' %}btn-secondary{% else %}btn-outline-secondary{% endif %}" href="?view=reported-by-me">Reportadas por mí</a>
+    <a class="btn btn-sm {% if current_view == 'assigned-to-me' %}btn-secondary{% else %}btn-outline-secondary{% endif %}" href="?view=assigned-to-me">Asignadas a mí</a>
+    <a class="btn btn-sm {% if current_view == 'assigned-to-my-team' %}btn-secondary{% else %}btn-outline-secondary{% endif %}" href="?view=assigned-to-my-team">Mi equipo</a>
+    <a class="btn btn-sm {% if current_view == 'overdue' %}btn-secondary{% else %}btn-outline-secondary{% endif %}" href="?view=overdue">Vencidas</a>
+    <a class="btn btn-sm {% if current_view == 'awaiting-correction' %}btn-secondary{% else %}btn-outline-secondary{% endif %}" href="?view=awaiting-correction">Pendiente de corrección</a>
+    <a class="btn btn-sm {% if current_view == 'awaiting-verification' %}btn-secondary{% else %}btn-outline-secondary{% endif %}" href="?view=awaiting-verification">Pendiente de verificación</a>
+    <a class="btn btn-sm {% if current_view == 'rejected-reopened' %}btn-secondary{% else %}btn-outline-secondary{% endif %}" href="?view=rejected-reopened">Rechazadas/reabiertas</a>
+    <a class="btn btn-sm {% if current_view == 'closed' %}btn-secondary{% else %}btn-outline-secondary{% endif %}" href="?view=closed">Cerradas</a>
+</div>
+<div class="table-responsive">
+<table class="table table-sm table-striped bg-white">
+    <thead><tr><th>Título</th><th>Edificio</th><th>Unidad</th><th>Prioridad</th><th>Responsable</th><th>Estado</th></tr></thead>
+    <tbody>
+    {% for issue in issues %}
+        <tr>
+            <td><a href="{% url 'fieldissues:detail' issue.pk %}">{{ issue.title }}</a></td>
+            <td>{{ issue.building }}</td>
+            <td>{{ issue.unit|default:"—" }}</td>
+            <td>{{ issue.get_priority_display }}</td>
+            <td>{{ issue.responsible_user|default:issue.responsible_department|default:"—" }}</td>
+            <td><span class="badge bg-secondary">{{ issue.get_status_display }}</span></td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="6" class="text-muted">Sin incidencias.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

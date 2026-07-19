@@ -414,6 +414,42 @@ is silently claimed to be done when it isn't.
 - `backup.sh`'s document-archiving step used a broken `docker run` volume
   invocation — fixed by archiving via `docker compose exec ... tar`.
 
+## Physical property / field operations release (added in a later session)
+
+- ~~Physical building/floor/apartment hierarchy~~ — **Done.**
+  `BuildingFamily` (new) + extended `Building`/`Floor`/`Unit`
+  (ADR-033), idempotent import from the 3 supplied source PDFs
+  (`apps.projects.services.import_physical_property_master`), stable
+  never-regenerated `Unit.permanent_code`. `/propiedades/` screens.
+- ~~Drawing and floor-plan register~~ — **Done.** New `apps.drawings`
+  app (ADR-034); a new revision is always a new row, never an edit of
+  a historical one. No graphical/spatial floor-plan schematic was
+  built (only a letter-grid table is available, no real coordinates —
+  A39); the real architectural PDFs remain linked/downloadable
+  instead. `/planos/` screens.
+- ~~Order destination allocation and purchased spares~~ — **Done.**
+  `OrderLineAllocation`/`PurchasedSpare` (new, ADR-035) extend
+  `apps.procurement`; a spare is an authorization record only —
+  quantity received/available/reserved always read from the existing
+  ledger. The "block PO approval on unresolved excess" requirement is
+  a visible warning banner, not a hard gate, since this codebase has
+  no existing "approve this PO" workflow transition to attach one to
+  (A40). `/compras/lineas/<id>/asignacion/` + allocation/spares
+  screens.
+- ~~Field issue reporting and corrective-action tracking~~ — **Done.**
+  New `apps.fieldissues` app (ADR-036); only `building` is required at
+  creation. Closure requires the same senior-authorization permission
+  every other approval-style action in this release uses
+  (`can_override_gates`), checked unconditionally regardless of who
+  performed the correction — a plain worker without that permission
+  can never self-close, though the release's own "at minimum" wording
+  does not additionally forbid a permission-holder from closing their
+  own work (A43). `/incidencias/` screens.
+- Lawson training/reference installations, apartment
+  walkthroughs/corrective actions, and the Unclassified Evidence Inbox
+  remain **not yet built** as of this entry — see
+  `docs/implementation-roadmap.md` for build order.
+
 ## Data-quality ambiguities (not bugs — see `DATA_QUALITY_AND_UNCERTAINTY.md`)
 
 The W5057/W5097 possible-match, the Sole-26 building/project labeling

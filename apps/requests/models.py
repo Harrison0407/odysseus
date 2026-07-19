@@ -260,6 +260,14 @@ class InstallationRecord(BaseModel):
         help_text="Primary photo, kept for backward compatibility — use the generic apps.audit.Attachment "
         "(content_type/object_id) for any additional evidence.",
     )
+    plan_template = models.ForeignKey(
+        "unitplans.UnitPlanTemplate", on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+        help_text="Set when linked from the interactive apartment plan — kept even if later superseded.",
+    )
+    plan_zone = models.ForeignKey(
+        "unitplans.PlanZone", on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+        help_text="The exact room/zone this installation belongs to, where known.",
+    )
 
     class Meta:
         ordering = ["-created_at"]
@@ -294,6 +302,14 @@ class InspectionRecord(BaseModel):
 
     previous_inspection = models.ForeignKey(
         "self", on_delete=models.SET_NULL, null=True, blank=True, related_name="reinspections"
+    )
+    plan_template = models.ForeignKey(
+        "unitplans.UnitPlanTemplate", on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+        help_text="Set when linked from the interactive apartment plan — kept even if later superseded.",
+    )
+    plan_zone = models.ForeignKey(
+        "unitplans.PlanZone", on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+        help_text="The exact room/zone this inspection belongs to, where known.",
     )
     technical_sign_off_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"

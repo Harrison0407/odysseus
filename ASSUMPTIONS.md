@@ -542,3 +542,99 @@ instead, exactly as required, and is **not** listed here as a resolved assumptio
   so this one shared function stays the single place cross-cutting
   isolation logic lives, instead of duplicating it per classifiable
   target type.
+- **A56. Of the two source PDFs beyond the unit-typology spreadsheet
+  and site-plan legend, only "PALMERA - PLANOS 13.11.2025.pdf" is an
+  actual per-unit-type architectural floor plan.** Direct visual
+  inspection of all 16 pages (rendered at 150dpi) confirms sheets
+  H-05/H-06/H-07/H-08 are genuinely labeled "APARTAMENTO TIPO A/B/C/D"
+  with furnished/dimensioned room layouts, and sheet H-09 is a real,
+  complete APT-number-to-tipo occupancy table for all 104 units
+  (cross-checked against — and found consistent with —
+  `apps.projects.building_source_data.palmera_rows()`'s already-
+  imported letter assignments). ARENA T1, MARE B, SOLE, SOLE PH, and
+  SOLE 26 have no equivalent per-unit-type drawing anywhere in the
+  supplied source material — only the site-plan legend and the
+  typology spreadsheet, neither of which shows room layouts. Per the
+  release's explicit instruction not to invent a template where the
+  source is insufficient, every template slot for those 5 families is
+  seeded as `Status.MISSING_SOURCE` with no zones, never a
+  plausible-looking but fabricated room boundary.
+- **A57. `UnitPlanTemplate` is resolved deterministically from
+  family + unit-type-letter + floor-variant, computed from data already
+  imported and verified in M1** (`Unit.apartment_letter`,
+  `Floor.level`, `Unit.is_penthouse`) **— never re-derived from the
+  family unit-spec tuples a second time.** `floor_variant` is `ALL_FLOORS`
+  for PALMERA (its real Tipo A-D sheets are letter-only, not
+  floor-specific — confirmed by H-04's typical-floor plan showing the
+  same 4 letters repeating on every residential level),
+  `PENTHOUSE_DUPLEX` for any `is_penthouse=True` unit (SOLE PH's
+  floor "4-5" units), `FIRST_FLOOR` for floor level 1 otherwise, and
+  `UPPER_FLOOR` for every other level — matching each family's real,
+  already-transcribed terrace/footprint differences (A32-era source
+  data) without adding a second parallel data source.
+- **A58. The "AI-proposed" PALMERA room zones (rectangular, not
+  pixel-perfect polygons) are real room identifications from the
+  actual furnished sub-view of each Tipo sheet, cropped and rendered at
+  150dpi, with rectangle boundaries visually estimated from that real
+  image — not fabricated room existence or count.** Every such zone is
+  seeded `validation_state=NEEDS_REVIEW`, `source_confidence=LOW`, and
+  the template itself stays `Status.DRAFT` (never `APPROVED`) until an
+  authorized user validates/approves it through the admin mapping
+  tool — satisfying "automated extraction is Draft by default" without
+  ever presenting a derived crop as an architect-approved drawing.
+- **A59. `UnitPlanTemplate`/`PlanZone` reuse the exact
+  versioned-immutable-row pattern already established for
+  `Drawing`/`OrderLineAllocation`/`EvidenceClassification`
+  (`supersedes` self-FK, `is_current`/`is_active` flag, never an
+  in-place edit).** A `UniqueConstraint` on (organization, code)
+  scoped to `is_current=True` (mirroring `UnitPlanAssignment`'s
+  one-current-assignment-per-unit constraint) allows a superseded
+  template to keep the same human-meaningful code as its replacement
+  without a collision — the same technique used for reassigned
+  allocations and reclassified evidence.
+- **A60. Superseding a template automatically moves every unit
+  currently assigned to it onto the new revision — but never touches
+  any FieldIssue/WalkthroughItem/InstallationRecord/InspectionRecord
+  already created against the old one, since those store their own
+  direct FK.** The alternative (leaving units pointed at a template
+  now marked `SUPERSEDED`) would mean the interactive viewer kept
+  showing an explicitly-replaced plan by default, which defeats the
+  purpose of uploading an improved/as-built drawing — while historical
+  traceability is guaranteed structurally by the direct FK on each
+  historical record, not by anything unit-assignment-related.
+- **A61. Editing an existing zone's shape/name/type through the admin
+  tool also never mutates the row in place — it always creates a new
+  `PlanZone` (`supersedes`) and marks the old one `is_active=False`,
+  the same as a template-level supersede.** Without this, correcting a
+  room boundary after a `FieldIssue` had already been created against
+  it would silently move that issue's "exact source-location
+  reference" out from under it — verified by a dedicated test that an
+  issue created against a zone keeps pointing at that zone's original
+  shape after the zone is later edited.
+- **A62. "Photograph" and "note" actions from a selected room reuse the
+  Unclassified Evidence Inbox's existing generic classification
+  mechanism (`unitplans.planzone` added to `CLASSIFIABLE_TARGETS`,
+  A54) rather than a new evidence model, and "installation record" /
+  "inspection item" get `plan_template`/`plan_zone` FKs for
+  traceability/display but no dedicated "quick create from a room"
+  flow.** Both `InstallationRecord` and `InspectionRecord` are already
+  multi-step domain workflows with their own real preconditions
+  (`project_receipt`/`delivery_line`, an existing `InstallationRecord`
+  to inspect) that don't fit a one-click "create from a room click"
+  the way `FieldIssue` and `WalkthroughItem` do — the release's own
+  example list, section "ISSUE CREATION FROM PLAN," only fully details
+  the field-issue case. A bare "note not tied to a photo or issue" is
+  not modeled as a new object — free text already has a home on the
+  issue description or the evidence's own `notes` field.
+- **A63. The 4 real PALMERA derived-crop images live at
+  `imports/buildings/derived_plans/*.jpg`, alongside the existing
+  source PDFs — and, like those PDFs, that path is gitignored.** This
+  matches the release's own established precedent exactly:
+  `import_buildings_and_units` and `register_source_drawings` already
+  depend on `imports/buildings/*.pdf` existing locally but untracked;
+  `seed_unit_plan_templates` depends on these 4 derived crops the same
+  way. The actual operational copy each `UnitPlanTemplate` serves from
+  lives in `protected_documents/` (via the normal `Document`/
+  `DocumentVersion` upload mechanism, itself already gitignored) — the
+  `imports/` copy is only ever the one-time seed input, not a second
+  source of truth.

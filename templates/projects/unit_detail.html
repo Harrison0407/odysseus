@@ -3,6 +3,7 @@
 <h3>{{ unit.building }} / {{ unit.name }}{% if unit.is_penthouse %} <span class="badge bg-warning text-dark">Penthouse</span>{% endif %}</h3>
 <p class="text-muted"><code>{{ unit.permanent_code }}</code></p>
 <a class="btn btn-outline-secondary btn-sm mb-3" href="{% url 'projects:building-detail' unit.building.pk %}">&larr; Volver al edificio</a>
+<a class="btn btn-primary btn-sm mb-3" href="{% url 'unitplans:unit-plan' unit.pk %}">Ver plano interactivo</a>
 
 <div class="card mb-3">
     <div class="card-header">Detalle de la unidad</div>

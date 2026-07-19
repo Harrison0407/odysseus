@@ -13,7 +13,9 @@
             <tr><th>Edificio</th><td>{{ issue.building }}</td></tr>
             <tr><th>Piso</th><td>{{ issue.floor|default:"—" }}</td></tr>
             <tr><th>Unidad</th><td>{{ issue.unit|default:"—" }}</td></tr>
-            <tr><th>Ambiente/ubicación</th><td>{{ issue.room_or_location|default:"—" }}</td></tr>
+            <tr><th>Ambiente/ubicación</th><td>{{ issue.room_or_location|default:"—" }}
+                {% if issue.plan_zone %}<a class="btn btn-outline-primary btn-sm ms-2" href="{% url 'unitplans:unit-plan' issue.unit_id %}?highlight_zone={{ issue.plan_zone_id }}">Ver en el plano</a>{% endif %}
+            </td></tr>
             <tr><th>Categoría</th><td>{{ issue.category|default:"—" }}</td></tr>
             <tr><th>Descripción</th><td>{{ issue.description|default:"—" }}</td></tr>
             <tr><th>Responsable</th><td>{{ issue.responsible_user|default:issue.responsible_department|default:"—" }}</td></tr>

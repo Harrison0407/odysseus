@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Crear incidencia — {{ zone.name_es }}</h3>
+<p class="text-muted">{{ unit.building }} / {{ unit.name }} — {{ zone.display_type_label }}</p>
+<form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button class="btn btn-primary" type="submit">Crear incidencia</button>
+    <a class="btn btn-outline-secondary" href="{% url 'unitplans:unit-plan' unit.pk %}">Cancelar</a>
+</form>
+{% endblock %}

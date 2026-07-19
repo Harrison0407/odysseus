@@ -1041,3 +1041,104 @@ documented order.
     pre-existing + 2 new). `manage.py check` and
     `makemigrations --check --dry-run` both clean (no schema changes
     were needed for either fix).
+49. **Interactive Apartment Plan / Room-Zone layer.** New
+    `apps.unitplans` app (ADR-040). Before writing any code, directly
+    inspected all 16 pages of the one architectural source PDF
+    (`imports/buildings/PALMERA - PLANOS 13.11.2025.pdf`, rendered at
+    150dpi via `pdftoppm`) to determine, honestly, which families
+    actually have a per-unit-type floor plan: only PALMERA does
+    (sheets H-05/06/07/08, "APARTAMENTO TIPO A/B/C/D", furnished and
+    dimensioned) plus a real APT-number occupancy table (H-09, all 104
+    units) that was cross-checked against — and found fully consistent
+    with — the already-imported `apartment_letter` values from M1.
+    ARENA T1, MARE B, SOLE, SOLE PH, and SOLE 26 have no per-unit
+    drawing anywhere in the supplied sources (only the site-plan legend
+    and the typology spreadsheet, both already used for the M1 import).
+    `UnitPlanTemplate` resolves deterministically from family +
+    `apartment_letter` + a computed floor-variant (first floor/upper
+    floor/all floors/penthouse duplex — derived from the already-
+    imported `Floor.level`/`Unit.is_penthouse`, A57); `PlanZone` holds
+    room/zone type, relative rect/polygon coordinates, and its own
+    validation lifecycle; `UnitPlanAssignment` links each `Unit` to its
+    current effective template. Both template and zone reuse the exact
+    versioned-immutable-row `supersedes`/`is_current` pattern as
+    `Drawing`/`OrderLineAllocation`/`EvidenceClassification` — a
+    `UniqueConstraint` scoped to `is_current=True` (not a plain
+    unique-together) lets a superseded row keep its human-meaningful
+    code without colliding with its replacement, mirroring
+    `UnitPlanAssignment`'s existing one-current-per-unit constraint.
+    `management/commands/seed_unit_plan_templates.py` seeds every
+    family/letter/floor-variant slot actually present among imported
+    units as `Missing Source`, then upgrades exactly the 4 real PALMERA
+    templates with a genuine derived crop (cropped via Pillow from the
+    150dpi render, uploaded through the normal Document/DocumentVersion
+    mechanism — checksum-tracked like every other upload in this
+    system) and AI-proposed rectangular zones, `Draft`/`Needs Review`
+    by construction, never presented as architect-approved (the source
+    sheet itself is stamped "PLANOS AUN EN PROCESO"). Interactive
+    viewer (`/propiedades/unidades/<id>/plano/`, linked from the
+    existing unit-detail page) shows the effective plan with clickable
+    zone overlays (percentage-positioned `<div>`s over the derived
+    image, no canvas/SVG library needed), per-zone open-issue counts,
+    and create-issue/add-photo/create-walkthrough-item actions — each
+    one prefilling building/floor/unit/room and storing a direct
+    `plan_template`/`plan_zone` FK (added to `FieldIssue`,
+    `WalkthroughItem`, and, for future display/traceability only,
+    `InstallationRecord`/`InspectionRecord`, A62) so that record's
+    "exact source-location reference" survives any later plan
+    revision. The photo action reuses the Unclassified Evidence
+    Inbox's upload-then-classify mechanism directly (`unitplans
+    .planzone` added to `CLASSIFIABLE_TARGETS`); no new evidence model.
+    A secure admin mapping screen (`/propiedades/admin-planos/`) lets
+    an authorized user (`can_override_gates`) upload/replace a derived
+    plan, add/edit zones (editing always supersedes rather than
+    mutating in place — a second real gap caught and fixed this
+    milestone, see below), validate zones, and approve or supersede a
+    template — with an operational review queue surfacing every
+    non-approved template, non-validated zone, and unmapped unit.
+    24 new tests (`tests/test_unit_plans.py`), covering floor-variant
+    resolution (first/upper/all/penthouse-duplex), template code
+    determinism, mirrored-orientation recording, duplex per-level zone
+    association, source-drawing/page provenance, polygon coordinate
+    persistence, zone-click prefilling an issue and a walkthrough item
+    with full traceability, supersede history preservation (both
+    template- and zone-level), permission enforcement (unauthorized
+    approve/validate/supersede all denied), cross-organization
+    isolation for both the viewer and the admin screen, responsive
+    markup presence, and idempotent re-seeding (a second command run
+    creates zero duplicate templates/assignments/zones).
+
+    Two genuine defects were found and fixed while building this, both
+    from real execution, not from the test suite: (1) the original
+    `UnitPlanTemplate` uniqueness was a plain `unique_together`
+    (organization, code), which broke the very versioning pattern the
+    model exists to support — superseding a template tried to insert a
+    second row sharing the still-occupied code and raised a raw
+    `IntegrityError`; fixed by scoping the constraint to
+    `is_current=True`, matching `UnitPlanAssignment`'s existing
+    pattern. (2) `supersede_template` created the new row *before*
+    marking the old one non-current, so both briefly held
+    `is_current=True` at once and hit the same constraint from the
+    other direction — fixed by reordering the two writes. A third,
+    behavioral gap (not a crash) was caught during live HTTP validation:
+    superseding a template left every currently-assigned unit still
+    pointed at the now-`SUPERSEDED` row, so the interactive viewer kept
+    showing an explicitly-replaced plan by default — fixed by having
+    `supersede_template` move every current assignment onto the new
+    revision automatically (A60), verified live by superseding a
+    template with 48 real assigned PALMERA units and confirming all 48
+    moved while an unrelated, already-created `FieldIssue`'s own
+    `plan_template`/`plan_zone` FKs stayed exactly on the superseded
+    row. 394/394 tests passing (370 pre-existing + 24 new). Verified
+    migrations apply cleanly to an empty database; live HTTP validation
+    covered MARE B Building 25 Floor 4 Apartment C4 (correctly
+    resolving to a Missing Source slot — no invented rooms — with
+    building/floor/apartment still accurately displayed), a full real
+    click-room → create-issue → upload-photo → confirm-full-provenance
+    → open-issue-from-plan-and-highlight-room cycle against a real
+    PALMERA Tipo B unit (the one family with genuine zones), repeated
+    effective-plan resolution across SOLE Building 17, SOLE PH
+    Building 18 (both its regular floors and its duplex penthouse),
+    SOLE 26 Building 26, and ARENA T1 Building 9, and cross-organization
+    denial (404) on the interactive viewer, the admin template screen,
+    and the field issue itself.

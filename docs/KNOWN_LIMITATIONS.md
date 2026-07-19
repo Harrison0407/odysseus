@@ -484,6 +484,22 @@ is silently claimed to be done when it isn't.
   missing input-validation check before a DB write) — see
   `docs/implementation-log.md` entry 48. No known limitation remains
   open for this release.
+- ~~Interactive Apartment Plan / Room-Zone layer~~ — **Done.** New
+  `apps.unitplans` app (ADR-040). Real per-unit-type plans and
+  AI-proposed (Draft/Needs Review) zones exist only for PALMERA (Tipos
+  A-D) — the only family with an actual per-unit-type drawing in the
+  supplied sources, confirmed by direct visual inspection of every page
+  of the one architectural PDF. ARENA T1, MARE B, SOLE, SOLE PH, and
+  SOLE 26 correctly show "Fuente faltante" (Missing Source) for every
+  unit — this is accurate, not a gap: no per-unit floor plan for these
+  families exists anywhere in the source material supplied, and the
+  release explicitly forbids inventing one. The workflow (template
+  resolution, assignment, viewer, admin mapping/review, issue/photo/
+  walkthrough-item creation) is fully functional and will start
+  showing real rooms the moment a real plan is uploaded for any of
+  these families through the admin mapping tool — no code change
+  required. Three genuine defects were found and fixed while building
+  this milestone — see `docs/implementation-log.md` entry 49.
 
 ## Data-quality ambiguities (not bugs — see `DATA_QUALITY_AND_UNCERTAINTY.md`)
 

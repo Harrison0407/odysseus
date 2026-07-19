@@ -110,6 +110,9 @@ def resolve_organization(target):
     walkthrough = getattr(target, "walkthrough", None)  # WalkthroughItem -> Walkthrough -> Building -> Project
     if walkthrough is not None:
         return resolve_organization(walkthrough)
+    plan_template = getattr(target, "template", None)  # PlanZone -> UnitPlanTemplate
+    if plan_template is not None:
+        return resolve_organization(plan_template)
     project = resolve_project(target)
     if project is not None:
         return project.organization

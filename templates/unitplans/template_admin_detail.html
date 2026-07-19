@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Administrar plantilla — {{ template.family.display_name }} Tipo {{ template.unit_type_letter }}</h3>
+<p>
+    <span class="badge bg-secondary">{{ template.get_status_display }}</span>
+    <span class="badge bg-light text-dark border">{{ template.get_floor_variant_display }}</span>
+    {% if template.is_mirrored %}<span class="badge bg-info text-dark">Espejado</span>{% endif %}
+    {% if not template.is_current %}<span class="badge bg-warning text-dark">Reemplazada — ver revisión actual</span>{% endif %}
+</p>
+<a class="btn btn-outline-secondary btn-sm mb-3" href="{% url 'unitplans:review-queue' %}">&larr; Volver a la cola de revisión</a>
+
+{% if not can_administer %}
+<div class="alert alert-warning">Su usuario no tiene permiso para modificar el mapeo — puede ver el estado, pero las acciones de administración están deshabilitadas.</div>
+{% endif %}
+
+<div class="card mb-3">
+    <div class="card-header">Fuente y plano derivado</div>
+    <div class="card-body">
+        <table class="table table-sm mb-3">
+            <tr><th>Plano fuente</th><td>{% if template.source_drawing %}<a href="{% url 'drawings:detail' template.source_drawing.pk %}">{{ template.source_drawing.title }}</a>{% else %}—{% endif %}</td></tr>
+            <tr><th>Página/hoja</th><td>{{ template.source_page|default:"—" }}</td></tr>
+            <tr><th>Plano operativo derivado</th><td>{% if template.derived_plan_document %}<a href="{% url 'unitplans:template-plan-image' template.pk %}" target="_blank">Ver imagen</a>{% else %}Sin plano cargado{% endif %}</td></tr>
+            <tr><th>Notas de incertidumbre</th><td>{{ template.uncertainty_notes|default:"—"|linebreaksbr }}</td></tr>
+            <tr><th>Verificado por</th><td>{{ template.verifier|default:"—" }} {% if template.verified_at %}({{ template.verified_at|date:"d/m/Y H:i" }}){% endif %}</td></tr>
+        </table>
+        {% if can_administer %}
+        <form method="post" action="{% url 'unitplans:template-upload-plan' template.pk %}" enctype="multipart/form-data" class="mb-2">
+            {% csrf_token %}
+            {{ upload_form.as_p }}
+            <button class="btn btn-sm btn-primary" type="submit">Cargar/reemplazar plano</button>
+        </form>
+        <form method="post" action="{% url 'unitplans:template-approve' template.pk %}" class="d-inline">
+            {% csrf_token %}
+            <button class="btn btn-sm btn-success" type="submit" {% if template.status == "missing_source" %}disabled{% endif %}>Aprobar para uso operativo</button>
+        </form>
+        <form method="post" action="{% url 'unitplans:template-supersede' template.pk %}" class="d-inline">
+            {% csrf_token %}
+            <input type="hidden" name="uncertainty_notes" value="Reemplazo registrado desde la pantalla de administración.">
+            <button class="btn btn-sm btn-outline-warning" type="submit" onclick="return confirm('¿Crear una nueva revisión? La actual se conservará como reemplazada.');">Reemplazar (nueva revisión)</button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Zonas ({{ zones.count }})</div>
+    <div class="table-responsive">
+    <table class="table table-sm mb-0">
+        <thead><tr><th>Código</th><th>Nombre</th><th>Tipo</th><th>Coordenadas</th><th>Estado</th><th>Confianza</th><th></th></tr></thead>
+        <tbody>
+        {% for z in zones %}
+        <tr>
+            <td>{{ z.zone_code }}</td>
+            <td>{{ z.name_es }}</td>
+            <td>{{ z.display_type_label }}</td>
+            <td class="small text-muted">{{ z.coordinates }}</td>
+            <td><span class="badge bg-secondary">{{ z.get_validation_state_display }}</span></td>
+            <td>{{ z.get_source_confidence_display }}</td>
+            <td>
+                {% if can_administer %}
+                <form method="post" action="{% url 'unitplans:zone-validate' z.pk %}" class="d-inline">
+                    {% csrf_token %}
+                    <button class="btn btn-sm btn-outline-success" type="submit" {% if z.validation_state == "validated" %}disabled{% endif %}>Validar</button>
+                </form>
+                <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#edit-zone-{{ z.pk }}">Editar</button>
+                {% endif %}
+            </td>
+        </tr>
+        {% if can_administer %}
+        <tr class="collapse" id="edit-zone-{{ z.pk }}"><td colspan="7">
+            <form method="post" action="{% url 'unitplans:zone-edit' z.pk %}" class="row g-2">
+                {% csrf_token %}
+                <div class="col-md-2"><input class="form-control form-control-sm" name="zone_code" value="{{ z.zone_code }}" placeholder="Código"></div>
+                <div class="col-md-2"><input class="form-control form-control-sm" name="name_es" value="{{ z.name_es }}" placeholder="Nombre"></div>
+                <div class="col-md-2">
+                    <select class="form-select form-select-sm" name="zone_type">
+                        {% for code, label in z.ZoneType.choices %}<option value="{{ code }}" {% if code == z.zone_type %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-1"><input class="form-control form-control-sm" name="x0" type="number" step="0.001" value="{{ z.coordinates.x0 }}"></div>
+                <div class="col-md-1"><input class="form-control form-control-sm" name="y0" type="number" step="0.001" value="{{ z.coordinates.y0 }}"></div>
+                <div class="col-md-1"><input class="form-control form-control-sm" name="x1" type="number" step="0.001" value="{{ z.coordinates.x1 }}"></div>
+                <div class="col-md-1"><input class="form-control form-control-sm" name="y1" type="number" step="0.001" value="{{ z.coordinates.y1 }}"></div>
+                <input type="hidden" name="display_order" value="{{ z.display_order }}">
+                <input type="hidden" name="duplex_floor" value="{{ z.duplex_floor }}">
+                <input type="hidden" name="custom_type_label" value="{{ z.custom_type_label }}">
+                <input type="hidden" name="name_en" value="{{ z.name_en }}">
+                <input type="hidden" name="source_confidence" value="{{ z.source_confidence }}">
+                <div class="col-md-1"><button class="btn btn-sm btn-primary" type="submit">Guardar</button></div>
+            </form>
+        </td></tr>
+        {% endif %}
+        {% empty %}
+        <tr><td colspan="7" class="text-muted">Sin zonas definidas todavía.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+{% if can_administer %}
+<div class="card mb-3">
+    <div class="card-header">Agregar nueva zona</div>
+    <div class="card-body">
+        <form method="post" action="{% url 'unitplans:zone-add' template.pk %}">
+            {% csrf_token %}
+            {{ zone_form.as_p }}
+            <button class="btn btn-primary btn-sm" type="submit">Agregar zona</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

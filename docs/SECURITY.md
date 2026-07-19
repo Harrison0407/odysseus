@@ -246,6 +246,23 @@
   without one, and marks the old row inactive + `superseded_by` rather
   than mutating or removing it, verified by dedicated tests including
   an attempt to reclassify an already-superseded row.
+- **Interactive Apartment Plan / Room-Zone layer: the interactive
+  viewer and the admin mapping screen are both organization- and
+  project-scoped**, verified live (404 for a cross-organization user
+  on the unit-plan viewer, the admin template-detail screen, and a
+  field issue created from a zone) and by dedicated tests. Every
+  mutating admin action (add/edit zone, validate zone, approve/
+  supersede template) requires `can_override_gates` — enforced in the
+  service layer itself (not just the view), verified by dedicated
+  unauthorized-attempt tests for all three actions.
+- **Editing a zone's shape/name/type, or superseding a template, never
+  mutates the row in place** — both create a new row and mark the old
+  one inactive/superseded, verified by a dedicated test that a
+  `FieldIssue` created against a zone keeps pointing at that zone's
+  exact original shape after the zone is later edited, and another
+  confirming an unrelated issue's `plan_template` reference survives a
+  template supersede untouched even while 48 real units assigned to
+  that template were moved onto the new revision.
 
 ## Known gaps (see `KNOWN_LIMITATIONS.md` for the full list)
 

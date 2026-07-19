@@ -148,6 +148,15 @@
 | `/evidencias-sin-clasificar/<id>/clasificar/` (POST) | `inbox_classify` | Links the evidence to a real target (14 supported types); target is resolved and organization-verified server-side |
 | `/evidencias-sin-clasificar/clasificaciones/<id>/reasignar/` (POST) | `inbox_reclassify` | Requires a written reason; the prior classification is preserved, marked inactive and linked via `superseded_by` |
 | `/evidencias-sin-clasificar/clasificar-lote/` (POST) | `inbox_batch_classify` | Classifies every selected evidence row to the same target in one action |
+| `/propiedades/unidades/<id>/plano/` | `apps.unitplans.views.unit_plan` | Interactive plan viewer — effective template's derived image with clickable zone overlays, per-zone open-issue counts, `?highlight_zone=` support; shows "Fuente faltante" honestly where no real plan exists yet |
+| `/propiedades/plantillas/<id>/imagen/` | `template_plan_image` | Serves the derived operational plan image inline (never the original architect PDF) |
+| `/propiedades/zonas/<id>/crear-incidencia/` | `zone_create_issue` | Quick issue creation prefilled with building/floor/unit/room/plan template/zone |
+| `/propiedades/zonas/<id>/agregar-foto/` (POST) | `zone_add_photo` | One-click photo upload, classified directly to the zone via the Unclassified Evidence Inbox mechanism |
+| `/propiedades/zonas/<id>/crear-item-recorrido/` (POST) | `zone_create_walkthrough_item` | Creates (or reuses) an in-progress walkthrough for the unit and adds an item prefilled from the zone |
+| `/propiedades/admin-planos/` | `review_queue` | Operational review queue: non-approved templates, non-validated zones, units with no plan assigned |
+| `/propiedades/admin-planos/plantillas/<id>/` | `template_admin_detail` | Full mapping screen: upload/replace plan, add/edit zones, validate, approve, supersede |
+| `/propiedades/admin-planos/plantillas/<id>/aprobar/`, `/reemplazar/`, `/cargar-plano/` (POST) | template admin actions | All require `can_override_gates`; supersede/upload-when-approved always create a new revision, never an in-place overwrite |
+| `/propiedades/admin-planos/plantillas/<id>/agregar-zona/`, `/propiedades/admin-planos/zonas/<id>/editar/`, `/validar/` (POST) | zone admin actions | Editing a zone always supersedes rather than mutating in place; requires `can_override_gates` |
 
 | Role code | Dashboard template |
 |---|---|

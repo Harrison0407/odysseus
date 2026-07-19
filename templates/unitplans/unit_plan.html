@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block extra_head %}
+<style>
+    .plan-viewer-wrap { position: relative; max-width: 100%; overflow: auto; touch-action: pinch-zoom; }
+    .plan-viewer-img { max-width: 100%; height: auto; display: block; }
+    .plan-zone {
+        position: absolute; border: 2px solid rgba(13,110,253,.65); background: rgba(13,110,253,.12);
+        cursor: pointer;
+    }
+    .plan-zone:hover, .plan-zone.selected { background: rgba(13,110,253,.32); border-color: #0d6efd; }
+    .plan-zone.highlighted { background: rgba(253,126,20,.35); border-color: #fd7e14; }
+    .plan-zone-badge {
+        position: absolute; top: -0.6rem; right: -0.6rem; font-size: .65rem;
+    }
+</style>
+{% endblock %}
+{% block content %}
+<h3>{{ unit.building }} / {{ unit.name }} — Plano interactivo</h3>
+<p class="text-muted"><code>{{ unit.permanent_code|default:unit.apartment_number }}</code> — Piso: {{ unit.floor|default:"—" }}</p>
+<a class="btn btn-outline-secondary btn-sm mb-3" href="{% url 'projects:unit-detail' unit.pk %}">&larr; Volver a la unidad</a>
+
+{% if template is None %}
+<div class="alert alert-warning">No hay una plantilla de plano asignada a esta unidad todavía.</div>
+{% elif template.status == "missing_source" %}
+<div class="alert alert-warning">
+    <strong>Fuente faltante (Missing Source).</strong> No se localizó un plano de planta por unidad para
+    esta familia/tipo/variante en las fuentes suministradas. {{ template.uncertainty_notes }}
+</div>
+{% else %}
+<div class="mb-2">
+    <span class="badge bg-secondary">{{ template.get_status_display }}</span>
+    <span class="badge bg-light text-dark border">Tipo {{ template.unit_type_letter }} — {{ template.get_floor_variant_display }}</span>
+    {% if template.is_mirrored %}<span class="badge bg-info text-dark">Espejado</span>{% endif %}
+</div>
+{% if template.status != "approved" %}
+<div class="alert alert-info py-2">
+    Este plano operativo es <strong>{{ template.get_status_display|lower }}</strong> — derivado por IA/herramienta a partir
+    del plano fuente, aún no validado por un usuario autorizado. {{ template.uncertainty_notes }}
+</div>
+{% endif %}
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="plan-viewer-wrap border bg-white" id="plan-viewer">
+            <img class="plan-viewer-img" id="plan-image"
+                 src="{% url 'unitplans:template-plan-image' template.pk %}" alt="Plano operativo">
+            {% for zone in zones %}
+            <div class="plan-zone{% if highlight_zone == zone.pk|stringformat:'s' %} highlighted{% endif %}"
+                 data-zone-id="{{ zone.pk }}"
+                 style="left: {{ zone.coordinates.x0|floatformat:4 }}%; top: {{ zone.coordinates.y0|floatformat:4 }}%;
+                        width: calc({{ zone.coordinates.x1 }}% - {{ zone.coordinates.x0 }}%);
+                        height: calc({{ zone.coordinates.y1 }}% - {{ zone.coordinates.y0 }}%);"
+                 onclick="selectZone('{{ zone.pk }}')">
+                {% if zone.open_issue_count %}<span class="badge bg-danger plan-zone-badge">{{ zone.open_issue_count }}</span>{% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        <p class="text-muted small mt-1">Toque o haga clic en una zona para seleccionarla. Fuente: {{ template.source_drawing.title|default:"—" }}{% if template.source_page %} (hoja/página {{ template.source_page }}){% endif %}.</p>
+    </div>
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">Zona seleccionada</div>
+            <div class="card-body" id="zone-panel">
+                <p class="text-muted">Seleccione una zona en el plano.</p>
+            </div>
+        </div>
+        <div class="list-group mt-3">
+            {% for zone in zones %}
+            <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+               onclick="selectZone('{{ zone.pk }}'); return false;">
+                {{ zone.name_es }} <small class="text-muted">{{ zone.display_type_label }}</small>
+                {% if zone.open_issue_count %}<span class="badge bg-danger rounded-pill">{{ zone.open_issue_count }}</span>{% endif %}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<script>
+const CSRF_TOKEN = "{{ csrf_token }}";
+const UNIT_ID = "{{ unit.pk }}";
+const ZONES = {
+    {% for zone in zones %}"{{ zone.pk }}": {name: "{{ zone.name_es|escapejs }}", type: "{{ zone.display_type_label|escapejs }}", issues: {{ zone.open_issue_count|default:0 }}},{% endfor %}
+};
+function selectZone(zoneId) {
+    document.querySelectorAll('.plan-zone').forEach(el => el.classList.remove('selected'));
+    const el = document.querySelector('.plan-zone[data-zone-id="' + zoneId + '"]');
+    if (el) el.classList.add('selected');
+    const z = ZONES[zoneId];
+    const panel = document.getElementById('zone-panel');
+    if (!z) { panel.innerHTML = '<p class="text-muted">Seleccione una zona en el plano.</p>'; return; }
+    panel.innerHTML = `
+        <h5>${z.name}</h5>
+        <p class="text-muted mb-2">${z.type} — ${z.issues} incidencia(s) abierta(s)</p>
+        <a class="btn btn-sm btn-primary mb-2" href="/propiedades/zonas/${zoneId}/crear-incidencia/?unit_id=${UNIT_ID}">Crear incidencia</a>
+        <form method="post" enctype="multipart/form-data" action="/propiedades/zonas/${zoneId}/agregar-foto/" class="mb-2">
+            <input type="hidden" name="csrfmiddlewaretoken" value="${CSRF_TOKEN}">
+            <input type="hidden" name="unit_id" value="${UNIT_ID}">
+            <label class="form-label small">Agregar foto rápida</label>
+            <input class="form-control form-control-sm mb-1" type="file" name="file" required>
+            <input class="form-control form-control-sm mb-1" type="text" name="title" placeholder="Título de la foto" required>
+            <button class="btn btn-sm btn-outline-primary" type="submit">Subir foto</button>
+        </form>
+        <form method="post" action="/propiedades/zonas/${zoneId}/crear-item-recorrido/">
+            <input type="hidden" name="csrfmiddlewaretoken" value="${CSRF_TOKEN}">
+            <input type="hidden" name="unit_id" value="${UNIT_ID}">
+            <button class="btn btn-sm btn-outline-secondary" type="submit">Crear ítem de recorrido</button>
+        </form>
+    `;
+}
+{% if highlight_zone %}selectZone("{{ highlight_zone }}");{% endif %}
+</script>
+{% endif %}
+{% endblock %}

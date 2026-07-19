@@ -2,6 +2,50 @@
 
 Newest first.
 
+## ADR-040 — Interactive Apartment Plan / Room-Zone layer: reusable per-family/letter/floor-variant templates, never one row per apartment; Missing Source is a valid, honest state
+**Decision:** New `apps.unitplans` app, strictly separating the
+existing immutable Source Drawing (`apps.drawings.Drawing`, untouched)
+from a new Operational Interactive Plan layer. `UnitPlanTemplate` is
+resolved deterministically from family + `Unit.apartment_letter` +
+a computed floor-variant (first floor / upper floor / all floors /
+penthouse duplex, derived from already-imported `Floor.level` and
+`Unit.is_penthouse` — never a second data source) — one row per
+distinct unit-type slot, never per physical apartment.
+`UnitPlanAssignment` links each `Unit` to its *current* effective
+template (`is_current`, one-per-unit unique constraint). `PlanZone`
+holds each room/zone's type, relative (0-1) rect/polygon coordinates,
+and its own independent validation lifecycle
+(draft/needs-review/validated). Both `UnitPlanTemplate` and `PlanZone`
+reuse the exact versioned-immutable-row `supersedes`/`is_current`
+pattern already established for `Drawing`/`OrderLineAllocation`
+/`EvidenceClassification` — a later plan revision or a corrected room
+boundary is always a new row, and superseding a template automatically
+moves every currently-assigned unit onto the new revision while never
+touching any `FieldIssue`/`WalkthroughItem` that already stored its own
+direct FK to the old template/zone. Of the two families' worth of
+source material supplied, only PALMERA (sheets H-05 through H-08,
+confirmed by direct visual inspection to be genuine "APARTAMENTO TIPO
+A/B/C/D" furnished/dimensioned plans, cross-checked against the real
+H-09 occupancy table) has an actual per-unit-type drawing; every other
+family's template slots are seeded `Status.MISSING_SOURCE` with zero
+invented rooms, and PALMERA's own AI-cropped/proposed zones stay
+`Draft`/`Needs Review` until an authorized user validates and approves
+them through a dedicated admin mapping screen (`can_override_gates`,
+the same universal senior-authorization permission used everywhere
+else in this release).
+**Why:** The release explicitly forbids inventing a template where the
+source is insufficient, and forbids treating a derived crop as an
+architect-approved drawing — this design makes "honestly missing" a
+first-class, fully-functional state (the interactive viewer, issue
+creation, and every other action still work, they just show "Fuente
+faltante" instead of a fabricated room) rather than something the code
+has to special-case or crash on. Keeping templates reusable per
+family/letter/variant instead of per-apartment avoids hundreds of
+near-duplicate rows, and reusing the versioned-immutable-row pattern
+guarantees a plan revision, a corrected room boundary, or an as-built
+upload can never retroactively change what an already-created
+FieldIssue or WalkthroughItem was actually created against.
+
 ## ADR-039 — Unclassified Evidence Inbox: upload provenance is permanent and untouched; classification is a separate, reassignable, generic pointer
 **Decision:** `apps.evidenceinbox.UnclassifiedEvidence` wraps a
 `documents.Document`/`DocumentVersion` (the same SHA-256-hashed,

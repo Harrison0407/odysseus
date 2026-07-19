@@ -164,6 +164,14 @@ class WalkthroughItem(BaseModel):
         help_text="The corrective issue created from this item, if any — the correction/verification "
         "lifecycle itself lives entirely on FieldIssue, never duplicated here.",
     )
+    plan_template = models.ForeignKey(
+        "unitplans.UnitPlanTemplate", on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+        help_text="Set when this item was created from the interactive apartment plan — kept even if later superseded.",
+    )
+    plan_zone = models.ForeignKey(
+        "unitplans.PlanZone", on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+        help_text="The exact room/zone clicked to create this walkthrough item — immutable source-location reference.",
+    )
     notes = models.TextField(blank=True)
 
     class Meta:

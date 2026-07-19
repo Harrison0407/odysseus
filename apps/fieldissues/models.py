@@ -84,6 +84,14 @@ class FieldIssue(BaseModel):
         "walkthroughs.WalkthroughItem", on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
         help_text="Set when this issue was created directly from a walkthrough inspection item.",
     )
+    plan_template = models.ForeignKey(
+        "unitplans.UnitPlanTemplate", on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+        help_text="Set when created from the interactive apartment plan — kept even if this template is later superseded.",
+    )
+    plan_zone = models.ForeignKey(
+        "unitplans.PlanZone", on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+        help_text="The exact room/zone clicked to create this issue — immutable source-location reference.",
+    )
 
     status = models.CharField(max_length=30, choices=Status.choices, default=Status.REPORTED)
 

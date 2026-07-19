@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Cola de revisión de planos de unidad</h3>
+<p class="text-muted">Plantillas y zonas que aún requieren atención humana, y unidades físicas sin plantilla de plano asignada.</p>
+
+<div class="card mb-3">
+    <div class="card-header">Plantillas sin aprobar ({{ templates.count }})</div>
+    <div class="table-responsive">
+    <table class="table table-sm mb-0">
+        <thead><tr><th>Familia</th><th>Tipo</th><th>Variante</th><th>Estado</th><th></th></tr></thead>
+        <tbody>
+        {% for t in templates %}
+        <tr>
+            <td>{{ t.family.display_name }}</td>
+            <td>{{ t.unit_type_letter }}</td>
+            <td>{{ t.get_floor_variant_display }}</td>
+            <td><span class="badge bg-secondary">{{ t.get_status_display }}</span></td>
+            <td><a class="btn btn-sm btn-outline-primary" href="{% url 'unitplans:template-admin-detail' t.pk %}">Administrar</a></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="text-muted">Sin plantillas pendientes.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Zonas sin validar ({{ zones.count }})</div>
+    <div class="table-responsive">
+    <table class="table table-sm mb-0">
+        <thead><tr><th>Plantilla</th><th>Zona</th><th>Tipo</th><th>Estado</th><th>Confianza</th><th></th></tr></thead>
+        <tbody>
+        {% for z in zones %}
+        <tr>
+            <td>{{ z.template }}</td>
+            <td>{{ z.name_es }}</td>
+            <td>{{ z.display_type_label }}</td>
+            <td><span class="badge bg-secondary">{{ z.get_validation_state_display }}</span></td>
+            <td>{{ z.get_source_confidence_display }}</td>
+            <td><a class="btn btn-sm btn-outline-primary" href="{% url 'unitplans:template-admin-detail' z.template_id %}">Administrar</a></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="text-muted">Sin zonas pendientes.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Unidades sin plantilla de plano asignada ({{ unmapped_units.count }})</div>
+    <div class="table-responsive">
+    <table class="table table-sm mb-0">
+        <thead><tr><th>Edificio</th><th>Unidad</th><th>Piso</th></tr></thead>
+        <tbody>
+        {% for u in unmapped_units %}
+        <tr>
+            <td>{{ u.building }}</td>
+            <td><a href="{% url 'projects:unit-detail' u.pk %}">{{ u.name }}</a></td>
+            <td>{{ u.floor|default:"—" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="3" class="text-muted">Todas las unidades tienen una plantilla asignada.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endblock %}

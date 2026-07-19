@@ -46,6 +46,8 @@ CLASSIFIABLE_TARGETS = [
     ("shipments", "container", "Contenedor"),
     ("requests", "installationrecord", "Instalación"),
     ("requests", "inspectionrecord", "Inspección"),
+    ("unitplans", "unitplantemplate", "Plantilla de plano de unidad"),
+    ("unitplans", "planzone", "Zona de plano (habitación)"),
 ]
 
 

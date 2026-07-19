@@ -74,10 +74,12 @@ def populate_checklist_from_template(walkthrough: Walkthrough, user) -> list:
     return created
 
 
-def add_item(walkthrough: Walkthrough, user, *, room_or_location="", item=None, component_description="", unit=None) -> WalkthroughItem:
+def add_item(walkthrough: Walkthrough, user, *, room_or_location="", item=None, component_description="", unit=None,
+             plan_template=None, plan_zone=None) -> WalkthroughItem:
     return WalkthroughItem.objects.create(
         walkthrough=walkthrough, unit=unit or walkthrough.unit, room_or_location=room_or_location, item=item,
-        component_description=component_description, created_by=user,
+        component_description=component_description, plan_template=plan_template, plan_zone=plan_zone,
+        created_by=user,
     )
 
 

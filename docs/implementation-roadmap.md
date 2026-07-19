@@ -196,6 +196,21 @@ All four Priority 1 features are now complete. See
     `resolve_organization()` resolver. `/evidencias-sin-clasificar/`
     screens, live-validated with a real historical-style photograph
     uploaded and classified to a real ARENA T1 Building 11 unit.
+39. ~~Interactive Apartment Plan / Room-Zone layer~~ — **Done.** New
+    `apps.unitplans` app (ADR-040): reusable `UnitPlanTemplate` per
+    family/unit-type-letter/floor-variant (never per apartment),
+    `PlanZone` room/zone records, `UnitPlanAssignment` linking each
+    physical unit to its current effective template. Only PALMERA
+    (confirmed by direct inspection of its source PDF) has real
+    per-unit-type plans (Tipos A-D) with AI-proposed Draft zones;
+    every other family is an honest `Missing Source` slot. Interactive
+    viewer with clickable zones, issue/photo/walkthrough-item creation
+    prefilled with full building/floor/unit/room/plan/zone traceability,
+    and a secure admin mapping/review/approve/supersede screen.
+    `/propiedades/unidades/<id>/plano/` + `/propiedades/admin-planos/`
+    screens, live-validated across MARE B Building 25, SOLE Building
+    17, SOLE PH Building 18 (including its duplex penthouse), SOLE 26
+    Building 26, PALMERA, and ARENA T1 Building 9.
 
 ## Explicitly out of scope for any near-term increment
 

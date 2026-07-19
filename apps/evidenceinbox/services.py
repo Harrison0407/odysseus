@@ -21,7 +21,7 @@ from .models import EvidenceClassification, UnclassifiedEvidence
 # narrowed to a general area.
 _LEAF_MODEL_NAMES = {
     "unit", "walkthroughitem", "walkthrough", "fieldissue", "trainingsession",
-    "installationrecord", "inspectionrecord", "purchaseorderline",
+    "installationrecord", "inspectionrecord", "purchaseorderline", "planzone",
 }
 
 

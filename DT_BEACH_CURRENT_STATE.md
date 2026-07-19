@@ -16,19 +16,30 @@ Active branch:
 Upstream:
 `origin/integration/dt-beach-supply-control-1.0.0`
 
-Working tree:
-`clean`
+Current repository HEAD:
+`8b7e102`
 
-## Verified Baseline
+Current HEAD purpose:
+Documentation-only commit adding this current-state document.
 
-Latest verified commit:
+Working tree at the time of this update:
+Contains untracked evidence-package documents only. No tracked application-code modifications are present.
+
+## Verified Functional Baseline
+
+Latest verified application-code commit:
 `58889c8`
 
-Tests:
+Commit title:
+`Document the Controlled Transparency / Confidentiality foundation (part 7/7)`
+
+Tests reported at that verified functional baseline:
 `455/455 passing`
 
-Migrations:
+Migrations at that verified functional baseline:
 `clean`
+
+The later commit `8b7e102` does not change application behavior; it only adds this current-state document.
 
 ## Latest Completed Milestone
 

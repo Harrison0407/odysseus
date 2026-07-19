@@ -1,0 +1,57 @@
+DT BEACH SUPPLY CONTROL — GIT EVIDENCE
+
+Repository:
+/Users/harrison/Downloads/DT_Beach_Supply_Control_Fable5:/Application
+
+Branch:
+main
+
+Verified historical baseline:
+90874ed
+
+Full commit:
+90874edacd980983fa67022a6f57e1157ad4b52e
+
+Commit title:
+Add Interactive Apartment Plan / Room-Zone layer (apps.unitplans)
+
+Author:
+Harrison Vargas <harrison.vargas@icloud.com>
+
+Commit date:
+2026-07-19 09:11:10 -0400
+
+Working tree at verified baseline:
+clean
+
+Regression suite at verified baseline:
+394/394 passing
+
+Latest completed milestone at this historical baseline:
+Interactive Apartment Plan / Room-Zone Layer
+
+Next active milestone at that time:
+DT Beach Controlled Transparency, Commercial Confidentiality & Authorization Foundation
+
+Commit summary:
+40 files changed
+2,298 insertions
+4 deletions
+
+New milestone test module:
+tests/test_unit_plans.py
+
+New milestone tests:
+24
+
+Primary implementation:
+apps.unitplans
+
+Primary routes:
+/propiedades/unidades/<id>/plano/
+/propiedades/admin-planos/
+
+Historical evidence note:
+This file records the verified repository state at commit 90874ed. It is intentionally historical and must not be updated to a later commit or later regression-suite count.
+
+Later development, including the Controlled Transparency, Commercial Confidentiality & Authorization Foundation, does not alter the facts recorded for this baseline.

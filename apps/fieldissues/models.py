@@ -76,6 +76,10 @@ class FieldIssue(BaseModel):
     installation = models.ForeignKey("requests.InstallationRecord", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     inspection = models.ForeignKey("requests.InspectionRecord", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     drawing = models.ForeignKey("drawings.Drawing", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    training_session = models.ForeignKey(
+        "training.TrainingSession", on_delete=models.SET_NULL, null=True, blank=True, related_name="field_issues",
+        help_text="Set when this issue was created directly from a training session — preserves the relationship.",
+    )
 
     status = models.CharField(max_length=30, choices=Status.choices, default=Status.REPORTED)
 

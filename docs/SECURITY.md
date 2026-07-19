@@ -207,6 +207,17 @@
   title report within a 60-second window — verified by both a
   service-level and an HTTP-level double-submit test.
 
+- **Training reference-installation approval cannot skip supervisor
+  sign-off** — `approve_as_reference_installation` checks
+  `session.supervisor_signed_off_at is None` before permission is even
+  relevant, verified by a dedicated test. Both sign-off and approval
+  also require `can_override_gates`, verified by dedicated unauthorized-
+  attempt tests.
+- **Participant acknowledgement is validated against the real
+  participant list** — `acknowledge_participation` raises if the
+  calling user isn't actually registered as a participant on that
+  session, verified by a dedicated test.
+
 ## Known gaps (see `KNOWN_LIMITATIONS.md` for the full list)
 
 - No automated dependency vulnerability scan is wired into this delivery

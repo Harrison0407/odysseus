@@ -77,6 +77,7 @@ INSTALLED_APPS = [
     "apps.labels",
     "apps.drawings",
     "apps.fieldissues",
+    "apps.training",
     "apps.api",
 ]
 

@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Capacitación — {{ session.building }}</h3>
+<p>
+    {% if session.is_approved_reference_installation %}<span class="badge bg-success">Instalación de referencia aprobada</span>{% endif %}
+    {% if session.supervisor_signed_off_at %}<span class="badge bg-info text-dark">Firmada por supervisor</span>{% endif %}
+</p>
+<a class="btn btn-outline-secondary btn-sm mb-3" href="{% url 'training:list' %}">&larr; Volver</a>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <table class="table table-sm mb-0">
+            <tr><th>Categoría</th><td>{{ session.category|default:"—" }}</td></tr>
+            <tr><th>Capacitador</th><td>{{ session.trainer|default:"—" }}</td></tr>
+            <tr><th>Participantes</th><td>{% for p in session.participants.all %}{{ p }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</td></tr>
+            <tr><th>Piso/Unidad</th><td>{{ session.floor|default:"—" }} / {{ session.unit|default:"—" }}</td></tr>
+            <tr><th>Ambiente/área</th><td>{{ session.room_or_area|default:"—" }}</td></tr>
+            <tr><th>Programada</th><td>{{ session.scheduled_at|default:"—" }}</td></tr>
+            <tr><th>Inicio real</th><td>{{ session.actual_start|default:"—" }}</td></tr>
+            <tr><th>Fin real</th><td>{{ session.actual_finish|default:"—" }}</td></tr>
+            <tr><th>Plano/procedimiento</th><td>{% if session.procedure_drawing %}<a href="{% url 'drawings:detail' session.procedure_drawing.pk %}">{{ session.procedure_drawing }}</a>{% else %}—{% endif %}</td></tr>
+            <tr><th>Nivel digital usado</th><td>{{ session.used_digital_level|yesno:"Sí,No" }} {{ session.digital_level_reading }}</td></tr>
+            <tr><th>Defectos encontrados</th><td>{{ session.defects_discovered|default:"—" }}</td></tr>
+            <tr><th>Ajuste demostrado</th><td>{{ session.adjustment_demonstrated|default:"—" }}</td></tr>
+            <tr><th>Acciones pendientes</th><td>{{ session.remaining_actions|default:"—" }}</td></tr>
+            <tr><th>Supervisor</th><td>{{ session.supervisor|default:"—" }} {% if session.supervisor_signed_off_at %}({{ session.supervisor_signed_off_at|date:"d/m/Y H:i" }}){% endif %}</td></tr>
+        </table>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Checklist</div>
+    <ul class="list-group list-group-flush">
+        {% for item in session.checklist_items.all %}
+        <li class="list-group-item d-flex justify-content-between">
+            <span>{{ item.description }}</span><span class="badge bg-secondary">{{ item.get_result_display }}</span>
+        </li>
+        {% empty %}<li class="list-group-item text-muted">Sin ítems de checklist.</li>{% endfor %}
+    </ul>
+    <div class="card-body">
+        <form method="post" action="{% url 'training:add-checklist-item' session.pk %}" class="row g-2">
+            {% csrf_token %}
+            <div class="col-12 col-md-5"><input type="text" name="description" class="form-control form-control-sm" placeholder="Descripción" required></div>
+            <div class="col-6 col-md-3">
+                <select name="result" class="form-control form-control-sm">
+                    <option value="pass">Aprobado</option><option value="fail">Rechazado</option><option value="not_applicable">No aplica</option>
+                </select>
+            </div>
+            <div class="col-6 col-md-4"><button class="btn btn-outline-primary btn-sm" type="submit">Agregar</button></div>
+        </form>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Evidencia</div>
+    <div class="card-body">
+        <div class="row">
+        {% for e in session.evidence.all %}
+            <div class="col-6 col-md-3 mb-2">
+                <div class="badge bg-secondary mb-1">{{ e.get_stage_display }}</div>
+                {% if e.document.current_version %}<a href="{% url 'documents:download' e.document.pk e.document.current_version.pk %}" class="d-block small">{{ e.document.title }}</a>{% endif %}
+            </div>
+        {% empty %}<p class="text-muted">Sin evidencia.</p>{% endfor %}
+        </div>
+        <form method="post" action="{% url 'training:add-evidence' session.pk %}" enctype="multipart/form-data" class="row g-2 mt-2">
+            {% csrf_token %}
+            <div class="col-12 col-md-3">
+                <select name="stage" class="form-control form-control-sm">
+                    <option value="before">Antes</option><option value="during">Durante</option><option value="after">Después</option>
+                </select>
+            </div>
+            <div class="col-12 col-md-3">{{ upload_form.document_type }}</div>
+            <div class="col-12 col-md-3">{{ upload_form.title }}</div>
+            <div class="col-12 col-md-3">{{ upload_form.file }}</div>
+            <div class="col-12"><button class="btn btn-outline-primary btn-sm" type="submit">Adjuntar</button></div>
+        </form>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Reconocimiento de participantes</div>
+    <ul class="list-group list-group-flush">
+        {% for ack in session.acknowledgements.all %}
+        <li class="list-group-item">{{ ack.participant }} — {{ ack.acknowledged_at|date:"d/m/Y H:i" }}</li>
+        {% empty %}<li class="list-group-item text-muted">Sin reconocimientos registrados.</li>{% endfor %}
+    </ul>
+    <div class="card-body">
+        <form method="post" action="{% url 'training:acknowledge' session.pk %}">
+            {% csrf_token %}<button class="btn btn-outline-secondary btn-sm" type="submit">Reconocer mi participación</button>
+        </form>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Acciones</div>
+    <div class="card-body d-flex flex-wrap gap-3">
+        {% if not session.actual_start %}
+        <form method="post" action="{% url 'training:start' session.pk %}">{% csrf_token %}<button class="btn btn-info btn-sm" type="submit">Iniciar sesión</button></form>
+        {% elif not session.actual_finish %}
+        <form method="post" action="{% url 'training:finish' session.pk %}" class="row g-2">
+            {% csrf_token %}
+            <div class="col-12"><textarea name="defects_discovered" class="form-control form-control-sm" rows="1" placeholder="Defectos encontrados"></textarea></div>
+            <div class="col-12"><textarea name="adjustment_demonstrated" class="form-control form-control-sm" rows="1" placeholder="Ajuste demostrado"></textarea></div>
+            <div class="col-12"><input type="text" name="digital_level_reading" class="form-control form-control-sm" placeholder="Lectura de nivel digital"></div>
+            <div class="col-12"><button class="btn btn-success btn-sm" type="submit">Finalizar sesión</button></div>
+        </form>
+        {% endif %}
+        {% if session.actual_finish and not session.supervisor_signed_off_at %}
+        <form method="post" action="{% url 'training:supervisor-sign-off' session.pk %}" class="row g-2">
+            {% csrf_token %}
+            <div class="col-12"><textarea name="notes" class="form-control form-control-sm" rows="1" placeholder="Notas del supervisor"></textarea></div>
+            <div class="col-12"><button class="btn btn-primary btn-sm" type="submit">Firma de supervisor</button></div>
+        </form>
+        {% endif %}
+        {% if session.supervisor_signed_off_at and not session.is_approved_reference_installation %}
+        <form method="post" action="{% url 'training:approve-reference' session.pk %}">
+            {% csrf_token %}<button class="btn btn-success btn-sm" type="submit">Aprobar como instalación de referencia</button>
+        </form>
+        {% endif %}
+        <form method="post" action="{% url 'training:create-issue' session.pk %}" class="row g-2">
+            {% csrf_token %}
+            <div class="col-12"><input type="text" name="title" class="form-control form-control-sm" placeholder="Título de incidencia" required></div>
+            <div class="col-12"><textarea name="description" class="form-control form-control-sm" rows="1" placeholder="Descripción"></textarea></div>
+            <div class="col-12"><button class="btn btn-warning btn-sm" type="submit">Crear incidencia desde esta sesión</button></div>
+        </form>
+    </div>
+</div>
+{% endblock %}

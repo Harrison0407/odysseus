@@ -850,3 +850,36 @@ documented order.
     uploads (SHA-256 hashed) → ready for verification → verified and
     closed by Harrison — plus a genuine second-organization user denied
     (404) on direct URL access to the issue.
+45. **Lawson training and reference-installation sessions.** New
+    `apps.training` app (ADR-037): `TrainingSession` mirrors
+    `FieldIssue`'s location shape exactly (building required, floor/
+    unit/room optional) and reuses the same stage-tagged evidence
+    wrapper pattern (`TrainingEvidence`: before/during/after, via
+    `attach_evidence`). `trainer`/`participants` are ordinary user
+    references — nothing in `apps.training.services` branches on a
+    specific name, and a dedicated test creates a session with Manuel
+    as trainer and Manuel+Miguel as participants specifically to prove
+    this. `supervisor_sign_off`/`approve_as_reference_installation`
+    both require `can_override_gates` — the same senior-authorization
+    permission used throughout this release —
+    and approval hard-requires sign-off to have already happened
+    (A45). `TrainingParticipantAcknowledgement` is recorded by the
+    participant themselves, not on their behalf (A46), and is
+    validated against the session's actual participant list.
+    `FieldIssue.training_session` (new FK) lets
+    `create_issue_from_training` produce a genuinely linked
+    `FieldIssue` through the existing `report_issue` service — never a
+    disconnected copy. New `/capacitaciones/` create/list/detail
+    screens (list supports `?reference=1` to show only approved
+    reference installations), linked from the main nav. 18 new tests
+    (`tests/test_training_sessions.py`), covering the configured-
+    trainer-not-hard-coded guarantee, session start/finish ordering,
+    checklist and before/during/after evidence recording,
+    participant-acknowledgement validation (including rejecting a
+    non-participant's attempt), supervisor sign-off permission and
+    ordering checks, reference-installation approval permission and
+    ordering checks, the create-issue-from-training relationship, and
+    cross-organization HTTP isolation — 336/336 passing (318
+    pre-existing + 18 new). Verified migrations apply cleanly from an
+    empty database; live HTTP walkthrough created a real training
+    session in the actual imported ARENA T1 Building 11.

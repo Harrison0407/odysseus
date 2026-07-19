@@ -174,7 +174,11 @@ All four Priority 1 features are now complete. See
     refinable later; full lifecycle including reject/resubmit/
     reinspection; closure requires `can_override_gates` regardless of
     who performed the correction. `/incidencias/` screens.
-36. Lawson training and reference installations — pending.
+36. ~~Lawson training and reference installations~~ — **Done.** New
+    `apps.training` app (ADR-037), mirroring the field-issue location/
+    evidence pattern; reference-installation approval requires
+    supervisor sign-off first. `/capacitaciones/` screens, live-
+    validated in the real ARENA T1 Building 11.
 37. Apartment walkthroughs and corrective actions — pending.
 38. Unclassified Evidence Inbox — pending.
 

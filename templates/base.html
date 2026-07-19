@@ -71,6 +71,16 @@
                         <li><a class="dropdown-item" href="{% url 'fieldissues:list' %}?view=awaiting-verification">{% trans "Pendiente de verificación" %}</a></li>
                     </ul>
                 </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" id="capacitacionDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        {% trans "Capacitación" %}
+                    </a>
+                    <ul class="dropdown-menu" aria-labelledby="capacitacionDropdown">
+                        <li><a class="dropdown-item" href="{% url 'training:create' %}">{% trans "Nueva sesión" %}</a></li>
+                        <li><a class="dropdown-item" href="{% url 'training:list' %}">{% trans "Todas las sesiones" %}</a></li>
+                        <li><a class="dropdown-item" href="{% url 'training:list' %}?reference=1">{% trans "Instalaciones de referencia" %}</a></li>
+                    </ul>
+                </li>
                 <li class="nav-item"><a class="nav-link" href="{% url 'workflow:inbox' %}">{% trans "Flujo y Entregas" %}</a></li>
             </ul>
             <span class="navbar-text text-white me-3">{{ user.get_full_name|default:user.username }}</span>

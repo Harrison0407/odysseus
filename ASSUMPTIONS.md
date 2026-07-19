@@ -426,3 +426,23 @@ instead, exactly as required, and is **not** listed here as a resolved assumptio
   kitchens, ...) but the system already has an established convention
   for "configurable taxonomy, never hard-coded into business logic" —
   reusing it here avoids a second taxonomy mechanism.
+- **A45. "Approved reference installation" requires supervisor
+  sign-off first, as a hard precondition, not merely a suggested
+  order.** The release lists "supervisor sign-off" and "whether the
+  result becomes an approved reference installation" as separate
+  captured facts without stating their exact ordering — requiring
+  sign-off before reference approval is the conservative reading (a
+  reference example for future teams should carry a supervisor's
+  endorsement, not just the trainer's own say-so), and both actions
+  reuse the same `can_override_gates` senior-authorization permission
+  already established for drawing approval and purchased-spare
+  confirmation.
+- **A46. `TrainingParticipantAcknowledgement` is recorded by the
+  participant themselves calling `acknowledge_participation`, not by
+  the trainer/supervisor on their behalf.** The release says
+  "participant acknowledgement" without specifying who records it;
+  requiring the participant's own action (enforced by checking
+  `session.participants.filter(pk=participant.pk)`) is the more
+  literal reading of "acknowledgement" and avoids a supervisor being
+  able to silently mark someone as having acknowledged something they
+  didn't.

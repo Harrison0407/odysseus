@@ -129,6 +129,11 @@
 | `/incidencias/<id>/asignar/` (POST) | `issue_assign` | Assigns/reassigns to a user or department |
 | `/incidencias/<id>/en-progreso/`, `/corregir/`, `/listo-para-verificar/`, `/verificar-cerrar/`, `/rechazar/`, `/reenviar/`, `/reinspeccion/` (POST) | lifecycle actions | Each transition server-side guarded; closure requires `can_override_gates` regardless of who did the work |
 | `/incidencias/<id>/evidencia/` (POST) | `issue_add_evidence` | Before/during/after staged evidence upload, reusing the shared upload path |
+| `/capacitaciones/` | `apps.training.views.session_list` | All sessions; `?reference=1` filters to approved reference installations |
+| `/capacitaciones/nueva/` | `session_create` | Building required; trainer/participants/category/floor/unit/drawing all configurable, none hard-coded |
+| `/capacitaciones/<id>/` | `session_detail` | Full detail: checklist, staged evidence, participant acknowledgements, lifecycle actions |
+| `/capacitaciones/<id>/iniciar/`, `/finalizar/`, `/firma-supervisor/`, `/aprobar-referencia/` (POST) | lifecycle actions | Reference-installation approval requires supervisor sign-off first (both gated by `can_override_gates`) |
+| `/capacitaciones/<id>/crear-incidencia/` (POST) | `session_create_issue` | Creates a real `FieldIssue` linked via `training_session`, never a disconnected copy |
 
 | Role code | Dashboard template |
 |---|---|

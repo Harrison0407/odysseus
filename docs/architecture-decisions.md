@@ -2,6 +2,25 @@
 
 Newest first.
 
+## ADR-037 — Training sessions mirror the field-issue location/evidence pattern exactly; reference-installation approval requires supervisor sign-off first
+**Decision:** `TrainingSession` (new `apps.training` app) uses the same
+building-required/floor-unit-room-optional location shape as
+`FieldIssue`, the same stage-tagged evidence wrapper
+(`TrainingEvidence`, reusing `attach_evidence`), and the same
+`can_override_gates` permission for both `supervisor_sign_off` and
+`approve_as_reference_installation` — the latter hard-requires the
+former to have already happened. `FieldIssue.training_session` (new
+FK) lets `create_issue_from_training` produce a real, linked
+`FieldIssue` via the existing `report_issue` service, never a
+duplicated/disconnected copy.
+**Why:** Reusing the exact location/evidence/permission shapes already
+established for field issues (rather than inventing new ones for
+training) keeps the whole property-master release internally
+consistent and avoids a fourth permission concept. Requiring
+supervisor sign-off before reference-installation approval (A45)
+ensures the "correct example for later teams" carries more than one
+person's endorsement.
+
 ## ADR-036 — Field issues reuse Comment/Attachment-style provenance and the existing senior-authorization permission; before/after evidence gets one small stage-tagged wrapper
 **Decision:** `FieldIssue` (new `apps.fieldissues` app) requires only
 `building` at creation; every other location field (floor/unit/room)

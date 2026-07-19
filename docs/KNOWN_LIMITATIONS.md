@@ -445,9 +445,13 @@ is silently claimed to be done when it isn't.
   can never self-close, though the release's own "at minimum" wording
   does not additionally forbid a permission-holder from closing their
   own work (A43). `/incidencias/` screens.
-- Lawson training/reference installations, apartment
-  walkthroughs/corrective actions, and the Unclassified Evidence Inbox
-  remain **not yet built** as of this entry — see
+- ~~Lawson training and reference installations~~ — **Done.** New
+  `apps.training` app (ADR-037); Lawson (or any other trainer) is an
+  ordinary configured user — nothing branches on a specific name.
+  Reference-installation approval requires supervisor sign-off first
+  (A45). `/capacitaciones/` screens.
+- Apartment walkthroughs/corrective actions and the Unclassified
+  Evidence Inbox remain **not yet built** as of this entry — see
   `docs/implementation-roadmap.md` for build order.
 
 ## Data-quality ambiguities (not bugs — see `DATA_QUALITY_AND_UNCERTAINTY.md`)

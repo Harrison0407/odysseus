@@ -140,8 +140,18 @@ definitions. A documentation-only **Milestone 1 Charter Correction Cycle**
 produced Charter version 2, resolving all twelve REVAL findings — again
 with no application code, template, test, or migration changed.
 
+Charter version 2 was then itself independently revalidated; the result
+was **MILESTONE 1 CHARTER VERSION 2 REQUIRES CORRECTION** — ten findings,
+including two of version 2's own REVAL corrections left incomplete under
+adversarial follow-through (REVAL-004-RESIDUAL, REVAL-008-RESIDUAL) and a
+direct contradiction against the current, unmodified
+`apps.governance.services.request_change` (NF-1). A documentation-only
+**Milestone 1 Charter Correction Cycle 2** produced Charter version 3,
+resolving all ten findings — again with no application code, template,
+test, or migration changed.
+
 Exact next action: **run a new, independent Fable 5 Charter revalidation
-session against the commit introducing Charter version 2. Do not begin
+session against the commit introducing Charter version 3. Do not begin
 A1–A6 implementation.**
 
 Milestone 1 remains planned and approved; neither foundation acceptance nor

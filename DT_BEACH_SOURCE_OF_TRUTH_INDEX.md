@@ -106,10 +106,17 @@ CHARTER REQUIRES CORRECTION (CHTR-001–CHTR-012 remained resolved, but
 twelve new findings, REVAL-001–REVAL-012, were found in version 1's own
 text). A documentation-only Milestone 1 Charter Correction Cycle produced
 Charter version 2, resolving all twelve REVAL findings. Charter version 2
-has not yet been independently revalidated and is not owner-approved.
+was itself independently revalidated (commit
+`3b62228b4a6efb4079e7f8c010e107fcf9de639a`); the result was MILESTONE 1
+CHARTER VERSION 2 REQUIRES CORRECTION (ten findings: REVAL-004-RESIDUAL,
+REVAL-005-RESIDUAL, REVAL-008-RESIDUAL, REVAL-009-TRACE,
+REVAL-011-ENFORCEMENT, NF-1, NF-2, NF-3, NF-4, NF-7). A documentation-only
+Milestone 1 Charter Correction Cycle 2 produced Charter version 3,
+resolving all ten. Charter version 3 has not yet been independently
+revalidated and is not owner-approved.
 
 **Next governing activity: a new, independent Milestone 1 Charter
-revalidation session against the commit introducing Charter version 2.**
+revalidation session against the commit introducing Charter version 3.**
 A1–A6 implementation is not authorized and has not started.
 
 Tests (as independently reproduced during the cycle-3 revalidation that

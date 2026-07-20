@@ -2,13 +2,19 @@
 
 Status: **DRAFT — DOCUMENTATION ONLY. NOT INDEPENDENTLY REVALIDATED. NOT OWNER-APPROVED.**
 
-Charter version: 2 (Milestone 1 Charter Correction Cycle, 2026-07-20)
+Charter version: 3 (Milestone 1 Charter Correction Cycle 2, 2026-07-20)
 
 Produced by: Milestone 1 Charter Definition and Reconciliation cycle,
 2026-07-20 (version 1), corrected by the Milestone 1 Charter Correction
 Cycle, 2026-07-20 (version 2), resolving every finding of the independent
-Milestone 1 Charter Revalidation (REVAL-001 through REVAL-012, §21).
-Version 2 has **not** itself been independently revalidated.
+Milestone 1 Charter Revalidation (REVAL-001 through REVAL-012, §21.2), and
+corrected again by the Milestone 1 Charter Correction Cycle 2, 2026-07-20
+(version 3), resolving every finding of the independent Milestone 1 Charter
+Version 2 Revalidation performed against commit
+`3b62228b4a6efb4079e7f8c010e107fcf9de639a` — NF-1, REVAL-004-RESIDUAL,
+REVAL-005-RESIDUAL, REVAL-008-RESIDUAL, REVAL-009-TRACE,
+REVAL-011-ENFORCEMENT, NF-2, NF-3, NF-4, and NF-7 (§21.3). Version 3 has
+**not** itself been independently revalidated.
 
 Supersedes: the 26-line acceptance-criteria summary in
 `docs/MARKETMATCH_ARCHITECTURE_RECONCILIATION_AND_ROADMAP.md` §3 "Milestone 1
@@ -18,14 +24,18 @@ and *priority*; this document is the binding statement of *how*. Where the
 two conflict on mechanism (not on intent), this Charter governs.
 
 This document resolves every finding of the independent Milestone 1 Charter
-Review (CHTR-001 through CHTR-012) and, as of version 2, every finding of
-the independent Milestone 1 Charter Revalidation (REVAL-001 through
-REVAL-012 — see §21 for the complete disposition table). It does not
-implement anything. No application code, template, test, or migration was
-written or modified to produce it. A1–A6 remain unimplemented after this
-document is committed. Implementation of this Charter requires a separate,
-subsequent, explicit owner authorization following a fresh, successful
-independent revalidation of this version — see §22.
+Review (CHTR-001 through CHTR-012), every finding of the independent
+Milestone 1 Charter Revalidation of version 1 (REVAL-001 through
+REVAL-012), and, as of version 3, every finding of the independent
+Milestone 1 Charter Version 2 Revalidation (NF-1, REVAL-004-RESIDUAL,
+REVAL-005-RESIDUAL, REVAL-008-RESIDUAL, REVAL-009-TRACE,
+REVAL-011-ENFORCEMENT, NF-2, NF-3, NF-4, NF-7 — see §21 for the complete
+disposition tables). It does not implement anything. No application code,
+template, test, or migration was written or modified to produce it. A1–A6
+remain unimplemented after this document is committed. Implementation of
+this Charter requires a separate, subsequent, explicit owner authorization
+following a fresh, successful independent revalidation of this version —
+see §22.
 
 ---
 
@@ -174,11 +184,18 @@ Resolves CHTR-003.
   requirement-code list, never a missing key. Each of the six entries
   contains: the ordered list of required evidence-requirement codes (§5.2)
   valid for that gate under this policy version, the capability code(s)
-  required to record a `GateDecision` for that gate, `overridable`
-  (boolean — whether any override may be requested for this gate at all,
-  §12.1), `non_overridable_requirements` (list of requirement codes from
-  this gate's own requirement list that remain mandatory even when
-  `overridable=True`, §12), and `override_satisfies_successor_predecessor`
+  required to record a `GateDecision` for that gate,
+  `attempt_creation_capability` (**required, binding, resolves NF-3 and
+  REVAL-005-RESIDUAL** — a single registered capability code, drawn from
+  the existing `CapabilityGrant` capability-code registry, that authorizes
+  *opening* a `GateAttempt` for this gate; deliberately separate from the
+  gate's `GateDecision` capability above and from `CREATE_EVIDENCE` — see
+  §13 for the full authorization table and the canonical policy's values),
+  `overridable` (boolean — whether any override may be requested for this
+  gate at all, §12.1; **binding for `A2`: this value must always be
+  `False`, §12.1**), `non_overridable_requirements` (list of requirement
+  codes from this gate's own requirement list that remain mandatory even
+  when `overridable=True`, §12), and `override_satisfies_successor_predecessor`
   (boolean, default `False`, §12 item 5).
 - `published_at` — nullable `DateTimeField`; set exactly once, only by the
   publish operation (§3.2).
@@ -197,13 +214,31 @@ Resolves CHTR-003.
   contains exactly the six keys `A1`, `A2`, `A3`, `A4`, `A5`, `A6` — no
   missing key, no unrecognized extra key — and every entry independently
   passes schema validation (required fields present and correctly typed:
-  requirement-code list, decision capability, `overridable`,
-  `non_overridable_requirements`, `override_satisfies_successor_predecessor`).
-  An entry with an empty requirement-code list is valid (a gate may
-  legitimately require no evidence, only a decision); a *missing* entry is
-  never valid. Runtime gate evaluation (§9) never interprets a missing gate
-  entry as any particular default — it cannot occur, because publication
-  rejected it.
+  requirement-code list, decision capability, `attempt_creation_capability`,
+  `overridable`, `non_overridable_requirements`,
+  `override_satisfies_successor_predecessor`). An entry with an empty
+  requirement-code list is valid (a gate may legitimately require no
+  evidence, only a decision); a *missing* entry is never valid. Runtime
+  gate evaluation (§9) never interprets a missing gate entry as any
+  particular default — it cannot occur, because publication rejected it.
+- **`attempt_creation_capability` validation (binding, resolves NF-3 and
+  REVAL-005-RESIDUAL):** every one of the six entries must declare a
+  non-null, non-empty `attempt_creation_capability` naming a capability
+  code registered in the existing capability-code registry (§13); a
+  missing, null, or unregistered value is rejected at publication, never
+  defaulted or inferred at runtime. Once published, `attempt_creation_capability`
+  is immutable exactly like every other field on a `PUBLISHED`/`WITHDRAWN`
+  row (§3.2 above). For the canonical A1–A6 policy shipped by the
+  Milestone 1 data migration (§4.2), every gate's
+  `attempt_creation_capability` is `CREATE_PROCUREMENT_GATE_ATTEMPT`
+  (§13).
+- **A2 non-overridability validation (binding, resolves REVAL-004-RESIDUAL):**
+  `publish_policy_version` must reject publication of any `gate_schema`
+  whose `A2` entry has `overridable = True`. `A2` — Technical Freeze — is
+  never overridable in Milestone 1, absolutely, with no policy opt-in of
+  any kind; this is a hardcoded publication-time rejection, not a default
+  that a sufficiently-motivated policy author could override. See §12.1
+  for the full binding rule and its rationale.
 - Publishing is a single, atomic, one-way transition `DRAFT → PUBLISHED`
   performed by a dedicated service function
   (`apps.procurement_gates.services.publish_policy_version`), never a
@@ -249,8 +284,32 @@ default." Multiple platform-scoped (`organization = NULL`) `GatePolicy`
 rows may coexist (e.g. an experimental platform-wide policy family not yet
 promoted); at most one of them may ever have `is_canonical_default = True`
 at a time, enforced by a database-level conditional unique constraint
-(`UniqueConstraint(condition=Q(is_canonical_default=True), fields=[])`, or
-the equivalent single-row-true invariant).
+(**resolves NF-7 — corrected from an invalid `fields=[]` example in
+version 2**):
+
+```python
+models.UniqueConstraint(
+    fields=["is_canonical_default"],
+    condition=models.Q(is_canonical_default=True),
+    name="unique_canonical_gate_policy",
+)
+```
+
+or the equivalent single-row-true invariant for the Django version in use.
+This constraint alone is necessary but not sufficient; it must be paired
+with the service-layer/model-validation rules below, all of which are
+required, not aspirational: (1) only a platform-scoped (`organization IS
+NULL`) `GatePolicy` may ever be flagged canonical — the service layer
+rejects setting the flag on any organization-owned row; (2) an
+organization-owned policy can never become canonical by any path,
+including direct model manipulation guarded by a `save()`-level check;
+(3) exactly one usable published canonical version (`is_canonical_default
+= True` and at least one `PUBLISHED`, non-`WITHDRAWN`-only
+`GatePolicyVersion`) must exist before any package-policy assignment or
+populated-database migration (§4.5) is permitted to run; (4) withdrawal of
+the canonical default's only published version is rejected whenever doing
+so would leave zero usable canonical defaults, per the availability
+invariant below.
 
 - A fresh installation seeds exactly one platform-scoped `GatePolicy` with
   `is_canonical_default = True` plus one initial `PUBLISHED`
@@ -288,7 +347,14 @@ the equivalent single-row-true invariant).
 - Fields: `package` (FK), `policy_version` (FK to `GatePolicyVersion`,
   must be `PUBLISHED` at assignment time — assigning a `DRAFT` or
   `WITHDRAWN` version is rejected by the service layer), `pinned_at`,
-  `pinned_by`, `is_active`, `superseded_by` (self FK, nullable).
+  `pinned_by`, `is_active`. **No `superseded_by` field (binding, resolves
+  NF-2 — removed from version 2):** Milestone 1 supports exactly one
+  permanent pinned assignment per package for the life of its gate
+  progression; there is no re-pinning, supersession, or reassignment
+  concept to link, so no self-FK for it exists on this model. A future
+  milestone may introduce versioned reassignment only through a
+  separately-approved architecture decision and its own migration; this
+  Charter reserves no field, placeholder, or column for that possibility.
 - **Pinning happens exactly once per package's A1 entry**, inside the same
   `transaction.atomic()` block that creates the package's first `A1`
   `GateAttempt` (§9), using `select_for_update()` on the `ProcurementPackage`
@@ -303,6 +369,64 @@ the equivalent single-row-true invariant).
   against that one `GatePolicyVersion`'s `gate_schema`, for the life of the
   package, regardless of later publications, withdrawals, or new default
   changes.
+
+### 3.5 Foreign-key deletion policy (binding, resolves NF-4)
+
+Version 2 specified every foreign key on every new model without stating
+`on_delete` behavior anywhere in the document — a systemic omission across
+all ~8 new models. This section is binding and exhaustive: every FK listed
+below must use exactly the stated `on_delete` value; no field-specific
+deviation is permitted without a documented, Charter-amendment-level
+reason.
+
+**General rule:** no history-critical foreign key may use `CASCADE`. A
+current-state projection row (`PackageGateState`, §9.6) may be rebuilt,
+but no operation may silently cascade-delete an immutable historical row
+(`GateAttempt`, `GateEvaluation`, `GateDecision`, `GateInvalidation`,
+`PackageFreezeRevision`, `ProcurementGateOverride`) as a side effect of
+deleting something it references. `ProcurementPackage` deletion must be
+blocked (via `PROTECT`) while any gate history exists for it, exactly as
+the accepted foundation already blocks deletion of referenced `Document`
+rows (`Attachment.document`, `EvidenceItem.document`, both `PROTECT` in
+`apps.audit.models`).
+
+| Model | FK field | `on_delete` | Rationale |
+|---|---|---|---|
+| `GatePolicy` | `organization` | `SET_NULL` (nullable, unchanged meaning — see §3.1) | Not a deletion-safety field; `NULL` is a valid, meaningful state already. |
+| `GatePolicyVersion` | `policy` | `PROTECT` | A version can never outlive the policy family identity it belongs to. |
+| `GatePolicyVersion` | `published_by` | `SET_NULL` | Actor account retention is not guaranteed; the published fact and timestamp remain regardless. |
+| `GatePolicyVersion` | `supersedes` | `PROTECT` | The version-supersession chain is historical and must never silently break. |
+| `PackagePolicyAssignment` | `package` | `PROTECT` | Deleting a package must not silently delete its policy pin. |
+| `PackagePolicyAssignment` | `policy_version` | `PROTECT` | A pin must never be able to point at nothing; the pinned version is permanent history (§3.4). |
+| `PackagePolicyAssignment` | `pinned_by` | `SET_NULL` (nullable already, §4.2) | Matches the existing system-assignment convention. |
+| `PackageFreezeRevision` | `package` | `PROTECT` | Freeze history must survive as long as any reference to it could exist; package deletion is blocked while history exists. |
+| `PackageFreezeRevision` | `policy_version` | `PROTECT` | The historical self-containment rationale (§7.1) requires this reference never silently vanish. |
+| `PackageFreezeRevision` | `actor` | `SET_NULL` | Actor account retention is not guaranteed. |
+| `PackageFreezeRevision` | `predecessor` | `PROTECT` | The revision chain (§7.1) must never have a broken link. |
+| `PackageFreezeRevision` | `source_change_requests` (M2M) | N/A (M2M; through-row deletion only removes the association, never the `ChangeRequest` or the revision) | M2M rows carry no independent historical meaning beyond the association itself. |
+| `GateAttempt` | `package` | `PROTECT` | Same package-deletion-blocked rationale as above. |
+| `GateAttempt` | `opened_by` | `SET_NULL` | Actor account retention is not guaranteed. |
+| `GateEvaluation` | `attempt` | `PROTECT` | An evaluation must never be able to outlive the attempt it evaluated. |
+| `GateEvaluation` | `evaluated_by` | `SET_NULL` (nullable already, §9.3) | Matches the existing system-evaluation convention. |
+| `GateDecision` | `attempt` | `PROTECT` | A decision must never be able to outlive the attempt it closed. |
+| `GateDecision` | `evaluation` | `PROTECT` | The decision's evidentiary basis must remain traceable forever. |
+| `GateDecision` | `decided_by` | `SET_NULL` | Actor account retention is not guaranteed. |
+| `GateInvalidation` | `decision` | `PROTECT` | An invalidation record is meaningless without the decision it invalidates. |
+| `GateInvalidation` | `invalidated_by` | `SET_NULL` (nullable already, §9.4) | Matches the existing system-invalidation convention. |
+| `GateInvalidation` | `trigger_content_type`/`trigger_object_id` | `SET_NULL` on `trigger_content_type` (generic FK; the historical `reason` text and safe trigger-id reference remain even if the triggering row is later removed) | Mirrors the existing generic-FK convention used by `audit.EvidenceBundle`/`Comment`/`Attachment`. |
+| `ProcurementGateOverride` | `package` | `PROTECT` | Same package-deletion-blocked rationale as above. |
+| `ProcurementGateOverride` | `policy_version` | `PROTECT` | The pinned-version-scope invariant (§11.2) must remain traceable. |
+| `ProcurementGateOverride` | `attempt` | `PROTECT` | An override record is meaningless without the attempt it applied to. |
+| `ProcurementGateOverride` | `organization` | `SET_NULL` | Matches the existing `Handoff.organization` denormalization convention this field mirrors (§11.2). |
+| `ProcurementGateOverride` | `requested_by`, `decided_by`, `revoked_by` | `SET_NULL` | Actor account retention is not guaranteed for any of the three. |
+| `PackageHoldCause` | `package` | `PROTECT` | Same package-deletion-blocked rationale as above. |
+| `PackageHoldCause` | `reference` (generic FK to `ChangeRequest`/`RiskFlag`) | `SET_NULL` on the content-type FK | Mirrors the existing generic-FK convention; the hold-cause record's own `cause_type`/timestamps remain meaningful independent of the referenced row's survival. |
+| `PackageGateState` (cache, §9.6) | `package` | `CASCADE` | The **only** permitted `CASCADE` in this Charter — this row is an explicitly non-authoritative, rebuildable cache (§9.6); deleting it loses nothing that `rebuild_gate_state` cannot regenerate, and it must never block package deletion the way a historical row would. |
+
+Required tests (§18): for every `PROTECT` relationship above, a test
+attempting the blocked deletion and asserting it is rejected; for
+`PackageGateState`, a test asserting its deletion is harmless and
+`rebuild_gate_state` regenerates it identically.
 
 ---
 
@@ -595,8 +719,9 @@ Resolves CHTR-005.
   for historical self-containment and forward compatibility, so that a
   future, separately-approved milestone that ever permits policy
   reassignment mid-package does not have to retrofit this model. A required
-  test (§18) asserts this invariant holds for every `PackageFreezeRevision`
-  created under this Charter's rules.
+  test (§18 test 18a, **added — resolves REVAL-009-TRACE**) asserts this
+  invariant holds for every `PackageFreezeRevision` created under this
+  Charter's rules.
 - `frozen_fields` — `JSONField`: the exact set of critical
   technical/commercial fields and their values at freeze time (role party
   ids, incoterm, currency, payment terms, specification/drawing revision,
@@ -713,7 +838,102 @@ An approved critical post-A2 `governance.ChangeRequest` (status transition
    override under the current (post-refreeze) terms if still needed —
    never by reviving the revoked one.
 
-### 8.2 Non-critical changes
+**Why step 4 needs no separate `A2` case (resolves REVAL-004-RESIDUAL):**
+version 2 of this cascade scoped active-override revocation to "A3–A6"
+only, leaving an open question — since §12.1 (version 2) permitted `A2`
+to be made `overridable` via explicit policy opt-in — of what happens to
+an `A2` gate that is currently `OVERRIDDEN` rather than decided, since
+step 2 only invalidates an existing `GateDecision`. §12.1 now makes `A2`
+**unconditionally, permanently non-overridable**, enforced by a
+publication-time rejection (§3.2) rather than a policy default that could
+be opted out of. `A2` can therefore never enter the `OVERRIDDEN` state at
+all under this Charter; step 2's `GateDecision`-based invalidation is
+always sufficient on its own, and step 4's scope correctly remains "A3–A6"
+because no `A2` override can ever exist to revoke. This closes the gap by
+construction rather than by adding a special case to the cascade.
+
+### 8.2 Change Request entry point, frozen-field vocabulary, and
+non-critical changes
+
+Resolves NF-1, REVAL-011-ENFORCEMENT, and the non-critical-change portion
+of the original charter review.
+
+#### 8.2.1 Gate-aware Change Request entry point (binding, resolves NF-1)
+
+**Version 2 problem, stated plainly:** version 2 claimed non-critical
+changes "never touch hold state" while relying on the existing, unchanged
+`apps.governance.services.request_change` — but that function
+unconditionally sets `ProcurementPackage.is_on_hold = True` on **every**
+`ChangeRequest` it creates, critical or not (verified at
+`apps/governance/services.py:677-688` as of commit
+`3b62228b4a6efb4079e7f8c010e107fcf9de639a`). Milestone 1 does not modify
+that function (§0 forbids redesigning the accepted `apps.governance`
+foundation), so the fix is an additive orchestration layer in front of it,
+never a change to it.
+
+**`apps.procurement_gates.services.request_gate_aware_change`** is the
+**sole** Change Request creation entry point for Milestone 1. Every
+Milestone 1 HTTP view, form, API endpoint, admin action, management
+command, and internal procurement-gate service that creates a
+`ChangeRequest` against a gate-governed package must call this function;
+none may call `apps.governance.services.request_change` directly. The
+existing `request_change` function remains fully available, unmodified,
+to legacy (pre-Milestone-1, non-gate-aware) foundation callers — this is
+additive orchestration, not a redesign of the accepted foundation.
+
+The function performs, in order:
+
+1. Enter `transaction.atomic()`.
+2. Lock the `ProcurementPackage` row with `select_for_update()` — this is
+   the same serialization boundary already used by every other
+   Charter-defined mutation (§14.1).
+3. **Authorize the actor before retrieving any protected value** —
+   resolved through `RoleAssignment`/`CapabilityGrant` exactly as
+   `apps.governance.services.has_capability` already requires (§13); a
+   denial is recorded via `log_denied_attempt`/`PRIVILEGED_ACCESS_DENIED`
+   (§10) and the function returns before touching `field_name`,
+   `frozen_current_value`, or `proposed_new_value`.
+4. Validate `field_name` against `apps.procurement_gates.constants.FROZEN_FIELD_CODES`
+   (§8.2.2); an unrecognized code is rejected outright, before a
+   `ChangeRequest` row is created.
+5. Determine critical/non-critical classification for the validated
+   `field_name` from the package's pinned `GatePolicyVersion.gate_schema`
+   (§8.2.2) — **before** creating the request, never inferred afterward.
+6. Invoke the existing, unmodified
+   `apps.governance.services.request_change` to create the `ChangeRequest`
+   row itself (reusing its `frozen_current_value` derivation and its
+   `AuditEvent.Action.CHANGE_REQUEST` logging exactly as today).
+7. **Recompute the package's `is_on_hold` inside the same transaction**,
+   from the full set of currently-open `PackageHoldCause` rows (§8.4),
+   never from a direct, unconditional flag write:
+   - For a **non-critical** change: `request_change`'s own unconditional
+     `is_on_hold = True` write (step 6) is **not** the transaction's final
+     externally-visible hold state. No open `PackageHoldCause` is opened
+     for a non-critical `ChangeRequest`. The recomputation in this step
+     immediately re-derives `is_on_hold` from whatever other hold causes
+     already exist for the package; if none exist, the package is **not**
+     held by this non-critical request, correctly realizing §8.2.2's
+     "never touches hold state" rule. There is no direct
+     `package.is_on_hold = False` shortcut anywhere in this step — the
+     result always comes from the same central `recompute_hold_state`
+     function §8.4 already defines, applied to the same
+     `PackageHoldCause` set every other hold-affecting operation uses.
+   - For a **critical** change: a new `PackageHoldCause`
+     (`cause_type = CRITICAL_CHANGE_REQUEST`, `reference` = this
+     `ChangeRequest`) is opened in this same step, so the recomputation
+     correctly leaves (or places) the package on hold; §8.1's cascade
+     fires on the request's later approval, unchanged.
+
+Required tests (§18): a static/architectural test proving no Milestone 1
+view, form, API, admin action, or service imports or calls
+`apps.governance.services.request_change` directly; service-level tests
+proving the critical and non-critical outcomes above; a test proving an
+unrelated, already-open hold cause (e.g. an unresolved `HIGH_RISK`
+`RiskFlag`) survives a non-critical change's hold recomputation unchanged;
+and authorization/denial-audit tests for step 3.
+
+#### 8.2.2 Frozen-field vocabulary (binding, resolves REVAL-011 and
+REVAL-011-ENFORCEMENT)
 
 **Shared frozen-field vocabulary (binding, resolves REVAL-011).** Both
 `governance.ChangeRequest.field_name` and `PackageFreezeRevision.frozen_fields`
@@ -732,29 +952,57 @@ are **not** independently accepted — there is exactly one canonical code
 per concept, and any UI label or translation maps onto that one stored
 code, never the reverse. `ChangeRequest.field_name` itself remains the
 existing free-text `CharField` on the model (unchanged per this cycle's
-authorization boundary — no application model is modified), but the
-**service layer** that creates a critical/non-critical-classified
-`ChangeRequest` against a frozen package validates `field_name` against
-this registry before accepting it, rejecting any value not in the
-registry's codes with a clear validation error — this is where the
-vocabulary constraint is actually enforced, not on the model field itself.
+authorization boundary — no application model is modified).
+
+**Enforcement location and ownership (binding, resolves
+REVAL-011-ENFORCEMENT):** the registry lives in, and is owned by,
+`apps.procurement_gates.constants.FROZEN_FIELD_CODES`. The **only**
+service-layer code that validates `field_name` against it is
+`apps.procurement_gates.services.request_gate_aware_change` (§8.2.1),
+step 4, executed before any `ChangeRequest` row is created — this is the
+one, named, non-ambiguous enforcement point this Charter previously left
+unnamed. **Dependency direction (binding, no exception):**
+`apps.procurement_gates` may import from `apps.governance`;
+`apps.governance` must never import from, or otherwise depend on,
+`apps.procurement_gates` — the registry and its validation live entirely
+in the new, downstream app, so no circular dependency between
+`governance`, `procurement`, and `procurement_gates` is created or
+possible. Because §8.2.1 establishes `request_gate_aware_change` as the
+sole Milestone 1 creation entry point, and the unmodified
+`apps.governance.services.request_change` remains reachable only by
+legacy, non-gate-aware callers that predate and are outside this
+Charter's scope, the registry check is not bypassable from any Milestone
+1 code path. Any value not in the registry's codes is rejected with a
+clear validation error at that single point — this is where the
+vocabulary constraint is actually enforced, not on the model field
+itself.
 
 A `ChangeRequest` whose validated `field_name` is not on the package's
 frozen-field list (§7.1 `frozen_fields`, whose keys are themselves drawn
 from the same registry) follows an explicit, policy-declared rule: the
 `GatePolicyVersion.gate_schema` (or a package-level policy extension)
 declares, per registry code, whether a change is `critical` (triggers
-§8.1) or `non_critical` (approved and recorded via the unchanged
-`ChangeRequest` mechanism, but never touches hold state, freeze revisions,
-or gate invalidation). There is no third, undeclared category — a
-registry code with no declared critical/non-critical classification in the
-pinned policy version, and any `field_name` value outside the registry
-entirely, is treated as `critical` by default (fail-closed), never silently
-allowed to bypass §8.1. Original submitted values (the `ChangeRequest`'s own
-`frozen_current_value`/`proposed_new_value` free text) are never altered by
-this vocabulary rule — only the stable `field_name` code is constrained;
-display labels and translations of that code do not alter the stored code
-itself, consistent with §17's localization boundary.
+§8.1) or `non_critical` (created via `request_gate_aware_change`, §8.2.1,
+which uses the unmodified `ChangeRequest` mechanism for the row itself but
+never leaves the package held on this cause alone, and never touches
+freeze revisions or gate invalidation). There is no third, undeclared
+category — a registry code with no declared critical/non-critical
+classification in the pinned policy version, and any `field_name` value
+outside the registry entirely, is treated as `critical` by default
+(fail-closed), never silently allowed to bypass §8.1. Original submitted
+values (the `ChangeRequest`'s own `frozen_current_value`/`proposed_new_value`
+free text) are never altered by this vocabulary rule — only the stable
+`field_name` code is constrained; display labels and translations of that
+code do not alter the stored code itself, consistent with §17's
+localization boundary.
+
+Required tests (§18): canonical codes succeed; aliases (e.g. `trade_terms`
+for `incoterm`) are rejected; unknown codes encountered in historical or
+pre-existing data are treated as critical, never silently passed through;
+direct Milestone 1 calls to `apps.governance.services.request_change` do
+not exist anywhere in the codebase (the same static/architectural test
+required by §8.2.1); and translations of a registry code never alter the
+stored code itself.
 
 ### 8.3 Risk Flags plus Change Requests
 
@@ -963,6 +1211,69 @@ invalidation/expiry/revocation moves it to `INVALIDATED`/`EXPIRED`/its
 pre-override derived state, at which point only a new attempt — never the
 old one — can move the gate forward again.
 
+**Downstream invalidation on predecessor-override lapse (binding, resolves
+REVAL-008-RESIDUAL):** version 2 left undefined what happens to a
+downstream gate `A(n+1)` (or further) that reached `PASSED`, `OVERRIDDEN`,
+`READY`, or `IN_REVIEW` in reliance on `A(n)`'s `OVERRIDDEN` state
+satisfying its predecessor check (only possible when
+`gate_schema[A(n)].override_satisfies_successor_predecessor = True`, §12
+item 5) — once `A(n)`'s backing `ProcurementGateOverride` subsequently
+expires or is revoked, nothing previously recomputed `A(n+1)`'s already-
+decided state. This Charter now defines a deterministic cascade, modeled
+directly on §8.1's critical-change cascade:
+
+1. The expiry-detection or revocation operation that causes `A(n)` to stop
+   being `OVERRIDDEN` (§11.5's lazy expiry check, or an explicit
+   revocation) executes inside `transaction.atomic()` with
+   `select_for_update()` on the `ProcurementPackage` row — the same
+   serialization boundary as every other Charter-defined mutation.
+2. Inside that same lock, the function determines whether `A(n)`'s prior
+   `OVERRIDDEN` state was ever relied on as satisfied predecessor validity
+   for gate `A(n+1)` — true whenever
+   `gate_schema[A(n)].override_satisfies_successor_predecessor` was `True`
+   at the time `A(n+1)`'s current attempt was opened or last evaluated
+   (recorded on that `GateEvaluation`'s `predecessor_valid` field, §9.3).
+   If so, the cascade below applies to `A(n+1)`; if `A(n+1)` has itself
+   been passed/overridden and relied upon by `A(n+2)`, the same check
+   propagates forward, gate by gate, through `A6`.
+3. For every downstream gate from `A(n+1)` through `A6` whose current
+   result is affected by this chain, append a `GateInvalidation` row
+   (§9.4) against its current `GateDecision` (if any), with
+   `trigger_content_type`/`trigger_object_id` referencing the lapsed
+   `ProcurementGateOverride` — never its own free-text `reason` field,
+   consistent with §8.1 step 4's confidentiality rule for cascade
+   triggers. A downstream gate currently `OVERRIDDEN` on its own,
+   independent override is likewise invalidated by revoking that override
+   through the same system-attributed convention as §8.1 step 4. A
+   downstream gate currently `READY` or `IN_REVIEW` (open attempt, no
+   terminal decision yet) does not need a `GateInvalidation` row — its
+   next `GateEvaluation` will naturally recompute `predecessor_valid` as
+   `False` and report `BLOCKED` (§9.5's `BLOCKED` row), because the
+   predecessor state feeding that evaluation has already changed.
+4. Every `GateAttempt`, `GateEvaluation`, `GateDecision`, `GateInvalidation`,
+   and `ProcurementGateOverride` row touched by this cascade is preserved
+   in full — none is edited or deleted; only the current-state projection
+   (§9.6) for the affected gates changes.
+5. The package is placed or kept `is_on_hold = True` via the same
+   `PackageHoldCause`/`recompute_hold_state` mechanism as §8.4, with
+   `cause_type` distinguishing this trigger from a critical-change hold,
+   so the two hold sources compose correctly rather than colliding.
+6. No downstream attempt is reopened by this cascade — exactly as expiry
+   and revocation never reopen `A(n)`'s own attempt. Progress past any
+   invalidated downstream gate requires opening a brand-new `GateAttempt`
+   for that gate once `A(n)`'s predecessor state is valid again (a fresh
+   decision, or a fresh override under current terms).
+7. This cascade is recorded with a stable audit action,
+   `GATE_DOWNSTREAM_INVALIDATED` (§10), one event per downstream gate
+   invalidated, in addition to the existing `GATE_OVERRIDE_EXPIRED`/
+   `GATE_OVERRIDE_REVOKED` event for `A(n)` itself.
+
+This closes the gap by defining the cascade explicitly rather than leaving
+downstream gates silently stale; it deliberately mirrors §8.1's
+already-accepted shape (lock → invalidate forward → hold → preserve
+history → require new attempts) rather than inventing a second
+invalidation philosophy.
+
 No state is stored as a single mutable enum column anywhere. `NOT_STARTED`
 through `OVERRIDDEN` are all computed by
 `apps.procurement_gates.services.compute_gate_state(package, gate_code)`
@@ -1012,6 +1323,7 @@ members):
 | `GATE_OVERRIDE_REJECTED` | An override request is rejected. |
 | `GATE_OVERRIDE_REVOKED` | An active override is revoked. |
 | `GATE_OVERRIDE_EXPIRED` | An override's `expires_at` passes (recorded at the next read/evaluation that observes the expiry, not by a required background job — see §11.5). |
+| `GATE_DOWNSTREAM_INVALIDATED` | **(added, resolves REVAL-008-RESIDUAL)** A downstream gate's current result is invalidated because a predecessor's `override_satisfies_successor_predecessor`-backed `OVERRIDDEN` state expired or was revoked (§9.5). One event per downstream gate invalidated. |
 | `PACKAGE_FREEZE_CREATED` | The first `PackageFreezeRevision` (revision 1) for a package. |
 | `PACKAGE_REFREEZE_CREATED` | Any subsequent `PackageFreezeRevision`. |
 | `GATE_PROGRESSION_EXEMPTION_GRANTED` | §4.4's administrative exemption is set. |
@@ -1228,14 +1540,37 @@ Resolves the remainder of CHTR-006.
 ### 12.1 Per-gate override eligibility default
 
 `gate_schema[gate_code].overridable` defaults to `True` for `A3`–`A6`, and
-to `False` for `A1` and `A2` unless a policy version explicitly opts in —
-`A1` (deal terms) and `A2` (technical freeze) are the two gates most likely
-to carry irreversible downstream consequences if overridden casually, so
-the safe default requires explicit policy opt-in before either becomes
-overridable at all. This default applies only when a policy version is
-first authored as a `DRAFT`; per item 10 above, a *published* version
-missing this field entirely is rejected outright, never silently defaulted
-at publish time.
+to `False` for `A1` unless a policy version explicitly opts in — `A1`
+(deal terms) carries irreversible downstream consequences if overridden
+casually, so the safe default requires explicit policy opt-in before it
+becomes overridable at all. This default applies only when a policy
+version is first authored as a `DRAFT`; per item 10 above, a *published*
+version missing this field entirely is rejected outright, never silently
+defaulted at publish time.
+
+**`A2` is unconditionally, permanently non-overridable (binding, resolves
+REVAL-004-RESIDUAL — supersedes version 2's "`False` unless a policy
+version explicitly opts in" treatment of `A2`):** `gate_schema["A2"].overridable`
+must always be `False`. There is no policy opt-in, no organization-level
+exception, and no platform-administration carve-out that can ever set it
+to `True` — §3.2's publish-time validation rejects any `gate_schema` whose
+`A2` entry has `overridable = True` outright, before the version can ever
+reach `PUBLISHED`. Consequently: no `ProcurementGateOverride` may ever be
+requested for `A2` (the request-creation service function rejects it
+before any row is written, same fail-closed mechanism as any other
+`overridable = False` gate, §12 item 10); `A2` can never enter the
+`OVERRIDDEN` state (§9.5); and the post-A2 critical-change cascade (§8.1)
+never needs to reconcile an overridden `A2` against its `GateDecision`-based
+invalidation step, because that case cannot occur (§8.1's closing note).
+**Why `A2` specifically, and not `A3`–`A6`:** `A2` is the technical-freeze
+gate whose entire purpose is to make the package's frozen terms
+authoritative for every downstream gate and for the critical-change
+cascade itself (§2, §7, §8); allowing it to be bypassed by override would
+let a package proceed through `A3`–`A6` against terms that were never
+actually frozen, undermining the freeze/change-control mechanism this
+Charter exists to define. `A1` and `A3`–`A6` carry no equivalent
+structural dependency, so their override eligibility remains
+policy-configurable.
 
 ---
 
@@ -1245,18 +1580,34 @@ For every read/mutation path introduced by this Charter, the following is
 mandatory and mirrors the existing foundation's authorization discipline
 exactly (no new authorization philosophy is invented):
 
+**New capability code (binding, resolves NF-3 and REVAL-005-RESIDUAL):**
+`CREATE_PROCUREMENT_GATE_ATTEMPT` is added to the existing `CapabilityGrant`
+capability-code registry (alongside `PUBLISH_GATE_POLICY`, following the
+same precedent), scoped exactly like any other capability code — via
+`CapabilityGrant.role_assignment` (package-scoped, once a `RoleAssignment`
+exists) or `CapabilityGrant.organization` (organization-scoped, for the
+`A1` bootstrap path only, §9.2 step 3). It is never implied by any role
+default (`ROLE_DEFAULT_CAPABILITIES`) and is a distinct capability from
+`CREATE_EVIDENCE`, `APPROVE_GATE`, and every `GateDecision` capability —
+attempt *creation* and gate *decision*/*evidence-creation* are three
+separate authorization questions, never conflated. For the canonical
+policy shipped by the Milestone 1 data migration (§4.2),
+`gate_schema[gate_code].attempt_creation_capability` (§3.1, §3.2) is
+`CREATE_PROCUREMENT_GATE_ATTEMPT` for all six gates, `A1` through `A6`.
+
 | Path | Capability required | Notes |
 |---|---|---|
 | View gate summary/detail (authorized projection) | package-scoped active role assignment, no elevated capability beyond it | Unauthorized viewer gets denial before any projection is computed. |
-| Create `GateAttempt` for `A2`–`A6` | package-scoped capability appropriate to that gate (declared per-gate in `gate_schema`) | A3–A5 evidence-creation capabilities reuse `CREATE_EVIDENCE`. |
-| Create a package's **first** `GateAttempt`, for `A1` only (binding exception, resolves REVAL-005) | **Organization-scoped** `CapabilityGrant` (via `CapabilityGrant.organization`, not `CapabilityGrant.role_assignment`) on the package's hosting organization | By construction, no package-scoped `RoleAssignment`/`CapabilityGrant` can exist before `A1` establishes the package's first roles — `A1`'s own content is establishing them. This is the **only** gate-attempt-creation path in this Charter authorized at organization scope rather than package scope; every other attempt-creation path (including every subsequent `A1` re-attempt after a prior one closed) still requires package scope once at least one `RoleAssignment` exists. |
+| Create `GateAttempt` for `A2`–`A6` | Package-scoped `CREATE_PROCUREMENT_GATE_ATTEMPT`, per `gate_schema[gate_code].attempt_creation_capability` (§3.1, resolves NF-3) | Distinct from the gate's `GateDecision` capability and from `CREATE_EVIDENCE` — an actor may be authorized to open an A3 attempt without yet holding QC-decision or evidence-verification authority, and vice versa. |
+| Create a package's **first** `GateAttempt`, for `A1` only (binding exception, resolves REVAL-005 and REVAL-005-RESIDUAL) | **Organization-scoped** `CapabilityGrant` for `CREATE_PROCUREMENT_GATE_ATTEMPT` (via `CapabilityGrant.organization`, not `CapabilityGrant.role_assignment`) on the package's hosting organization | By construction, no package-scoped `RoleAssignment`/`CapabilityGrant` can exist before `A1` establishes the package's first roles — `A1`'s own content is establishing them. This is the **only** gate-attempt-creation path in this Charter authorized at organization scope rather than package scope; every other attempt-creation path (including every subsequent `A1` re-attempt after a prior one closed, and every `A2`–`A6` attempt) requires the same capability at package scope once at least one `RoleAssignment` exists. |
 | Record `GateEvaluation` | System-triggered or same capability as viewing detail (evaluation itself grants no authority, only informs) | |
-| Record `GateDecision` | The specific capability declared in `gate_schema[gate_code]` (§3.1), e.g. `APPROVE_GATE` (existing code, reused) | Never satisfied by same-organization membership alone. |
+| Record `GateDecision` | The specific capability declared in `gate_schema[gate_code]` (§3.1), e.g. `APPROVE_GATE` (existing code, reused) | Never satisfied by same-organization membership alone; distinct from `CREATE_PROCUREMENT_GATE_ATTEMPT` above. |
 | `PUBLISH_GATE_POLICY` (new capability code) | Platform- or organization-scoped policy administration capability | Never implied by any role default (§ governance `ROLE_DEFAULT_CAPABILITIES` — no role gets this by default). |
-| Request `ProcurementGateOverride` | `AUTHORIZE_EXCEPTION` (existing code) scoped to the package | |
+| Request `ProcurementGateOverride` | `AUTHORIZE_EXCEPTION` (existing code) scoped to the package | Rejected outright for `A2` regardless of capability held — `A2` is unconditionally non-overridable (§12.1). |
 | Approve `ProcurementGateOverride` | A distinct capability from the requester's own grant (§11.3) | |
 | Revoke `ProcurementGateOverride` | Same capability as approval | |
 | Create/approve `PackageFreezeRevision` | `APPROVE_TECHNICAL_SPEC` (existing code) for the initial freeze; refreeze additionally requires the triggering `ChangeRequest`'s own approval capability | |
+| Create `governance.ChangeRequest` against a gate-governed, frozen package | Resolved entirely inside `apps.procurement_gates.services.request_gate_aware_change` (§8.2.1) — the same capability check `apps.governance.services.request_change` already performs, evaluated before any protected value is retrieved | This is the sole Milestone 1 creation entry point (§8.2.1); it is not a new authorization rule, only a named, single enforcement location. |
 
 **Binding rules restated for this domain specifically (already true
 platform-wide, restated because the review flagged them as easy to get
@@ -1378,12 +1729,17 @@ not be claimed as validated on SQLite evidence alone:
 - Override decision and expiry races (§14.4 rows 6 and 8).
 - Transactional hold recomputation under concurrent cause open/close
   (§8.4).
+- **Downstream invalidation cascade locking (added, resolves
+  REVAL-008-RESIDUAL)** — the package/gate-state row locking used by
+  §9.5's downstream-invalidation cascade when a predecessor-satisfying
+  override expires or is revoked concurrently with a downstream decision
+  or a new downstream attempt being opened.
 
 ### 15.2 Closure gate
 
 Milestone 1 **cannot** be declared technically closed (§20) until one of:
 
-(a) the six PostgreSQL-dependent scenarios above are executed against a
+(a) the seven PostgreSQL-dependent scenarios above are executed against a
 real PostgreSQL instance with recorded, reproducible evidence (command,
 output, pass/fail, database engine explicitly logged), or
 
@@ -1506,6 +1862,13 @@ organization, but every row must be traceable to at least one test.
      replacement available is rejected; a populated-database migration
      attempted with zero usable canonical default refuses to proceed
      (resolves REVAL-003).
+10c. Publishing a `GatePolicyVersion` whose `A2` entry has
+     `overridable = True` is rejected outright, regardless of any other
+     field's validity (resolves REVAL-004-RESIDUAL).
+10d. Every gate entry's `attempt_creation_capability` is present, non-null,
+     and names a registered capability code before a `gate_schema` may
+     publish; a missing, null, or unregistered value on any of the six
+     entries is rejected (resolves NF-3).
 
 **Existing-package migration**
 11. Empty-database migration succeeds and seeds exactly one canonical
@@ -1538,6 +1901,13 @@ organization, but every row must be traceable to at least one test.
 
 **Freeze and change control**
 18. A2 freeze creates revision 1 correctly.
+18a. For every `PackageFreezeRevision` created (initial freeze, a plain
+     refreeze, and a critical-change-triggered refreeze), `policy_version`
+     equals the package's `PackagePolicyAssignment.policy_version` at that
+     moment; a deliberately mismatched value supplied to the freeze/refreeze
+     service function is rejected before the row is created; the invariant
+     is additionally asserted by re-reading historical revisions after
+     other, unrelated mutations occur (resolves REVAL-009-TRACE).
 19. Freeze revisions are immutable (attempt to edit a `SUPERSEDED` or
     `CURRENT` revision's `frozen_fields` directly is not exposed by any
     service function — enforced by absence of such a function, and by a
@@ -1567,10 +1937,50 @@ organization, but every row must be traceable to at least one test.
      pinned policy version default to critical treatment (resolves
      REVAL-011).
 
+**Change Request entry point (resolves NF-1 and REVAL-011-ENFORCEMENT)**
+25c. Static/architectural test: no Milestone 1 view, form, API endpoint,
+     admin action, management command, or service imports or calls
+     `apps.governance.services.request_change` directly; every such path
+     resolves exclusively through
+     `apps.procurement_gates.services.request_gate_aware_change`.
+25d. A non-critical `ChangeRequest` created via `request_gate_aware_change`
+     against a package with no other open hold cause leaves the package
+     **not** on hold after the transaction commits, despite
+     `request_change`'s own unconditional `is_on_hold = True` write inside
+     the same call.
+25e. A non-critical `ChangeRequest` created via `request_gate_aware_change`
+     against a package that already has an unrelated open hold cause (e.g.
+     an unresolved `HIGH_RISK` `RiskFlag`) leaves the package correctly
+     still on hold, and that unrelated cause is neither cleared nor
+     duplicated by this request.
+25f. A critical `ChangeRequest` created via `request_gate_aware_change`
+     opens a `PackageHoldCause` and leaves the package on hold, unchanged
+     from §8.1's existing behavior.
+25g. Authorization is evaluated, and a denial is durably audited via
+     `PRIVILEGED_ACCESS_DENIED`, before any protected `ChangeRequest`
+     field is retrieved by `request_gate_aware_change` for an unauthorized
+     actor.
+25h. Registry enforcement: canonical `FROZEN_FIELD_CODES` values succeed;
+     a known alias (e.g. `trade_terms` for `incoterm`) is rejected, not
+     silently mapped; a `field_name` value found only in historical/legacy
+     data and absent from the registry is treated as critical when
+     encountered by gate-domain evaluation, never silently passed through
+     as non-critical; a translation/display label of a registry code never
+     alters the stored code itself.
+
 **Decisions and attempts**
 26. A `GateDecision` requires the exact capability declared in
     `gate_schema` — a user with a different, plausible-sounding capability
     is denied.
+26a. Creating a `GateAttempt` for `A2`–`A6` requires the exact
+     `attempt_creation_capability` declared in `gate_schema[gate_code]`
+     (`CREATE_PROCUREMENT_GATE_ATTEMPT` for the canonical policy); a user
+     holding only the gate's `GateDecision` capability (and not
+     `attempt_creation_capability`) is denied attempt creation, and a user
+     holding only `attempt_creation_capability` (and not the decision
+     capability) is denied recording the eventual `GateDecision` — proving
+     the two are enforced as genuinely separate capabilities (resolves
+     NF-3).
 27. `GateAttempt` immutability: no service function edits a closed
     attempt's `gate_code`/`attempt_number`/`policy_version`.
 27a. `attempt_number` allocation: a concurrency test opening two attempts
@@ -1579,10 +1989,11 @@ organization, but every row must be traceable to at least one test.
      the second caller under the open-attempt constraint, never assigning
      a duplicate or skipped number (resolves REVAL-007).
 27b. Creating a package's first `A1` `GateAttempt` succeeds for a user
-     holding only an organization-scoped `CapabilityGrant` (no
-     package-scoped role assignment yet exists) and fails for a user
-     holding neither organization- nor package-scoped authority (resolves
-     REVAL-005).
+     holding only an organization-scoped `CapabilityGrant` for
+     `CREATE_PROCUREMENT_GATE_ATTEMPT` (no package-scoped role assignment
+     yet exists) and fails for a user holding neither organization- nor
+     package-scoped grant of that exact capability (resolves REVAL-005 and
+     REVAL-005-RESIDUAL).
 
 **Overrides**
 28. Override request requires minimum evidence per policy where declared.
@@ -1610,6 +2021,40 @@ organization, but every row must be traceable to at least one test.
      `GateEvaluation` without reopening it, and no further progress on
      that gate is possible without opening a new `GateAttempt` (resolves
      REVAL-008).
+33c. `gate_schema["A2"].overridable` cannot be published as `True` (see
+     10c); requesting a `ProcurementGateOverride` for `A2` is rejected
+     outright by the request-creation service function, regardless of
+     capability held, and the denial is audited (resolves
+     REVAL-004-RESIDUAL).
+
+**Downstream invalidation cascade (resolves REVAL-008-RESIDUAL)**
+33d. A downstream gate `A(n+1)` that reached `PASSED` while relying on
+     `A(n)`'s `OVERRIDDEN` state (`override_satisfies_successor_predecessor
+     = True`) is invalidated via a `GateInvalidation` row when `A(n)`'s
+     backing override subsequently **expires**.
+33e. The same downstream invalidation occurs when `A(n)`'s override is
+     **revoked by a human actor**, system-attributed fields set correctly
+     for the downstream `GateInvalidation` rows.
+33f. The same downstream invalidation occurs when `A(n)`'s override is
+     revoked by the **system-attributed** post-A2 critical-change cascade
+     (§8.1 step 4).
+33g. Multiple downstream gates (`A(n+1)` through `A6`, chained) are each
+     invalidated when the originating predecessor override lapses,
+     verified for a package with more than one downstream `PASSED` gate in
+     the chain.
+33h. Multiple independent descendant chains (e.g. two different packages,
+     or two different gates within the allowed policy configuration) are
+     each invalidated independently without cross-package or cross-chain
+     leakage.
+33i. The cascade transaction rolls back cleanly and leaves no partial
+     invalidation state if an unexpected error occurs mid-cascade (e.g.
+     after invalidating `A(n+1)` but before `A(n+2)`).
+33j. The cascade is idempotent under retry: a retried expiry/revocation
+     observation with the same idempotency key does not create duplicate
+     `GateInvalidation` or `GATE_DOWNSTREAM_INVALIDATED` rows.
+33k. The `GATE_DOWNSTREAM_INVALIDATED` audit event's safe projection
+     references only the triggering override's identifier, never any
+     confidential evidence or `ChangeRequest` free text.
 
 **Authorization and confidentiality**
 34. Same-organization, unauthorized-capability actor is denied on every
@@ -1649,6 +2094,15 @@ organization, but every row must be traceable to at least one test.
 45. `ProcurementPackage.Status` transitions and their existing tests
     continue to pass unmodified — proves no regression into the existing
     commercial-package state machine.
+
+**Foreign-key deletion policy (resolves NF-4)**
+46. For every `PROTECT` relationship listed in §3.5's table, attempting the
+    blocked deletion raises the expected integrity error and the
+    referencing historical row remains intact.
+47. Deleting a `PackageGateState` cache row (§9.6, the sole `CASCADE`
+    relationship in this Charter) is harmless: `rebuild_gate_state`
+    regenerates an identical row from history alone, and no historical row
+    is affected.
 
 ---
 
@@ -1745,7 +2199,7 @@ declared closed:
    `migrate --check` both pass).
 4. All tests in §18's matrix pass, plus the full existing regression suite
    with no new failures.
-5. PostgreSQL concurrency validation is completed per §15.1's six named
+5. PostgreSQL concurrency validation is completed per §15.1's seven named
    scenarios, or an explicit, separate, milestone-specific owner
    disposition accepts the gap per §15.2(b).
 6. Live HTTP/browser validation per §19 is completed and recorded — not
@@ -1778,7 +2232,7 @@ declared closed:
 | CHTR-007 — No gate attempt/evaluation/decision/invalidation model or audit taxonomy | **Accept.** `GateAttempt`/`GateEvaluation`/`GateDecision`/`GateInvalidation` defined with exact meanings, plus a derived current-state cache and a rebuild-from-history requirement; new `AuditEvent.Action` codes enumerated. | §9, §10. |
 | CHTR-008 — "Live validation" method undefined | **Accept.** Explicit, real HTTP/browser walkthrough method defined, distinct from and in addition to automated tests, with ten required paths and a required record format. | §19. |
 | CHTR-009 — Milestone 1 vs. Milestone 3 API boundary ambiguous | **Accept as clarified boundary.** Narrow, exhaustive Milestone 1 surface list defined; generalized convergence work explicitly reserved for Milestone 3. | §16. |
-| CHTR-010 — PostgreSQL availability/validation treatment unstated | **Accept with explicit rule.** SQLite permitted for general development; six named lock-sensitive scenarios require real PostgreSQL evidence or a separate, milestone-specific owner disposition before closure — never silently carried forward as validated. | §15. |
+| CHTR-010 — PostgreSQL availability/validation treatment unstated | **Accept with explicit rule.** SQLite permitted for general development; seven named lock-sensitive scenarios (six as of version 2, plus the version-3 downstream-invalidation-cascade scenario, resolves REVAL-008-RESIDUAL) require real PostgreSQL evidence or a separate, milestone-specific owner disposition before closure — never silently carried forward as validated. | §15. |
 | CHTR-011 — `EvidenceBundle`/`EvidenceItem` reuse feasibility (positive finding) | **Accept.** Confirmed and specified in full; no new evidence-storage model introduced. | §5. |
 | CHTR-012 — Evidence-classification inheritance from package visibility mode undefined | **Accept.** Deterministic classification precedence defined, plus participant-projection and information-absence rules and an explicit rule against exposing raw evidence merely because it is referenced. | §6. |
 
@@ -1806,26 +2260,68 @@ document) corrects all twelve:
 | REVAL-011 — No shared vocabulary between `ChangeRequest.field_name` and `PackageFreezeRevision.frozen_fields` keys | Underspecification | Low-Medium | No | Accept | Defined one canonical, enumerated frozen-field code registry; both sides validated against it at the service layer; the `ChangeRequest` model itself is unmodified | §8.2, §18 test 25b |
 | REVAL-012 — Completion cross-reference incorrectly excluded §18–§19 | Editorial cross-reference error | Low | No | Accept | Changed "§1–§17" to "§1–§19" in completion criterion 1 | §20 item 1 |
 
-**No implementation has occurred.** Both tables in this section record
-documentation dispositions only. A1–A6 remain unimplemented. Version 2 of
+**No implementation has occurred.** All three tables in this section record
+documentation dispositions only. A1–A6 remain unimplemented. Version 3 of
 this Charter has not itself been independently revalidated — see §22.
+
+### 21.3 NF-1, REVAL-004-RESIDUAL, REVAL-005-RESIDUAL, REVAL-008-RESIDUAL,
+REVAL-009-TRACE, REVAL-011-ENFORCEMENT, NF-2, NF-3, NF-4, NF-7
+(independent Milestone 1 Charter Version 2 Revalidation, corrected in
+version 3)
+
+The independent Milestone 1 Charter Version 2 Revalidation performed
+against commit `3b62228b4a6efb4079e7f8c010e107fcf9de639a` confirmed
+REVAL-001, 002, 003, 006, 007, 009 (text), 010, 011 (registry design), and
+012 as resolved, found two of version 2's own REVAL corrections
+(REVAL-004, REVAL-008) left residual gaps, and identified five newly
+discovered findings — and returned **MILESTONE 1 CHARTER VERSION 2
+REQUIRES CORRECTION**. Version 3 (this document) corrects all ten accepted
+findings:
+
+| Finding | Original classification | Original severity | Blocked before correction? | Accepted disposition | Exact correction applied | Corrected Charter references |
+|---|---|---|---|---|---|---|
+| NF-1 — §8.2's "non-critical changes never touch hold state" was contradicted by the current, unmodified `apps.governance.services.request_change`, which unconditionally sets `is_on_hold = True` on every `ChangeRequest` creation | Internal contradiction against current repository code | Critical | Yes | Accept | Added `apps.procurement_gates.services.request_gate_aware_change` as the sole Milestone 1 Change Request entry point, wrapping the unmodified `request_change`, with its own hold-state recomputation from all open `PackageHoldCause` rows | §8.2.1, §13, §18 tests 25c–25g |
+| REVAL-004-RESIDUAL — the post-A2 cascade revoked overrides only on A3–A6, never addressing an `A2` gate left `OVERRIDDEN` by a policy-opt-in override | State-machine gap | High | Yes | Accept | `A2` is now unconditionally, permanently non-overridable (publication-time rejection); `A2` can never enter `OVERRIDDEN`, so the gap cannot occur | §3.2, §12.1, §8.1 closing note, §18 tests 10c, 33c |
+| REVAL-005-RESIDUAL — the exact A1-bootstrap capability code was never named, only its organization-vs-package scope shape | Authorization completeness gap | High | Yes | Accept | Added `CREATE_PROCUREMENT_GATE_ATTEMPT` as a new capability code; the A1-bootstrap grant now names it explicitly | §13, §18 test 27b |
+| REVAL-008-RESIDUAL — no defined behavior for a downstream `PASSED`/`OVERRIDDEN` gate when the predecessor override it relied on later expires or is revoked | Internal contradiction / stale-descendant gap | Critical | Yes | Accept | Added an explicit, locked downstream-invalidation cascade (§9.5), mirroring §8.1's shape, with a new `GATE_DOWNSTREAM_INVALIDATED` audit action | §9.5, §10, §15.1 (7th PostgreSQL scenario), §18 tests 33d–33k |
+| REVAL-009-TRACE — §7.1 promised a required §18 test for the `policy_version` equality invariant that did not exist in §18 | Testability gap | Medium | No | Accept | Added §18 test 18a, covering initial freeze, refreeze, critical-change refreeze, historical revisions, and a deliberately mismatched rejected input | §7.1, §18 test 18a |
+| REVAL-011-ENFORCEMENT — the frozen-field registry's enforcing "service layer" and its dependency direction against `apps.governance` were never named | Architecture conflict | Medium | Yes | Accept | Named `request_gate_aware_change` (§8.2.1) as the sole enforcement point; stated the binding one-way dependency direction (`procurement_gates` → `governance`, never the reverse) | §8.2.2, §18 test 25h |
+| NF-2 — `PackagePolicyAssignment.superseded_by` was defined but structurally unusable under §3.4's own permanent-pin rule, with no rationale | Internal contradiction / dead field | Medium | No | Accept | Removed the field entirely; §3.4 states no re-pinning/supersession concept exists in Milestone 1 | §3.4 |
+| NF-3 — attempt-creation capability codes for A2–A6 (and A1's exact code) were never named; §13 referenced a `gate_schema` field that did not exist in §3.1/§3.2's validated field list | Internal contradiction / testability gap | High | Yes | Accept | Added the required, publish-validated `attempt_creation_capability` field to every gate entry; added `CREATE_PROCUREMENT_GATE_ATTEMPT` as its canonical value for all six gates | §3.1, §3.2, §13, §18 tests 10d, 26a |
+| NF-4 — no `on_delete` behavior was specified for any FK on any of the ~8 new Charter models | Migration gap | Medium | No | Accept | Added an exhaustive, field-by-field `on_delete` table (§3.5) with a `PROTECT`-by-default rule for history-critical rows and exactly one documented `CASCADE` (the rebuildable `PackageGateState` cache) | §3.5, §18 tests 46–47 |
+| NF-7 — the illustrative canonical-default `UniqueConstraint(fields=[], ...)` example was invalid Django syntax | Editorial issue | Low | No | Accept | Replaced with a valid `UniqueConstraint(fields=["is_canonical_default"], condition=..., name=...)` example | §3.3 |
+
+**No implementation has occurred.** All three tables in this section
+record documentation dispositions only. A1–A6 remain unimplemented.
+Version 3 of this Charter has not itself been independently revalidated —
+see §22.
 
 ---
 
 ## 22. Status and next action
 
-**MILESTONE 1 CHARTER CORRECTION COMPLETE (VERSION 2) — NOT YET
+**MILESTONE 1 CHARTER CORRECTION CYCLE 2 COMPLETE (VERSION 3) — NOT YET
 INDEPENDENTLY REVALIDATED — NOT OWNER-APPROVED.**
 
 Version 1 of this Charter was independently revalidated and returned
 MILESTONE 1 CHARTER REQUIRES CORRECTION, with twelve findings
-(REVAL-001–REVAL-012, §21.2). Version 2 (this document) corrects all
-twelve. Version 2 has **not** itself been independently revalidated.
-Milestone 1 implementation remains unauthorized. The exact next action is
-a new, independent Fable 5 Charter revalidation session against the commit
-that introduces this version — confirming this Charter actually resolves
-CHTR-001 through CHTR-012 and REVAL-001 through REVAL-012 as claimed,
-contains no internal contradictions of its own, and does not itself
-require further correction — before any owner-approval decision or A1–A6
-implementation authorization is considered. Do not begin A1–A6
-implementation.
+(REVAL-001–REVAL-012, §21.2). Version 2 corrected all twelve, but was
+itself independently revalidated (the Independent Milestone 1 Charter
+Version 2 Revalidation, performed against commit
+`3b62228b4a6efb4079e7f8c010e107fcf9de639a`) and returned **MILESTONE 1
+CHARTER VERSION 2 REQUIRES CORRECTION**, finding two of version 2's own
+REVAL corrections incomplete (REVAL-004-RESIDUAL, REVAL-008-RESIDUAL) and
+five newly discovered findings (NF-1, NF-2, NF-3, NF-4, NF-7), plus two
+further, more narrowly-scoped gaps (REVAL-005-RESIDUAL,
+REVAL-009-TRACE/REVAL-011-ENFORCEMENT) — ten findings in total, all listed
+in §21.3. Version 3 (this document) corrects all ten. Version 3 has
+**not** itself been independently revalidated. Milestone 1 implementation
+remains unauthorized. The exact next action is a new, independent Fable 5
+Charter revalidation session against the commit that introduces this
+version — confirming this Charter actually resolves CHTR-001 through
+CHTR-012, REVAL-001 through REVAL-012, and NF-1/REVAL-004-RESIDUAL/
+REVAL-005-RESIDUAL/REVAL-008-RESIDUAL/REVAL-009-TRACE/
+REVAL-011-ENFORCEMENT/NF-2/NF-3/NF-4/NF-7 as claimed, contains no internal
+contradictions of its own, and does not itself require further correction
+— before any owner-approval decision or A1–A6 implementation
+authorization is considered. Do not begin A1–A6 implementation.

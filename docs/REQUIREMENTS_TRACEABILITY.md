@@ -38,11 +38,17 @@ documentation-only. An independent Milestone 1 Charter Revalidation of
 version 1 then returned MILESTONE 1 CHARTER REQUIRES CORRECTION with
 twelve new findings (REVAL-001–REVAL-012, found in the Charter's own text);
 a Milestone 1 Charter Correction Cycle produced version 2, resolving all
-twelve, again documentation-only. The exact next action is a new,
-independent Fable 5 Charter revalidation session against the commit
-introducing version 2. A1–A6 implementation remains not started and is not
-authorized by this acceptance or by the Charter's own authorship;
-`ProcurementPackage.Status` is not evidence of gate execution.
+twelve, again documentation-only. An independent Milestone 1 Charter
+Version 2 Revalidation then returned MILESTONE 1 CHARTER VERSION 2
+REQUIRES CORRECTION with ten further findings (NF-1, REVAL-004-RESIDUAL,
+REVAL-005-RESIDUAL, REVAL-008-RESIDUAL, REVAL-009-TRACE,
+REVAL-011-ENFORCEMENT, NF-2, NF-3, NF-4, NF-7); a Milestone 1 Charter
+Correction Cycle 2 produced version 3, resolving all ten, again
+documentation-only. The exact next action is a new, independent Fable 5
+Charter revalidation session against the commit introducing version 3.
+A1–A6 implementation remains not started and is not authorized by this
+acceptance or by the Charter's own authorship; `ProcurementPackage.Status`
+is not evidence of gate execution.
 
 ## Priority 0 capabilities (spec section 5)
 

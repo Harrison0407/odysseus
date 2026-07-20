@@ -139,11 +139,15 @@ Current unresolved limitations, grouped by official roadmap disposition:
 - **Milestone 1:** configurable, versioned A1–A6 gate definitions, evidence
   schemas, progression, exceptions, expiry/revocation, and live validation.
   The design for all of this is now specified in
-  `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md` (version 2, corrected
+  `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md` (version 3, corrected
   after independent revalidation found twelve findings in version 1 —
-  REVAL-001–REVAL-012, all now resolved in version 2); none of it is
-  implemented yet — this remains a full open limitation until Milestone 1
-  is actually built, tested, and completed per that Charter's §20.
+  REVAL-001–REVAL-012, all resolved in version 2 — and then found ten
+  further findings in version 2 itself — NF-1, REVAL-004-RESIDUAL,
+  REVAL-005-RESIDUAL, REVAL-008-RESIDUAL, REVAL-009-TRACE,
+  REVAL-011-ENFORCEMENT, NF-2, NF-3, NF-4, NF-7 — all resolved in version
+  3); none of it is implemented yet — this remains a full open limitation
+  until Milestone 1 is actually built, tested, and completed per that
+  Charter's §20.
 - **Milestone 2:** complete `es`/`en`/`zh-Hans` internationalization
   foundation; OCR and automated translation engines remain deferred until the
   authorized-projection and localization boundaries are complete.

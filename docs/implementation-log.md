@@ -1746,3 +1746,109 @@ documented order.
     Exact next action: run a new, independent Fable 5 Charter revalidation
     session against the commit introducing Charter version 2. Do not begin
     A1–A6 implementation.
+
+58. **Milestone 1 Charter Correction Cycle 2 — documentation-only.** Dated
+    2026-07-20. No application code, template, test, or migration was
+    touched.
+
+    The independent Milestone 1 Charter Version 2 Revalidation that
+    followed entry 57 reread Charter version 2 (commit
+    `3b62228b4a6efb4079e7f8c010e107fcf9de639a`) fresh against itself, the
+    actual repository models (`apps.audit.EvidenceBundle`,
+    `apps.governance.ChangeRequest`/`CapabilityGrant`, `apps.procurement.ProcurementPackage`),
+    and — critically — the actual, unmodified
+    `apps.governance.services.request_change` function, and returned
+    **MILESTONE 1 CHARTER VERSION 2 REQUIRES CORRECTION** with ten
+    findings. Every REVAL-001–REVAL-012 correction from version 2 was
+    independently confirmed textually resolved, but two of them left
+    residual gaps under adversarial follow-through, and five further
+    findings were newly discovered:
+
+    - **NF-1 (Critical):** §8.2's claim that non-critical Change Requests
+      "never touch hold state" was contradicted by
+      `apps.governance.services.request_change` (`apps/governance/services.py:677-688`),
+      which unconditionally sets `is_on_hold = True` on every
+      `ChangeRequest` it creates, critical or not.
+    - **REVAL-004-RESIDUAL (High):** the post-A2 cascade revoked overrides
+      only on A3–A6, never addressing an `A2` gate left `OVERRIDDEN` by a
+      policy-opt-in override version 2 itself permitted.
+    - **REVAL-005-RESIDUAL (High):** the A1-bootstrap grant's scope shape
+      was specified, but its exact capability code was never named.
+    - **REVAL-008-RESIDUAL (Critical):** no behavior was defined for a
+      downstream `PASSED`/`OVERRIDDEN` gate when the predecessor override
+      it relied on later expired or was revoked.
+    - **REVAL-009-TRACE (Medium):** §7.1 promised a required §18 test for
+      the `PackageFreezeRevision.policy_version` equality invariant that
+      did not exist in §18.
+    - **REVAL-011-ENFORCEMENT (Medium):** the frozen-field registry's
+      enforcing "service layer" and its dependency direction against
+      `apps.governance` were never named.
+    - **NF-2 (Medium):** `PackagePolicyAssignment.superseded_by` was
+      defined but structurally unusable under §3.4's own permanent-pin
+      rule, with no rationale given.
+    - **NF-3 (High):** attempt-creation capability codes for A2–A6 were
+      never named, and §13 referenced a `gate_schema` field that did not
+      exist in §3.1/§3.2's validated field list.
+    - **NF-4 (Medium):** no `on_delete` behavior was specified for any FK
+      on any of the ~8 new Charter models.
+    - **NF-7 (Low):** the illustrative canonical-default
+      `UniqueConstraint(fields=[], ...)` example was invalid Django syntax.
+
+    This cycle corrected all ten findings in Charter version 3:
+    `apps.procurement_gates.services.request_gate_aware_change` is now the
+    sole Milestone 1 Change Request entry point, wrapping the unmodified
+    `request_change` with its own hold-state recomputation from all open
+    `PackageHoldCause` rows (§8.2.1, NF-1); `A2` is now unconditionally,
+    permanently non-overridable, enforced by publication-time rejection,
+    closing the REVAL-004-RESIDUAL gap by construction rather than by
+    special-casing the cascade further (§3.2, §12.1); a new capability
+    code, `CREATE_PROCUREMENT_GATE_ATTEMPT`, is added and named explicitly
+    for both the A1-bootstrap path and every A2–A6 attempt-creation path
+    (§13, NF-3/REVAL-005-RESIDUAL); an explicit, locked
+    downstream-invalidation cascade is defined for lapsed predecessor
+    overrides, mirroring §8.1's shape, with a new `GATE_DOWNSTREAM_INVALIDATED`
+    audit action (§9.5, §10, REVAL-008-RESIDUAL); the missing
+    `policy_version` equality-invariant test was added (§18 test 18a,
+    REVAL-009-TRACE); the registry's enforcement point and one-way
+    dependency direction against `apps.governance` were named explicitly
+    (§8.2.2, REVAL-011-ENFORCEMENT); `PackagePolicyAssignment.superseded_by`
+    was removed entirely (§3.4, NF-2); a complete, field-by-field
+    `on_delete` table was added for every new model, `PROTECT`-by-default
+    with exactly one documented `CASCADE` exception (§3.5, NF-4); and the
+    invalid `UniqueConstraint` example was replaced with valid Django
+    syntax (§3.3, NF-7). §21.3 of the Charter records the complete
+    disposition table.
+
+    Documentation reconciled in the same commit: `DT_BEACH_CURRENT_STATE.md`,
+    `DT_BEACH_SOURCE_OF_TRUTH_INDEX.md`, `README.md`,
+    `docs/architecture-decisions.md` (ADR-045, new entry, does not reopen
+    ADR-044), `docs/SECURITY.md`, `docs/KNOWN_LIMITATIONS.md`,
+    `docs/REQUIREMENTS_TRACEABILITY.md`, and
+    `docs/MARKETMATCH_ARCHITECTURE_RECONCILIATION_AND_ROADMAP.md`.
+
+    Fresh evidence for this cycle: HEAD confirmed at
+    `3b62228b4a6efb4079e7f8c010e107fcf9de639a` before editing; branch
+    `integration/dt-beach-supply-control-1.0.0`; upstream
+    `origin/integration/dt-beach-supply-control-1.0.0`; ahead/behind `0/0`;
+    working tree clean before editing. `manage.py check` passed;
+    `makemigrations --check --dry-run` reported no changes detected;
+    `migrate --check` passed, 72/72 migrations applied, 0 pending —
+    unchanged, as expected for a documentation-only cycle. The full
+    regression suite was **not** rerun for this cycle, by design — it was
+    already independently reproduced at **511/511** during the foundation
+    acceptance revalidation, and independently reproduced again (39/39 and
+    53/53 on the targeted privileged-audit/foundation suites) during the
+    Charter Version 2 Revalidation that preceded this cycle; documentation
+    changes cannot alter Python test outcomes, so those figures are
+    carried forward here, not re-claimed as freshly rerun.
+
+    **Status distinctions, precise:** Charter version 3 is *authored* and
+    *corrected against every accepted Version 2 Revalidation finding*
+    (this entry); it is **not** *independently revalidated* and **not**
+    *owner approved*. A1–A6 remain entirely *unimplemented* — nothing in
+    this entry changes that. Milestone 1 implementation is **not
+    authorized** by this entry.
+
+    Exact next action: run a new, independent Fable 5 Charter revalidation
+    session against the commit introducing Charter version 3. Do not begin
+    A1–A6 implementation.

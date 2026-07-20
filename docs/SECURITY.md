@@ -41,9 +41,9 @@ control rules for Procurement Gates A1–A6:
   ever placing raw evidence content or confidential field values in audit
   `metadata`.
 - PostgreSQL-specific lock/race validation is required before Milestone 1
-  may be declared closed for six named concurrency scenarios (Charter §15)
-  — SQLite evidence alone is explicitly disallowed from being represented
-  as PostgreSQL validation.
+  may be declared closed for seven named concurrency scenarios (Charter
+  §15) — SQLite evidence alone is explicitly disallowed from being
+  represented as PostgreSQL validation.
 
 **Correction cycle update (2026-07-20):** an independent revalidation of
 Charter version 1 found, and Charter version 2 corrected, two
@@ -55,8 +55,26 @@ terms can never silently survive a critical change (Charter §8.1 step 4);
 explicit organization-scoped capability rather than an impossible
 package-scoped one, since no package-scoped role can exist before `A1`
 creates it (Charter §13). Both remain design-only — neither has been
-implemented, and Charter version 2 has not itself been independently
-revalidated.
+implemented.
+
+**Correction cycle 2 update (2026-07-20):** an independent revalidation of
+Charter version 2 found this cascade still left an `A2` gate that had
+itself been overridden (permitted under version 2's policy-opt-in rule)
+untouched by the cascade, and found no defined behavior for a downstream
+gate that relied on a predecessor's `OVERRIDDEN` state once that override
+later expired or was revoked. Charter version 3 makes `A2` unconditionally
+non-overridable, eliminating the first gap by construction, and adds an
+explicit, locked downstream-invalidation cascade for the second (Charter
+§9.5, resolves REVAL-008-RESIDUAL). The same cycle also found that
+version 2's non-critical-Change-Request "never touches hold state" claim
+was contradicted by the current, unmodified
+`apps.governance.services.request_change`, which unconditionally holds
+the package on every Change Request creation; Charter version 3 adds
+`apps.procurement_gates.services.request_gate_aware_change` as the sole
+Milestone 1 Change Request entry point to resolve this without modifying
+the accepted foundation (Charter §8.2.1, resolves NF-1). All three remain
+design-only — none has been implemented, and Charter version 3 has not
+itself been independently revalidated.
 
 None of this has been implemented. A1–A6 do not exist in the codebase as of
 this entry; this section documents the approved design only.

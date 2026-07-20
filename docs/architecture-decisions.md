@@ -2,6 +2,50 @@
 
 Newest first.
 
+## ADR-045 — Milestone 1 Change Requests route through a new orchestration
+service, never the foundation's `request_change` directly; `A2` becomes
+unconditionally non-overridable; a downstream-invalidation cascade is
+added for lapsed predecessor overrides
+
+**Decision:** `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md` version 3
+adds three binding rules, all documentation-only as of this entry (no
+application code changed): (1)
+`apps.procurement_gates.services.request_gate_aware_change` becomes the
+sole Milestone 1 entry point for creating a `governance.ChangeRequest`
+against a gate-governed package — every Milestone 1 view, form, API,
+admin action, and service must call it, never
+`apps.governance.services.request_change` directly; the latter remains
+fully available, unmodified, to legacy foundation callers (Charter
+§8.2.1). (2) `gate_schema["A2"].overridable` must always be `False`,
+enforced by publication-time rejection, with no policy opt-in of any kind
+(Charter §12.1, supersedes the "`False` unless a policy version explicitly
+opts in" treatment `A2` previously shared with `A1`). (3) An explicit,
+locked downstream-invalidation cascade is defined for when a gate that
+relied on a predecessor's `override_satisfies_successor_predecessor`-backed
+`OVERRIDDEN` state later has that predecessor override expire or be
+revoked (Charter §9.5).
+
+**Why:** the independent Milestone 1 Charter Version 2 Revalidation
+(against commit `3b62228b4a6efb4079e7f8c010e107fcf9de639a`) found that (1)
+version 2's claim that non-critical Change Requests "never touch hold
+state" was contradicted by the current, unmodified
+`apps.governance.services.request_change`, which unconditionally sets
+`is_on_hold = True` on every `ChangeRequest` it creates — an orchestration
+layer was required rather than a change to the accepted foundation, which
+this Charter cycle's authorization boundary forbids modifying (NF-1); (2)
+version 2 permitted `A2` to be made `overridable` via policy opt-in, but
+the post-A2 critical-change cascade (ADR-044's correction addendum) only
+ever revoked active overrides on `A3`–`A6`, leaving an `OVERRIDDEN` `A2`
+gate untouched by a critical change — the safer, simpler fix is to remove
+the possibility entirely rather than special-case the cascade further
+(REVAL-004-RESIDUAL); (3) nothing defined what happens to a downstream
+gate that already passed in reliance on a predecessor's override once
+that override lapses, leaving a real "stale descendant" gap
+(REVAL-008-RESIDUAL). None of these three corrections reopens or
+contradicts ADR-044 above; `apps.workflow.GateOverride` and
+`apps.governance.services.request_change` remain unmodified by all of
+them.
+
 ## ADR-044 — Milestone 1 procurement gate overrides get a new, domain-native model; `apps.workflow.GateOverride` is not reused or relaxed
 **Decision:** `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md` §11 defines a
 new `ProcurementGateOverride` model, scoped to

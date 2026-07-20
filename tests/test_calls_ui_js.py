@@ -1,6 +1,7 @@
 """Focused Node-backed tests for the visible MarketMatch Capture pilot UI."""
 
 import json
+import re
 import shutil
 import subprocess
 import textwrap
@@ -11,6 +12,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE = (ROOT / "static" / "js" / "calls.js").as_uri()
+I18N_MODULE = (ROOT / "static" / "js" / "i18n.js").as_uri()
 SOURCE = (ROOT / "static" / "js" / "calls.js").read_text(encoding="utf-8")
 INDEX = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
 APP_SOURCE = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
@@ -22,7 +24,11 @@ def _run_node(script: str):
         pytest.skip("node binary not on PATH")
     completed = subprocess.run(
         ["node", "--input-type=module"],
-        input=textwrap.dedent(script).replace("CALLS_MODULE", MODULE),
+        input=(
+            textwrap.dedent(script)
+            .replace("CALLS_MODULE", MODULE)
+            .replace("I18N_MODULE", I18N_MODULE)
+        ),
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -153,9 +159,123 @@ def test_success_empty_result_timestamps_copy_and_reset():
     assert result["resets"] == 1
     assert result["silence"] is True
     assert result["rendered"][0]["segments"][0] == {"start_ms": 0, "end_ms": 600, "text": "Example"}
-    assert result["rendered"][1] == {"duration_ms": 1000, "segments": [], "transcript_text": ""}
+    assert result["rendered"][1] == {
+        "duration_ms": 1000, "segments": [], "transcript_text": "",
+        "language": "und", "language_confidence": None,
+    }
     assert result["timestamp"] == "01:01:01.001"
-    assert any("No speech was detected" in message for _, message in result["statuses"])
+    assert any("No se detectó voz" in message for _, message in result["statuses"])
+
+
+def test_repeated_transcription_state_is_ordered_validated_and_stale_safe():
+    result = _run_node(
+        """
+        import { createCallsController } from 'CALLS_MODULE';
+        const statuses = [];
+        const renders = [];
+        const timelines = [];
+        const pending = [];
+        const copied = [];
+        const success = (text, language = undefined, confidence = undefined) => ({
+          duration_ms: 1000,
+          segments: [{ start_ms: 0, end_ms: 1000, text }],
+          transcript_text: text,
+          ...(language === undefined ? {} : { language }),
+          ...(confidence === undefined ? {} : { language_confidence: confidence }),
+        });
+        const response = (payload, ok = true, status = 200) => ({
+          ok, status, json: async () => payload,
+        });
+        const queueFetch = (_url, options) => new Promise((resolve, reject) => {
+          pending.push({ resolve, reject, signal: options.signal });
+        });
+        const view = {
+          clearResult() {}, clearSave() {}, clearAnalysis() {}, clearRecording() {},
+          clearUpload() {}, showSelected() {}, setReady() {}, setBusy() {}, reset() {},
+          setRecordingState() {}, setRecordingStatus() {}, setSaveBusy() {},
+          setStatus(message, kind) { statuses.push([kind, message]); },
+          renderResult(value) { renders.push(value.transcript_text); },
+          renderTimeline(value) { timelines.push(value.map((item) => item.code)); },
+        };
+        const controller = createCallsController({
+          view, fetchImpl: queueFetch, copyText: async (text) => copied.push(text),
+        });
+        const file = { name: 'call.wav', size: 46 };
+        controller.selectFile(file);
+
+        // An obsolete request may resolve after reset and after the replacement
+        // success; it must not render, change status, or append a false event.
+        const stale = controller.submit();
+        controller.reset();
+        controller.selectFile(file);
+        const current = controller.submit();
+        pending[1].resolve(response(success('current success', 'es', 0.88)));
+        const currentResult = await current;
+        pending[0].resolve(response(success('stale success', 'en', null)));
+        const staleResult = await stale;
+
+        // A stale safe error also cannot replace a newer successful outcome.
+        const staleError = controller.submit();
+        controller.reset();
+        controller.selectFile(file);
+        const replacement = controller.submit();
+        pending[3].resolve(response(success('replacement success', 'en', null)));
+        const replacementResult = await replacement;
+        pending[2].resolve(response({ error: 'INVALID_BACKEND_RESULT' }, false, 502));
+        const staleErrorResult = await staleError;
+
+        // Three sequential active attempts: success, safe failure, success.
+        const second = controller.submit();
+        pending[4].resolve(response({ error: 'INVALID_BACKEND_RESULT' }, false, 502));
+        const secondResult = await second;
+        const copiedAfterFailure = await controller.copyTranscript();
+        const third = controller.submit();
+        pending[5].resolve(response(success('legacy success')));
+        const thirdResult = await third;
+        const fourth = controller.submit();
+        pending[6].resolve(response(success('zh success', 'zh-Hans', null)));
+        const fourthResult = await fourth;
+
+        // A structurally invalid 200 is a failure and never earns completed.
+        const invalid = controller.submit();
+        pending[7].resolve(response({ duration_ms: 1000, segments: [], transcript_text: 7 }));
+        const invalidResult = await invalid;
+
+        // Cancellation is neutral even when the transport reports AbortError.
+        const cancelled = controller.submit();
+        const cancelAccepted = controller.cancel();
+        pending[8].reject(new DOMException('stopped', 'AbortError'));
+        const cancelledResult = await cancelled;
+
+        console.log(JSON.stringify({
+          currentResult, staleResult, replacementResult, staleErrorResult,
+          secondResult, copiedAfterFailure,
+          thirdResult, fourthResult, invalidResult, cancelAccepted, cancelledResult,
+          renders, statuses, copied, timeline: timelines.at(-1),
+        }));
+        """
+    )
+
+    assert result["currentResult"] is True
+    assert result["staleResult"] is False
+    assert result["replacementResult"] is True
+    assert result["staleErrorResult"] is False
+    assert result["secondResult"] is False
+    assert result["copiedAfterFailure"] is True
+    assert result["thirdResult"] is True
+    assert result["fourthResult"] is True
+    assert result["invalidResult"] is False
+    assert result["cancelAccepted"] is True
+    assert result["cancelledResult"] is False
+    assert result["renders"] == [
+        "current success", "replacement success", "legacy success", "zh success",
+    ]
+    assert result["copied"] == ["replacement success"]
+    assert all("stale" not in value for value in result["renders"])
+    assert result["timeline"].count("CAPTURE_TRANSCRIPTION_COMPLETED") == 3
+    assert result["timeline"].count("CAPTURE_TRANSCRIPTION_FAILED") == 2
+    assert result["timeline"][-1] == "CAPTURE_TRANSCRIPTION_STARTED"
+    assert result["statuses"][-1][0] == "cancelled"
 
 
 def test_fixed_http_error_mapping():
@@ -189,10 +309,60 @@ def test_malformed_and_non_json_successes_are_fixed_safe_failures():
         """
     )
     assert result == [
-        {"code": "MALFORMED_RESPONSE", "message": "Transcription could not be completed. Please try again."},
-        {"code": "MALFORMED_RESPONSE", "message": "Transcription could not be completed. Please try again."},
+        {"code": "MALFORMED_RESPONSE", "message": "No se pudo completar la transcripción. Inténtelo de nuevo."},
+        {"code": "MALFORMED_RESPONSE", "message": "No se pudo completar la transcripción. Inténtelo de nuevo."},
     ]
     assert "PRIVATE" not in json.dumps(result)
+
+
+def test_transcription_contract_accepts_legacy_and_additive_language_metadata():
+    result = _run_node(
+        """
+        import { requestCallsTranscription } from 'CALLS_MODULE';
+        const file = { name: 'call.wav', size: 46 };
+        const payloads = [
+          { duration_ms: 1000, segments: [{ start_ms: 0, end_ms: 1000, text: 'legacy' }], transcript_text: 'legacy' },
+          { duration_ms: 1000, segments: [{ start_ms: 0, end_ms: 1000, text: 'hola' }], transcript_text: 'hola', language: 'es', language_confidence: 0.91, additive: 'allowed' },
+          { duration_ms: 1000, segments: [{ start_ms: 0, end_ms: 1000, text: 'hello' }], transcript_text: 'hello', language: 'en', language_confidence: null },
+          { duration_ms: 1000, segments: [{ start_ms: 0, end_ms: 1000, text: '你好' }], transcript_text: '你好', language: 'zh-Hans' },
+          { duration_ms: 1000, segments: [], transcript_text: '', language: 'und', language_confidence: null },
+        ];
+        const accepted = [];
+        for (const payload of payloads) {
+          accepted.push(await requestCallsTranscription(file, { fetchImpl: async () => ({ ok: true, status: 200, json: async () => payload }) }));
+        }
+        console.log(JSON.stringify(accepted));
+        """
+    )
+    assert [item["language"] for item in result] == ["und", "es", "en", "zh-Hans", "und"]
+    assert result[1]["language_confidence"] == 0.91
+    assert result[2]["language_confidence"] is None
+    assert [item["transcript_text"] for item in result] == ["legacy", "hola", "hello", "你好", ""]
+
+
+def test_transcription_contract_rejects_invalid_structures_and_language_metadata():
+    result = _run_node(
+        """
+        import { requestCallsTranscription } from 'CALLS_MODULE';
+        const file = { name: 'call.wav', size: 46 };
+        const base = { duration_ms: 1000, segments: [{ start_ms: 0, end_ms: 1000, text: 'ok' }], transcript_text: 'ok' };
+        const payloads = [
+          {}, { ...base, transcript_text: 7 }, { ...base, duration_ms: '1000' },
+          { ...base, segments: [{ start_ms: 0, end_ms: 1000, text: 7 }] },
+          { ...base, language: 'fr' }, { ...base, language: null },
+          { ...base, language_confidence: 'high' }, { ...base, language_confidence: NaN },
+          { ...base, language_confidence: Infinity }, { ...base, language_confidence: -0.01 },
+          { ...base, language_confidence: 1.01 }, { result: base },
+        ];
+        const codes = [];
+        for (const payload of payloads) {
+          try { await requestCallsTranscription(file, { fetchImpl: async () => ({ ok: true, status: 200, json: async () => payload }) }); }
+          catch (error) { codes.push(error.code); }
+        }
+        console.log(JSON.stringify(codes));
+        """
+    )
+    assert result == ["MALFORMED_RESPONSE"] * 12
 
 
 def test_transcript_text_uses_text_content_not_html():
@@ -236,8 +406,8 @@ def test_microphone_controls_are_explicit_and_accessible():
         'id="calls-recording-indicator"',
         'id="calls-recording-elapsed"',
         'id="calls-recording-status"',
-        'aria-label="Start microphone recording"',
-        'aria-label="Stop microphone recording"',
+        'data-i18n-aria-label="capture.voice.start_aria"',
+        'data-i18n-aria-label="capture.voice.stop_aria"',
         'aria-live="polite"',
     )
     assert all(marker in INDEX for marker in required)
@@ -553,13 +723,13 @@ def test_microphone_permission_and_device_errors_are_fixed_and_safe():
         """
     )
     assert result == [
-        ["loading", "Waiting for microphone permission…"],
-        ["error", "Microphone permission was denied. Allow access and try again."],
-        ["loading", "Waiting for microphone permission…"],
-        ["error", "No microphone is available."],
-        ["loading", "Waiting for microphone permission…"],
-        ["error", "The microphone could not be started. Check the device and try again."],
-        ["error", "Microphone recording is unavailable in this browser."],
+        ["loading", "Esperando permiso para usar el micrófono…"],
+        ["error", "Se denegó el permiso del micrófono. Permita el acceso e inténtelo de nuevo."],
+        ["loading", "Esperando permiso para usar el micrófono…"],
+        ["error", "No hay un micrófono disponible."],
+        ["loading", "Esperando permiso para usar el micrófono…"],
+        ["error", "No se pudo iniciar el micrófono. Revise el dispositivo e inténtelo de nuevo."],
+        ["error", "La grabación con micrófono no está disponible en este navegador."],
     ]
     assert "PRIVATE" not in json.dumps(result)
 
@@ -572,11 +742,11 @@ def test_library_save_controls_are_explicit_and_unavailable_before_success():
         'id="calls-save-status"',
         'for="calls-save-title"',
         'aria-live="polite"',
-        'Save Capture to Library',
+        'data-i18n="capture.save.action"',
     )
     assert all(marker in INDEX for marker in required)
     assert '<section id="calls-save" class="calls-card calls-save"' in INDEX
-    assert 'id="calls-save-btn" class="calls-button calls-button-primary" disabled' in INDEX
+    assert re.search(r'id="calls-save-btn"[^>]*disabled', INDEX)
     result = _run_node(
         """
         import { createCallsController } from 'CALLS_MODULE';
@@ -645,7 +815,8 @@ def test_document_save_request_reuses_owner_scoped_json_contract_and_complete_co
     )
     request = result["request"]
     assert result["saved"] == {"id": "doc-123"}
-    assert result["defaultTitle"] == "Capture — 2026-07-18 14:05"
+    assert result["defaultTitle"].startswith("Capture — ")
+    assert "18/07/2026" in result["defaultTitle"]
     assert request["url"] == "/api/document"
     assert request["method"] == "POST"
     assert request["credentials"] == "same-origin"
@@ -660,7 +831,10 @@ def test_document_save_request_reuses_owner_scoped_json_contract_and_complete_co
     assert "Review before relying" in content
     assert "Source: MarketMatch Capture" in content
     assert "Capture title: Calls Persistence Test" in content
-    assert "Created: 2026-07-18 14:05" in content
+    assert "Created: 2026-07-18T" in content
+    assert "Interface locale at save time: es" in content
+    assert "Display timezone: America/Santo_Domingo" in content
+    assert "Detected transcript language: und" in content
     assert "Duration: 01:02:03.456" in content
     assert "<b>Complete transcript</b>" in content
     assert "[00:00.000 – 00:03.200] <b>Complete " in content
@@ -729,7 +903,7 @@ def test_save_title_validation_duplicate_prevention_success_and_new_result_reset
     assert result["duplicateComplete"] is False
     assert result["secondSaved"] is True
     assert result["saveRequests"] == 2
-    assert any(event[:2] == ["save-status", "error"] and "title" in event[2] for event in result["events"])
+    assert any(event[:2] == ["save-status", "error"] and "título" in event[2] for event in result["events"])
     assert ["saved", True] in result["events"]
     assert sum(event[0] == "show-save" for event in result["events"]) == 2
     assert sum(event == ["clear-save"] for event in result["events"]) >= 2
@@ -786,7 +960,7 @@ def test_save_failure_is_safe_preserves_transcript_and_supports_copy():
     assert result["copied"] == "Keep this transcript"
     assert result["rendered"] == ["Keep this transcript"]
     assert result["requestNumber"] == 2
-    assert result["saveStatuses"][-1] == ["error", "The Capture could not be saved. Please try again."]
+    assert result["saveStatuses"][-1] == ["error", "No se pudo guardar Capture. Inténtelo de nuevo."]
     assert [code for code, _ in result["directErrors"]] == [
         "DOCUMENT_HTTP_401", "DOCUMENT_HTTP_403", "DOCUMENT_HTTP_413",
         "DOCUMENT_HTTP_422", "DOCUMENT_MALFORMED_RESPONSE",
@@ -1012,8 +1186,8 @@ def test_history_failures_are_fixed_safe_and_do_not_break_calls_features():
     assert result["copied"] == "Still works"
     assert result["saved"] is True
     assert result["statuses"] == [
-        "Saved Captures could not be loaded. Please try again.",
-        "Saved Captures could not be loaded. Please try again.",
+        "No se pudieron cargar los Captures guardados. Inténtelo de nuevo.",
+        "No se pudieron cargar los Captures guardados. Inténtelo de nuevo.",
     ]
 
 
@@ -1098,11 +1272,11 @@ def test_history_open_uses_existing_document_module_and_accessible_safe_ui():
         'id="calls-history-status"',
         'id="calls-history-empty"',
         'id="calls-history-list"',
-        'aria-label="Saved Captures"',
+        'data-i18n-aria-label="capture.history.aria"',
         'aria-live="polite"',
     )
     assert all(marker in INDEX for marker in required)
-    assert "open.setAttribute('aria-label', `Open ${documentValue.title} from Library`)" in SOURCE
+    assert "open.setAttribute('aria-label', t('capture.history.open_aria'" in SOURCE
     assert "setElementText(title, documentValue.title)" in SOURCE
     assert "documentModule.loadDocument(documentId)" in APP_SOURCE
     assert "callsModule.init(document" in APP_SOURCE
@@ -1115,18 +1289,115 @@ def test_analysis_controls_are_explicit_accessible_and_render_with_text_nodes():
         'id="calls-analysis-regenerate-btn"',
         'id="calls-analysis-copy-btn"',
         'id="calls-analysis-status"',
-        'id="calls-analysis-summary-heading">Summary',
-        'id="calls-analysis-decisions-heading">Decisions',
-        'id="calls-analysis-actions-heading">Action Items',
-        'id="calls-analysis-questions-heading">Open Questions',
+        'data-i18n="capture.analysis.summary"',
+        'data-i18n="capture.analysis.decisions"',
+        'data-i18n="capture.analysis.actions"',
+        'data-i18n="capture.analysis.questions"',
         'aria-live="polite"',
     )
     assert all(marker in INDEX for marker in required)
-    assert 'id="calls-analysis-generate-btn" class="calls-button calls-button-primary" disabled' in INDEX
+    assert re.search(r'id="calls-analysis-generate-btn"[^>]*disabled', INDEX)
     assert "setElementText(analysisSummary, value.summary)" in SOURCE
     assert "setElementText(item, itemValue)" in SOURCE
     assert "analysisSummary.innerHTML" not in SOURCE
     assert "analysisResult.innerHTML" not in SOURCE
+
+
+def test_auto_analysis_language_tracks_current_transcript_without_stale_state():
+    result = _run_node(
+        """
+        import { createCallsController } from 'CALLS_MODULE';
+        import { setTemporaryLocale } from 'I18N_MODULE';
+        setTemporaryLocale('es');
+        const resolved = [];
+        const analysisBodies = [];
+        const sttPayloads = [];
+        const analysisResult = {
+          summary: 'safe', decisions: [], action_items: [], open_questions: [],
+        };
+        const payload = (text, language) => ({
+          duration_ms: 1000,
+          segments: [{ start_ms: 0, end_ms: 1000, text }],
+          transcript_text: text,
+          language,
+          language_confidence: language === 'und' ? null : 0.9,
+        });
+        const fetchImpl = async (url, options) => {
+          if (url === '/api/marketmatch/stt/transcribe') {
+            return { ok: true, status: 200, json: async () => sttPayloads.shift() };
+          }
+          if (url === '/api/marketmatch/calls/analyze') {
+            analysisBodies.push(JSON.parse(options.body));
+            return { ok: true, status: 200, json: async () => analysisResult };
+          }
+          throw new Error('unexpected request');
+        };
+        const view = {
+          clearResult() {}, clearSave() {}, clearAnalysis() {}, clearRecording() {}, clearUpload() {},
+          showSelected() {}, setReady() {}, setBusy() {}, setStatus() {}, renderResult() {}, reset() {},
+          setRecordingState() {}, setRecordingStatus() {}, setSaveBusy() {}, showSave() {},
+          showAnalysisReady() {}, beginAnalysisAttempt() {}, setAnalysisBusy() {}, setAnalysisStatus() {},
+          renderAnalysis() {}, setAnalysisLanguage() {},
+          setResolvedAnalysisLanguage(value) { resolved.push(value); },
+          renderCaptureDetails() {}, renderTimeline() {}, renderCaptureMedia() {},
+          setCaptureStatus() {}, setMediaStatus() {}, setSaveStatus() {}, setCaptureSaveReady() {},
+          closeCaptureCamera() {},
+        };
+        const controller = createCallsController({ view, fetchImpl });
+        const file = { name: 'call.wav', size: 46 };
+        controller.setAnalysisLanguage('auto');
+        controller.selectFile(file);
+        const apply = async (text, language) => {
+          sttPayloads.push(payload(text, language));
+          const ok = await controller.submit();
+          return { ok, resolved: resolved.at(-1) };
+        };
+
+        const spanish = await apply('hola', 'es');
+        const english = await apply('hello', 'en');
+        const analyzed = await controller.generateAnalysis();
+        const chinese = await apply('你好', 'zh-Hans');
+        const unknown = await apply('unknown', 'und');
+
+        const currentEnglish = await apply('current english', 'en');
+        controller.setAnalysisLanguage('es');
+        const explicitBeforeTranscript = resolved.at(-1);
+        const explicitAfterChinese = await apply('later chinese', 'zh-Hans');
+        setTemporaryLocale('en');
+        controller.onLocaleChanged();
+        const explicitAfterLocale = resolved.at(-1);
+        controller.setAnalysisLanguage('auto');
+        const autoAfterExplicit = resolved.at(-1);
+
+        const autoEnglish = await apply('english again', 'en');
+        const autoSpanish = await apply('spanish again', 'es');
+        controller.reset();
+        const afterClear = resolved.at(-1);
+
+        console.log(JSON.stringify({
+          spanish, english, analyzed, analysisBodies, chinese, unknown,
+          currentEnglish, explicitBeforeTranscript, explicitAfterChinese,
+          explicitAfterLocale, autoAfterExplicit, autoEnglish, autoSpanish, afterClear,
+        }));
+        """
+    )
+
+    assert result["spanish"] == {"ok": True, "resolved": "es"}
+    assert result["english"] == {"ok": True, "resolved": "en"}
+    assert result["analyzed"] is True
+    assert result["analysisBodies"] == [
+        {"transcript": "hello", "output_language": "en"},
+    ]
+    assert result["chinese"] == {"ok": True, "resolved": "zh-Hans"}
+    assert result["unknown"] == {"ok": True, "resolved": "es"}
+    assert result["currentEnglish"] == {"ok": True, "resolved": "en"}
+    assert result["explicitBeforeTranscript"] == "es"
+    assert result["explicitAfterChinese"] == {"ok": True, "resolved": "es"}
+    assert result["explicitAfterLocale"] == "es"
+    assert result["autoAfterExplicit"] == "zh-Hans"
+    assert result["autoEnglish"] == {"ok": True, "resolved": "en"}
+    assert result["autoSpanish"] == {"ok": True, "resolved": "es"}
+    assert result["afterClear"] == "en"
 
 
 def test_analysis_request_is_exact_bounded_same_origin_json_and_strictly_validated():
@@ -1192,15 +1463,15 @@ def test_analysis_request_is_exact_bounded_same_origin_json_and_strictly_validat
     assert result["method"] == "POST"
     assert result["credentials"] == "same-origin"
     assert result["headers"] == {"content-type": "application/json"}
-    assert result["body"] == {"transcript": "Complete transcript only"}
-    assert result["bodyKeys"] == ["transcript"]
+    assert result["body"] == {"transcript": "Complete transcript only", "output_language": "es"}
+    assert result["bodyKeys"] == ["output_language", "transcript"]
     assert not ({"authorization", "x-api-key", "x-odysseus-internal-token", "x-odysseus-owner"} & result["headers"].keys())
     assert result["oversized"]["code"] == "ANALYSIS_TOO_LONG"
-    assert "Summary\n<b>Summary stays text</b>" in result["copied"]
-    assert "Decisions\nNone identified." in result["copied"]
-    assert "Owner: Not stated." in result["copied"]
-    assert "Due date: Not stated." in result["copied"]
-    assert "Open Questions\nNone identified." in result["copied"]
+    assert "Resumen\n<b>Summary stays text</b>" in result["copied"]
+    assert "Decisiones\nNinguno identificado." in result["copied"]
+    assert "Responsable: No indicado." in result["copied"]
+    assert "Fecha límite: No indicado." in result["copied"]
+    assert "Preguntas abiertas\nNinguno identificado." in result["copied"]
 
 
 def test_analysis_safe_errors_and_malformed_responses_never_expose_backend_details():
@@ -1226,10 +1497,10 @@ def test_analysis_safe_errors_and_malformed_responses_never_expose_backend_detai
     )
     assert result[0] == {
         "code": "ANALYSIS_HTTP_502",
-        "message": "The local analysis result could not be validated.",
+        "message": "No se pudo validar el resultado del análisis local.",
         "status": 502,
     }
-    assert all(item["message"] == "The local analysis result could not be validated." for item in result)
+    assert all(item["message"] == "No se pudo validar el resultado del análisis local." for item in result)
     assert "PRIVATE" not in json.dumps(result)
 
 
@@ -1327,7 +1598,7 @@ def test_analysis_controller_requires_success_prevents_duplicates_copies_regener
     assert ["analysis-ready", True] in result["events"]
     assert ["analysis-render", "ANALYSIS CANARY 1"] in result["events"]
     assert ["analysis-render", "ANALYSIS CANARY 2"] in result["events"]
-    assert all(heading in result["copied"][0] for heading in ("Summary", "Decisions", "Action Items", "Open Questions"))
+    assert all(heading in result["copied"][0] for heading in ("Resumen", "Decisiones", "Acciones", "Preguntas abiertas"))
     assert result["copied"][-1] == "Keep this complete transcript"
     assert result["saved"] is True
     assert "Keep this complete transcript" in result["documentBody"]["content"]
@@ -1433,31 +1704,28 @@ def test_analysis_lifecycle_aborts_and_ignores_stale_results_without_losing_tran
 
 
 def test_capture_visible_rename_session_details_and_clear_reset():
-    assert '<span class="grow">Capture</span>' in INDEX
-    assert 'aria-label="Open Capture"' in INDEX
-    assert 'aria-label="Close Capture"' in INDEX
+    assert 'data-i18n="nav.capture">Capture</span>' in INDEX
+    assert 'data-i18n-aria-label="nav.capture"' in INDEX
+    assert 'data-i18n-aria-label="capture.close.aria"' in INDEX
     assert '>Calls<' not in INDEX
-    assert (
-        'Record meetings, walkthroughs, voice notes and field observations. '
-        'Add photographs and videos, transcribe speech locally and preserve selected records in Library.'
-    ) in INDEX
+    assert 'data-i18n="capture.description"' in INDEX
     for marker in (
-        'id="calls-capture-details-heading">Capture details',
+        'id="calls-capture-details-heading" data-i18n="capture.details.heading"',
         'id="calls-save-title"',
         'id="calls-capture-type"',
         'id="calls-capture-notes"',
         'id="calls-capture-created"',
         'id="calls-capture-status"',
-        'id="calls-history-heading">Saved Captures',
-        'id="calls-timeline-heading">Capture timeline',
-        'id="calls-save-heading">Save Capture to Library',
+        'id="calls-history-heading" data-i18n="capture.history.heading"',
+        'id="calls-timeline-heading" data-i18n="capture.timeline.heading"',
+        'id="calls-save-heading" data-i18n="capture.save.heading"',
     ):
         assert marker in INDEX
     for capture_type in (
-        "Meeting", "Field Observation", "Walkthrough", "Training", "Voice Note",
-        "Supplier Conversation", "Other",
+        "meeting", "field_observation", "walkthrough", "training", "voice_note",
+        "supplier_conversation", "other",
     ):
-        assert f"<option>{capture_type}</option>" in INDEX
+        assert f'<option value="{capture_type}" data-i18n="capture.type.' in INDEX
 
     result = _run_node(
         """
@@ -1474,7 +1742,7 @@ def test_capture_visible_rename_session_details_and_clear_reset():
         };
         const controller = createCallsController({ view, now: () => fixed });
         const edited = controller.updateCaptureDetails({
-          title: '  Site walk  ', type: 'Walkthrough', notes: '<b>Safe note</b>',
+          title: '  Site walk  ', type: 'walkthrough', notes: '<b>Safe note</b>',
         });
         const emptySave = await controller.saveToLibrary('   ');
         controller.reset();
@@ -1484,14 +1752,14 @@ def test_capture_visible_rename_session_details_and_clear_reset():
         }));
         """
     )
-    assert result["defaultTitle"] == "Capture — 2026-07-19 09:07"
-    assert result["edited"]["type"] == "Walkthrough"
+    assert result["defaultTitle"].startswith("Capture — ")
+    assert result["edited"]["type"] == "walkthrough"
     assert result["edited"]["notes"] == "<b>Safe note</b>"
     assert result["emptySave"] is False
     assert result["reset"] == {
-        "title": "Capture — 2026-07-19 09:07", "type": "Meeting", "notes": "",
+        "title": "Capture — 19/07/2026, 09:07", "type": "meeting", "notes": "",
     }
-    assert ["error", "Enter a Capture title before saving."] in result["statuses"]
+    assert ["error", "Escriba un título de Capture antes de guardar."] in result["statuses"]
 
 
 def test_capture_photo_video_validation_and_transient_fingerprint():
@@ -1544,7 +1812,7 @@ def test_capture_media_lifecycle_timeline_and_in_memory_only_save():
           renderCaptureMedia(kind, items) {
             mediaRenders.push([kind, items.map(({ name, caption, url }) => ({ name, caption, url }))]);
           },
-          renderTimeline(items) { timelines.push(items.map((item) => item.message)); },
+          renderTimeline(items) { timelines.push(items.map((item) => item.code)); },
           setMediaStatus(kind, message, state) { statuses.push([kind, state, message]); },
           setCaptureSaveReady() {}, setSaved() {}, setSaveStatus() {}, setSaveBusy() {},
           renderCaptureDetails() {}, setCaptureStatus() {}, setHistoryLoading() {},
@@ -1561,7 +1829,7 @@ def test_capture_media_lifecycle_timeline_and_in_memory_only_save():
           revokeObjectURL: (url) => revoked.push(url),
         });
         controller.updateCaptureDetails({
-          title: 'Capture Test', type: 'Field Observation', notes: '<b>Review facade</b>',
+          title: 'Capture Test', type: 'field_observation', notes: '<b>Review facade</b>',
         });
         const photo = { name: 'facade.jpg', size: 123, type: 'image/jpeg', lastModified: 1 };
         const video = { name: 'walk.mp4', size: 456, type: 'video/mp4', lastModified: 2 };
@@ -1593,7 +1861,7 @@ def test_capture_media_lifecycle_timeline_and_in_memory_only_save():
     content = request["body"]["content"]
     assert "# MarketMatch Capture" in content
     assert "Capture title: Capture Test" in content
-    assert "Capture type: Field Observation" in content
+    assert "Capture type: field_observation" in content
     assert "&lt;b&gt;Review facade&lt;/b&gt;" in content
     assert "facade.jpg" in content and "Front elevation" in content
     assert "walk.mp4" in content and "Walkthrough clip" in content
@@ -1602,11 +1870,11 @@ def test_capture_media_lifecycle_timeline_and_in_memory_only_save():
     assert "data:" not in content
     assert "analysis" not in content.lower()
     latest_timeline = result["timelines"][-1]
-    assert latest_timeline.count("Photo added.") == 1
-    assert latest_timeline.count("Video added.") == 1
-    assert "Capture saved to Library." in latest_timeline
-    assert "Attachment removed." in latest_timeline
-    assert any(state == "error" and "already" in message for _, state, message in result["statuses"])
+    assert latest_timeline.count("CAPTURE_PHOTO_ADDED") == 1
+    assert latest_timeline.count("CAPTURE_VIDEO_ADDED") == 1
+    assert "CAPTURE_SAVED_TO_LIBRARY" in latest_timeline
+    assert "CAPTURE_ATTACHMENT_REMOVED" in latest_timeline
+    assert any(state == "error" and "ya está" in message for _, state, message in result["statuses"])
 
 
 def test_capture_history_accepts_new_and_legacy_markers_without_title_filtering():
@@ -1642,21 +1910,24 @@ def test_capture_media_dom_privacy_timeline_hooks_and_analysis_boundary():
         'accept="image/jpeg,image/png,image/webp"',
         'id="calls-video-input"',
         'accept="video/mp4,video/webm,video/quicktime"',
-        'capture="environment"',
-        'Photos and videos in this pilot remain in memory and are not saved.',
-        'Current AI analysis uses the transcript only. Photo and video interpretation is not included yet.',
+        'id="calls-photo-camera-btn"',
+        'id="calls-video-camera-btn"',
+        'id="calls-camera-panel"',
+        'id="calls-camera-preview"',
+        'data-i18n="capture.save.media_notice"',
+        'data-i18n="capture.analysis.boundary"',
     ):
         assert marker in INDEX
     for source_marker in (
         "preview.controls = true",
         "preview.preload = 'metadata'",
         "setElementText(name, media.name)",
-        "setElementText(message, event.message)",
-        "addTimelineEvent('Recording started.')",
-        "addTimelineEvent('Recording stopped.')",
-        "addTimelineEvent('Transcription completed.')",
-        "addTimelineEvent('Transcript analysis generated.')",
-        "addTimelineEvent('Capture saved to Library.')",
+        "TIMELINE_I18N_KEYS[event.code]",
+        "addTimelineEvent('CAPTURE_RECORDING_STARTED')",
+        "addTimelineEvent('CAPTURE_RECORDING_STOPPED')",
+        "addTimelineEvent('CAPTURE_TRANSCRIPTION_COMPLETED')",
+        "addTimelineEvent('CAPTURE_ANALYSIS_GENERATED')",
+        "addTimelineEvent('CAPTURE_SAVED_TO_LIBRARY')",
     ):
         assert source_marker in SOURCE
     assert "preview.autoplay" not in SOURCE
@@ -1670,4 +1941,216 @@ def test_capture_media_dom_privacy_timeline_hooks_and_analysis_boundary():
     assert "readAsDataURL" not in SOURCE
     assert "console.log" not in SOURCE
     assert "console.error" not in SOURCE
-    assert "JSON.stringify({ transcript })" in SOURCE
+    assert "JSON.stringify({ transcript, output_language: canonicalOutputLanguage })" in SOURCE
+    assert 'id="calls-photo-camera-input"' not in INDEX
+    assert 'id="calls-video-camera-input"' not in INDEX
+
+
+def test_real_camera_photo_and_video_use_in_memory_media_pipeline_and_cleanup():
+    result = _run_node(
+        """
+        import {
+          createCallsController, MAX_CAPTURE_VIDEO_BYTES, selectCaptureVideoMimeType,
+        } from 'CALLS_MODULE';
+        const tracks = [];
+        const requests = [];
+        const rendered = [];
+        const timelines = [];
+        const statuses = [];
+        const cameraStates = [];
+        const streams = [];
+        function makeStream(kind) {
+          const localTracks = [{ kind: 'video', stopped: false, stop() { this.stopped = true; } }];
+          if (kind === 'video') localTracks.push({ kind: 'audio', stopped: false, stop() { this.stopped = true; } });
+          tracks.push(...localTracks);
+          const stream = { getTracks: () => localTracks };
+          streams.push(stream);
+          return stream;
+        }
+        let requestedKind = 'photo';
+        const mediaDevices = {
+          getSupportedConstraints: () => ({ facingMode: true }),
+          async getUserMedia(constraints) {
+            requests.push(constraints);
+            return makeStream(requestedKind);
+          },
+        };
+        class Recorder {
+          static tested = [];
+          static isTypeSupported(type) {
+            this.tested.push(type);
+            return type === 'video/webm;codecs=vp8,opus';
+          }
+          constructor(stream, options) { this.stream = stream; this.mimeType = options.mimeType; this.state = 'inactive'; }
+          start(timeslice) { this.state = 'recording'; this.timeslice = timeslice; }
+          stop() {
+            this.state = 'inactive';
+            this.ondataavailable({ data: new Blob(['recorded'], { type: 'video/webm' }) });
+            this.onstop();
+          }
+        }
+        const view = {
+          renderCaptureMedia(kind, items) { rendered.push([kind, items.map((item) => item.name)]); },
+          renderTimeline(items) { timelines.push(items.map((item) => item.code)); },
+          setMediaStatus(kind, message, state) { statuses.push([kind, state, message]); },
+          openCaptureCamera(kind, stream, options) { cameraStates.push(['open', kind, options.canSwitch]); },
+          setCaptureCameraState(kind, state) { cameraStates.push(['state', kind, state]); },
+          closeCaptureCamera() { cameraStates.push(['close']); },
+          setCaptureSaveReady() {}, setSaved() {}, setSaveStatus() {},
+        };
+        let stamp = 100;
+        const controller = createCallsController({
+          view, mediaDevices, MediaRecorderClass: Recorder, now: () => ++stamp,
+          capturePhotoFrame: async () => new Blob(['jpeg'], { type: 'image/jpeg' }),
+          createMediaFile(parts, name, options) {
+            return { name, type: options.type, size: parts[0].size, lastModified: options.lastModified };
+          },
+          createObjectURL: (file) => `blob:${file.name}`,
+          revokeObjectURL() {},
+          fetchImpl: async (...args) => { throw new Error(`unexpected upload ${args.length}`); },
+        });
+        const beforeGesture = requests.length;
+        const openedPhoto = await controller.openCaptureCamera('photo');
+        const capturedPhoto = await controller.captureCameraPhoto();
+        requestedKind = 'video';
+        const openedVideo = await controller.openCaptureCamera('video');
+        const startedVideo = controller.startCaptureVideoRecording();
+        const stoppedVideo = controller.stopCaptureVideoRecording();
+        const mime = selectCaptureVideoMimeType(Recorder);
+        console.log(JSON.stringify({
+          beforeGesture, openedPhoto, capturedPhoto, openedVideo, startedVideo, stoppedVideo,
+          requestCount: requests.length, requests, allTracksStopped: tracks.every((track) => track.stopped),
+          rendered, timelines, statuses, cameraStates, mime, tested: Recorder.tested,
+          limit: MAX_CAPTURE_VIDEO_BYTES, cameraOpen: controller.isCameraOpen(),
+        }));
+        """
+    )
+    assert result["beforeGesture"] == 0
+    assert result["openedPhoto"] is True and result["capturedPhoto"] is True
+    assert result["openedVideo"] is True and result["startedVideo"] is True
+    assert result["stoppedVideo"] is True
+    assert result["requestCount"] == 2
+    assert result["requests"][0]["audio"] is False
+    assert result["requests"][1]["audio"] is True
+    assert result["allTracksStopped"] is True
+    assert result["mime"] == "video/webm;codecs=vp8,opus"
+    assert result["cameraOpen"] is False
+    assert any("Capture-photo-" in name for kind, names in result["rendered"] for name in names if kind == "photo")
+    assert any("Capture-video-" in name for kind, names in result["rendered"] for name in names if kind == "video")
+    assert result["timelines"][-1].count("CAPTURE_PHOTO_ADDED") == 1
+    assert result["timelines"][-1].count("CAPTURE_VIDEO_ADDED") == 1
+
+
+def test_camera_permission_unsupported_cancel_clear_and_locale_rerender_are_safe():
+    result = _run_node(
+        """
+        import { createCallsController } from 'CALLS_MODULE';
+        const states = [];
+        const statuses = [];
+        let requests = 0;
+        const track = { stopped: false, stop() { this.stopped = true; } };
+        const view = {
+          setMediaStatus(kind, message, state) { statuses.push([kind, state, message]); },
+          openCaptureCamera() { states.push('open'); },
+          setCaptureCameraState(_kind, state) { states.push(state); },
+          closeCaptureCamera() { states.push('close'); },
+          renderCaptureMedia() {}, renderTimeline() {}, renderCaptureDetails() {},
+          setCaptureStatus() {}, setCaptureSaveReady() {}, setSaved() {}, setSaveStatus() {},
+          reset() {}, clearAnalysis() {}, clearSave() {}, clearRecording() {}, setRecordingState() {},
+        };
+        const controller = createCallsController({
+          view,
+          mediaDevices: {
+            getSupportedConstraints: () => ({ facingMode: true }),
+            async getUserMedia() { requests += 1; return { getTracks: () => [track] }; },
+          },
+          MediaRecorderClass: class { static isTypeSupported() { return true; } },
+        });
+        await controller.openCaptureCamera('photo');
+        controller.onLocaleChanged();
+        const requestAfterLocale = requests;
+        const closed = controller.closeCaptureCamera({ announce: true });
+        await controller.openCaptureCamera('photo');
+        controller.reset();
+        const unsupported = createCallsController({ view, mediaDevices: null, MediaRecorderClass: null });
+        const unsupportedResult = await unsupported.openCaptureCamera('photo');
+        const denied = createCallsController({
+          view, MediaRecorderClass: null,
+          mediaDevices: { async getUserMedia() { const error = new Error('private'); error.name = 'NotAllowedError'; throw error; } },
+        });
+        const deniedResult = await denied.openCaptureCamera('photo');
+        console.log(JSON.stringify({
+          requests, requestAfterLocale, closed, trackStopped: track.stopped,
+          unsupportedResult, deniedResult, states, statuses,
+        }));
+        """
+    )
+    assert result["requestAfterLocale"] == 1
+    assert result["requests"] == 2
+    assert result["closed"] is True
+    assert result["trackStopped"] is True
+    assert result["unsupportedResult"] is False
+    assert result["deniedResult"] is False
+    assert any(state == "error" for _, state, _ in result["statuses"])
+
+
+def test_camera_video_oversize_and_clear_stop_recorder_tracks_without_adding_media():
+    result = _run_node(
+        """
+        import { createCallsController, MAX_CAPTURE_VIDEO_BYTES } from 'CALLS_MODULE';
+        const tracks = [];
+        const rendered = [];
+        const statuses = [];
+        class Recorder {
+          static last = null;
+          static isTypeSupported(type) { return type === 'video/webm'; }
+          constructor() { this.state = 'inactive'; Recorder.last = this; }
+          start() { this.state = 'recording'; }
+          stop() { this.state = 'inactive'; if (this.onstop) this.onstop(); }
+        }
+        const mediaDevices = {
+          getSupportedConstraints: () => ({}),
+          async getUserMedia() {
+            const track = { stopped: false, stop() { this.stopped = true; } };
+            tracks.push(track);
+            return { getTracks: () => [track] };
+          },
+        };
+        const view = {
+          openCaptureCamera() {}, setCaptureCameraState() {}, closeCaptureCamera() {},
+          setMediaStatus(kind, message, state) { statuses.push([kind, state, message]); },
+          renderCaptureMedia(kind, items) { rendered.push([kind, items.length]); },
+          renderTimeline() {}, setCaptureSaveReady() {}, setSaved() {}, setSaveStatus() {},
+          renderCaptureDetails() {}, setCaptureStatus() {}, reset() {}, clearAnalysis() {},
+          clearSave() {}, clearRecording() {}, setRecordingState() {},
+        };
+        const controller = createCallsController({ view, mediaDevices, MediaRecorderClass: Recorder });
+        await controller.openCaptureCamera('video');
+        controller.startCaptureVideoRecording();
+        Recorder.last.ondataavailable({ data: { size: MAX_CAPTURE_VIDEO_BYTES + 1 } });
+        const afterOversize = rendered.filter(([kind]) => kind === 'video').at(-1)?.[1] || 0;
+        await controller.openCaptureCamera('video');
+        controller.startCaptureVideoRecording();
+        controller.reset();
+        console.log(JSON.stringify({
+          afterOversize, tracksStopped: tracks.every((track) => track.stopped),
+          recorderInactive: Recorder.last.state === 'inactive', statuses,
+        }));
+        """
+    )
+    assert result["afterOversize"] == 0
+    assert result["tracksStopped"] is True
+    assert result["recorderInactive"] is True
+    assert any(kind == "video" and state == "error" for kind, state, _ in result["statuses"])
+
+
+def test_camera_shell_and_privacy_contract_is_explicit():
+    assert 'data-i18n="nav.tools">Herramientas</span>' in INDEX
+    assert "'nav.tools': 'Herramientas'" in (ROOT / "static/js/locales.js").read_text(encoding="utf-8")
+    assert "'nav.tools': 'Tools'" in (ROOT / "static/js/locales.js").read_text(encoding="utf-8")
+    assert "'nav.tools': '工具'" in (ROOT / "static/js/locales.js").read_text(encoding="utf-8")
+    assert "mediaDevices.getUserMedia(cameraConstraints(mode))" in SOURCE
+    assert "MediaRecorderClass.isTypeSupported" in SOURCE
+    assert "capturePhotoBlobFromVideo" in SOURCE
+    assert "cameraRecorder.start(1000)" in SOURCE
+    assert "fetchImpl" not in SOURCE[SOURCE.index("async function openCaptureCamera"):SOURCE.index("function clearRecordingTimer")]

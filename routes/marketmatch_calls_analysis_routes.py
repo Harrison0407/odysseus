@@ -40,6 +40,7 @@ MAX_ACTION_OWNER_CHARS = 200
 MAX_ACTION_DUE_DATE_CHARS = 200
 MAX_ANALYSIS_TEXT_CHARS = 16_000
 MAX_RAW_MODEL_OUTPUT_CHARS = 24_000
+ANALYSIS_OUTPUT_LANGUAGES = ("es", "en", "zh-Hans")
 
 _KNOWN_ENDPOINT_KINDS = frozenset({"auto", "local", "api", "proxy"})
 
@@ -87,6 +88,7 @@ class TranscriptRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     transcript: StrictStr = Field(max_length=MAX_TRANSCRIPT_CHARS)
+    output_language: StrictStr
 
     @field_validator("transcript", mode="before")
     @classmethod
@@ -96,6 +98,13 @@ class TranscriptRequest(BaseModel):
         value = value.strip()
         if not value:
             raise ValueError("transcript is empty")
+        return value
+
+    @field_validator("output_language")
+    @classmethod
+    def _validate_output_language(cls, value: str) -> str:
+        if value not in ANALYSIS_OUTPUT_LANGUAGES:
+            raise ValueError("unsupported output language")
         return value
 
 
@@ -233,7 +242,7 @@ def resolve_local_analysis_endpoint(owner: str) -> LocalAnalysisEndpoint | None:
 _SYSTEM_PROMPT = """You create a conservative, reviewable draft analysis of one call transcript.
 Use only the supplied transcript. Preserve uncertainty. Do not invent facts, decisions,
 owners, deadlines, amounts, dates, locations, approvals, commitments, or identities.
-Do not infer a speaker's identity. Use the transcript's dominant language.
+Do not infer a speaker's identity. Follow the route-supplied output-language instruction.
 
 Classify each supported statement by what the transcript explicitly communicates:
 
@@ -291,9 +300,23 @@ null for an unstated owner or due date. Do not include reasoning, markdown fence
 commentary, or extra keys."""
 
 
-def _messages(transcript: str) -> list[dict[str, str]]:
+_OUTPUT_LANGUAGE_NAMES = {
+    "es": "Spanish",
+    "en": "English",
+    "zh-Hans": "Simplified Chinese",
+}
+
+
+def _messages(transcript: str, output_language: str) -> list[dict[str, str]]:
+    language_name = _OUTPUT_LANGUAGE_NAMES[output_language]
+    language_instruction = (
+        f"Write every human-readable JSON value in {language_name}. "
+        "Keep the JSON property names exactly as specified. Preserve original personal names, "
+        "company names, filenames, product names, and technical identifiers or codes unchanged. "
+        "Do not return a translation of the transcript. For zh-Hans, use Simplified Chinese."
+    )
     return [
-        {"role": "system", "content": _SYSTEM_PROMPT},
+        {"role": "system", "content": _SYSTEM_PROMPT + "\n\n" + language_instruction},
         {"role": "user", "content": "Transcript:\n" + transcript},
     ]
 
@@ -403,7 +426,7 @@ def setup_marketmatch_calls_analysis_routes(
                     raw_result = await inference_call(
                         endpoint.url,
                         endpoint.model,
-                        _messages(payload.transcript),
+                        _messages(payload.transcript, payload.output_language),
                         headers=endpoint.headers,
                         temperature=0.0,
                         max_tokens=ANALYSIS_MAX_TOKENS,
@@ -432,6 +455,7 @@ def setup_marketmatch_calls_analysis_routes(
 
 
 __all__ = [
+    "ANALYSIS_OUTPUT_LANGUAGES",
     "ANALYSIS_TIMEOUT_SECONDS",
     "AnalysisActionItem",
     "AnalysisCode",

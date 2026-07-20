@@ -262,10 +262,34 @@ async def test_authorized_request_consumes_body_and_returns_bounded_shape():
     assert receive.calls == 1
     assert response.body == (
         b'{"duration_ms":1,"segments":[{"start_ms":0,"end_ms":1,"text":"ok"}],'
-        b'"transcript_text":"ok"}'
+        b'"transcript_text":"ok","language":"und","language_confidence":null}'
     )
     assert try_acquire_admission() is not None
     release_admission()
+
+
+async def test_genuine_worker_language_metadata_survives_route_response():
+    async def transcriber(wav_bytes, *, deadline):
+        assert wav_bytes and deadline > 0
+        return MarketMatchProcessResult(
+            duration_ms=10,
+            transcript_text="那個窗戶",
+            segments=((0, 10, "那個窗戶"),),
+            language="zh-Hans",
+            language_confidence=0.84,
+        )
+
+    receive = CountedReceive([{"type": "http.request", "body": b"x", "more_body": False}])
+    response = await _endpoint(transcriber)(_request(receive))
+
+    assert response.status_code == 200
+    assert response.body == (
+        b'{"duration_ms":10,"segments":[{"start_ms":0,"end_ms":10,"text":"'
+        + "那個窗戶".encode()
+        + b'"}],"transcript_text":"'
+        + "那個窗戶".encode()
+        + b'","language":"zh-Hans","language_confidence":0.84}'
+    )
 
 
 async def test_localhost_bypass_without_cookie_identity_never_receives_body(monkeypatch):

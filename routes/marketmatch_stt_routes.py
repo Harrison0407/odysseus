@@ -255,6 +255,8 @@ def _success_response(result: MarketMatchProcessResult) -> JSONResponse:
                 for start, end, text in result.segments
             ],
             "transcript_text": result.transcript_text,
+            "language": result.language,
+            "language_confidence": result.language_confidence,
         },
     )
 

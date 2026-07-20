@@ -42,7 +42,10 @@ class CountedReceive:
 
 
 def _request(payload=None, *, auth=None, cookie=True, current_user="alice", headers=None):
-    body = json.dumps(payload if payload is not None else {"transcript": "hello"}).encode()
+    payload = payload if payload is not None else {"transcript": "hello"}
+    if isinstance(payload, dict) and "transcript" in payload and "output_language" not in payload:
+        payload = {**payload, "output_language": "en"}
+    body = json.dumps(payload).encode()
     raw_headers = {
         "content-type": "application/json",
         "content-length": str(len(body)),
@@ -151,10 +154,11 @@ async def test_authorized_request_invokes_local_model_once_with_safe_options():
     assert kwargs["timeout"] == 120
     assert kwargs["max_tokens"] == 2048
     assert "session_id" not in kwargs
+    assert "Write every human-readable JSON value in English" in args[2][0]["content"]
 
 
 def test_analysis_prompt_has_conservative_classification_rules_and_examples():
-    prompt = route_module._messages("test transcript")[0]["content"]
+    prompt = route_module._messages("test transcript", "en")[0]["content"]
     required_rules = (
         "A decision is not an action item.",
         "Never rewrite a decision as an imperative task.",
@@ -181,6 +185,65 @@ def test_analysis_prompt_has_conservative_classification_rules_and_examples():
     combined_example = prompt.split("Example 4", 1)[1].split("Return strict JSON", 1)[0]
     assert '"decisions":["The team decided to use the revised plan."]' in combined_example
     assert '"task":"Send the drawing.","owner":"Felipe","due_date":"Friday"' in combined_example
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("language,name", [("es", "Spanish"), ("en", "English"), ("zh-Hans", "Simplified Chinese")])
+async def test_output_language_is_whitelisted_and_prompt_only(language, name):
+    calls = []
+
+    async def invoke(*args, **kwargs):
+        calls.append((args, kwargs))
+        return _valid_result()
+
+    response = await _endpoint(invoker=invoke)(
+        _request({"transcript": "MARE B WA-10", "output_language": language})[0]
+    )
+    assert response.status_code == 200
+    assert len(calls) == 1
+    system = calls[0][0][2][0]["content"]
+    assert f"in {name}" in system
+    assert "Preserve original personal names" in system
+    assert "Do not return a translation of the transcript" in system
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("language", ["auto", "fr", "zh-CN", "", 123, None])
+async def test_invalid_output_language_is_rejected_before_inference(language):
+    called = False
+
+    async def invoke(*args, **kwargs):
+        nonlocal called
+        called = True
+        return _valid_result()
+
+    response = await _endpoint(invoker=invoke)(
+        _request({"transcript": "text", "output_language": language})[0]
+    )
+    assert response.status_code == 422
+    assert called is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "language,summary",
+    [("es", "El equipo confirmó el plan."), ("en", "The team confirmed the plan."),
+     ("zh-Hans", "团队确认了方案。")],
+)
+async def test_strict_schema_accepts_unicode_values_in_each_supported_output_language(language, summary):
+    async def invoke(*args, **kwargs):
+        return _valid_result(summary=summary, decisions=[], action_items=[], open_questions=[])
+
+    response = await _endpoint(invoker=invoke)(
+        _request({"transcript": "MARE B WA-10", "output_language": language})[0]
+    )
+    assert response.status_code == 200
+    assert _response_json(response) == {
+        "summary": summary,
+        "decisions": [],
+        "action_items": [],
+        "open_questions": [],
+    }
 
 
 @pytest.mark.asyncio

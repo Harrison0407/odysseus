@@ -30,6 +30,7 @@ from src.marketmatch_canonical_wav import (
     CanonicalWavError,
     transcribe_canonical_wav,
 )
+from src.marketmatch_i18n import normalize_transcript_language
 
 
 MAX_RESULT_JSON_BYTES = 4 * 1024 * 1024
@@ -77,6 +78,8 @@ class MarketMatchProcessResult:
     duration_ms: int
     transcript_text: str
     segments: tuple[tuple[int, int, str], ...]
+    language: str = "und"
+    language_confidence: float | None = None
 
 
 _ADMISSION_GUARD = threading.Lock()
@@ -176,7 +179,7 @@ def _fail(code: MarketMatchProcessCode | CanonicalWavCode) -> NoReturn:
     raise MarketMatchProcessError(code) from None
 
 
-def _fixed_local_base_backend(waveform):
+def _fixed_local_base_backend(waveform, language_metadata: dict | None = None):
     """Return exact tuples from the provisioned local faster-whisper base model."""
 
     from faster_whisper import WhisperModel
@@ -189,8 +192,35 @@ def _fixed_local_base_backend(waveform):
         local_files_only=True,
         revision=FASTER_WHISPER_BASE_REVISION,
     )
-    segments, _ = model.transcribe(waveform)
-    return ((float(item.start), float(item.end), str(item.text)) for item in segments)
+    segments, info = model.transcribe(waveform)
+    if type(language_metadata) is dict:
+        language_metadata["language"] = normalize_transcript_language(
+            getattr(info, "language", None)
+        )
+        probability = getattr(info, "language_probability", None)
+        if type(probability) in (int, float) and math.isfinite(float(probability)):
+            numeric = float(probability)
+            language_metadata["language_confidence"] = numeric if 0.0 <= numeric <= 1.0 else None
+        else:
+            language_metadata["language_confidence"] = None
+
+    # Whisper timestamps use a coarser frame grid than the input PCM duration.
+    # For short, valid recordings its final segment can therefore end after the
+    # last sample (for example 1.0 s for a 250 ms WAV).  Keep every other strict
+    # backend check intact, but normalize that one trusted-model boundary to the
+    # duration proved by the canonical waveform before the generic validator
+    # checks ordering, finiteness, text, and transcript bounds.
+    waveform_duration_seconds = len(waveform) / 16_000
+
+    def _bounded_segments():
+        for item in segments:
+            start = float(item.start)
+            end = float(item.end)
+            if math.isfinite(end) and end > waveform_duration_seconds:
+                end = waveform_duration_seconds
+            yield start, end, str(item.text)
+
+    return _bounded_segments()
 
 
 def _scrub_worker_environment() -> None:
@@ -205,8 +235,14 @@ def _scrub_worker_environment() -> None:
     os.environ.update(preserved)
 
 
-def _success_payload(transcript: CanonicalTranscript) -> dict:
-    return {
+def _success_payload(
+    transcript: CanonicalTranscript,
+    language_metadata: dict | None = None,
+    *,
+    include_language_metadata: bool = True,
+) -> dict:
+    metadata = language_metadata if type(language_metadata) is dict else {}
+    payload = {
         "duration_ms": transcript.duration_ms,
         "segments": [
             {
@@ -218,6 +254,14 @@ def _success_payload(transcript: CanonicalTranscript) -> dict:
         ],
         "transcript_text": transcript.transcript_text,
     }
+    if include_language_metadata:
+        payload.update({
+            "language": normalize_transcript_language(metadata.get("language")),
+            "language_confidence": metadata.get("language_confidence")
+            if type(metadata.get("language_confidence")) is float
+            else None,
+        })
+    return payload
 
 
 def _encode_worker_message(message: dict) -> bytes:
@@ -236,7 +280,11 @@ def _encode_worker_message(message: dict) -> bytes:
     return encoded
 
 
-def _marketmatch_stt_child(input_connection: Connection, result_connection: Connection) -> None:
+def _marketmatch_stt_child(
+    input_connection: Connection,
+    result_connection: Connection,
+    result_protocol_version: int = 1,
+) -> None:
     """Spawn target. Receive one WAV message and send one bounded JSON message."""
 
     _scrub_worker_environment()
@@ -255,15 +303,24 @@ def _marketmatch_stt_child(input_connection: Connection, result_connection: Conn
                 pass
 
         try:
+            language_metadata: dict[str, object] = {}
+
+            def _backend_with_metadata(waveform):
+                return _fixed_local_base_backend(waveform, language_metadata)
+
             transcript = transcribe_canonical_wav(
                 wav_bytes,
                 byte_limit=MAX_WAV_BYTES,
                 duration_limit_ms=MAX_DURATION_MS,
-                backend=_fixed_local_base_backend,
+                backend=_backend_with_metadata,
                 transcript_utf8_limit=MAX_TRANSCRIPT_UTF8_BYTES,
                 segment_limit=MAX_SEGMENTS,
             )
-            message = _success_payload(transcript)
+            message = _success_payload(
+                transcript,
+                language_metadata,
+                include_language_metadata=result_protocol_version >= 2,
+            )
         except CanonicalWavError as error:
             message = {"error": error.code.value}
         except Exception:
@@ -357,12 +414,16 @@ def _decode_parent_result(payload: bytes) -> MarketMatchProcessResult:
                 _fail(MarketMatchProcessCode(raw_code))
             except ValueError:
                 _fail(MarketMatchProcessCode.WORKER_PROTOCOL_ERROR)
-    if set(value) != {"duration_ms", "segments", "transcript_text"}:
+    legacy_keys = {"duration_ms", "segments", "transcript_text"}
+    extended_keys = legacy_keys | {"language", "language_confidence"}
+    if set(value) not in (legacy_keys, extended_keys):
         _fail(MarketMatchProcessCode.WORKER_PROTOCOL_ERROR)
 
     duration_ms = value["duration_ms"]
     supplied_segments = value["segments"]
     transcript_text = value["transcript_text"]
+    language = normalize_transcript_language(value.get("language"))
+    language_confidence = value.get("language_confidence")
     if (
         type(duration_ms) is not int
         or not 0 < duration_ms <= MAX_DURATION_MS
@@ -371,6 +432,14 @@ def _decode_parent_result(payload: bytes) -> MarketMatchProcessResult:
         or type(transcript_text) is not str
     ):
         _fail(MarketMatchProcessCode.WORKER_PROTOCOL_ERROR)
+    if language_confidence is not None:
+        if (
+            type(language_confidence) not in (int, float)
+            or not math.isfinite(float(language_confidence))
+            or not 0.0 <= float(language_confidence) <= 1.0
+        ):
+            _fail(MarketMatchProcessCode.WORKER_PROTOCOL_ERROR)
+        language_confidence = float(language_confidence)
     try:
         transcript_size = len(transcript_text.encode("utf-8", errors="strict"))
     except UnicodeEncodeError:
@@ -400,6 +469,8 @@ def _decode_parent_result(payload: bytes) -> MarketMatchProcessResult:
         duration_ms=duration_ms,
         transcript_text=transcript_text,
         segments=tuple(segments),
+        language=language,
+        language_confidence=language_confidence,
     )
 
 
@@ -425,7 +496,12 @@ async def transcribe_in_spawned_process(
     target = _target or _marketmatch_stt_child
     input_receive, input_send = context.Pipe(duplex=False)
     result_receive, result_send = context.Pipe(duplex=False)
-    process = context.Process(target=target, args=(input_receive, result_send), daemon=True)
+    target_args = (
+        (input_receive, result_send, 2)
+        if _target is None
+        else (input_receive, result_send)
+    )
+    process = context.Process(target=target, args=target_args, daemon=True)
     registered = False
     first_payload: bytes | None = None
     result_eof = False

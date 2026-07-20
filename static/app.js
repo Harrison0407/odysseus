@@ -28,6 +28,7 @@ import notesModule from './js/notes.js';
 import adminModule from './js/admin.js';
 import settingsModule from './js/settings.js';
 import callsModule from './js/calls.js';
+import { bindLocaleControls, initializeI18n, subscribe as subscribeLocale, t } from './js/i18n.js';
 // Eagerly bind unified minimize/restore behavior across all tool modals.
 import './js/modalManager.js';
 // Desktop window tiling — drag a modal near an edge/corner to snap.
@@ -53,6 +54,9 @@ window.sessionModule = sessionModule;
 window.uiModule = uiModule;
 window.adminModule = adminModule;
 window.cookbookModule = cookbookModule;
+
+bindLocaleControls();
+void initializeI18n();
 
 function _isMobileChatInput() {
   return window.innerWidth <= 768;
@@ -157,33 +161,38 @@ initForegroundActivityHeartbeat();
 
 function initRailHoverLabels() {
   const labels = {
-    'rail-search-btn': 'Search',
-    'rail-new-session': 'New',
-    'rail-delete-session': 'Delete',
-    'rail-chats': 'Chat',
-    'rail-documents': 'Docs',
-    'rail-calendar': 'Calendar',
-    'rail-compare': 'Compare',
+    'rail-search-btn': 'nav.search',
+    'rail-new-session': 'nav.new',
+    'rail-delete-session': 'nav.delete_session',
+    'rail-chats': 'nav.chat',
+    'rail-documents': 'nav.documents',
+    'rail-calendar': 'nav.calendar',
+    'rail-compare': 'nav.compare',
     'rail-cookbook': 'Cookbook',
-    'rail-research': 'Research',
-    'rail-email': 'Email',
-    'rail-gallery': 'Gallery',
-    'rail-archive': 'Library',
+    'rail-research': 'nav.research',
+    'rail-email': 'nav.email',
+    'rail-gallery': 'nav.gallery',
+    'rail-archive': 'nav.library',
     'rail-memory': 'Brain',
-    'rail-notes': 'Notes',
-    'rail-tasks': 'Tasks',
-    'rail-theme': 'Theme',
-    'rail-settings': 'Settings',
+    'rail-notes': 'nav.notes',
+    'rail-tasks': 'nav.tasks',
+    'rail-theme': 'nav.theme',
+    'rail-settings': 'nav.settings',
   };
-  document.querySelectorAll('#icon-rail .icon-rail-btn').forEach(btn => {
-    if (btn.querySelector('.rail-hover-label')) return;
-    const label = labels[btn.id] || btn.getAttribute('aria-label') || btn.getAttribute('title') || '';
+  const render = () => document.querySelectorAll('#icon-rail .icon-rail-btn').forEach(btn => {
+    const value = labels[btn.id];
+    const label = value && value.includes('.') ? t(value) : value;
     if (!label) return;
-    const span = document.createElement('span');
-    span.className = 'rail-hover-label';
+    let span = btn.querySelector('.rail-hover-label');
+    if (!span) {
+      span = document.createElement('span');
+      span.className = 'rail-hover-label';
+      btn.appendChild(span);
+    }
     span.textContent = String(label).replace(/\s*\([^)]*\)\s*/g, '').trim();
-    btn.appendChild(span);
   });
+  subscribeLocale(render);
+  render();
 }
 
 // Redirect to login on 401 from any fetch
@@ -287,7 +296,7 @@ async function _syncWelcomeModelHint() {
   if (!tip && !sub) return;
   const hasModel = await _hasUsableChatModel();
   if (hasModel) {
-    if (sub && !sub.dataset.researchOrigText) sub.textContent = 'New chat ready.';
+    if (sub && !sub.dataset.researchOrigText) sub.textContent = t('chat.new_ready');
     if (tip) tip.textContent = 'Pick a model if you want, or just type.';
   } else {
     if (sub && !sub.dataset.researchOrigText) {
@@ -2316,7 +2325,7 @@ function initializeEventListeners() {
       // Keep a prompt inside the composer even when the picker crowds the row.
       // A blank placeholder makes the mobile/compact empty state feel broken.
       if (textarea) {
-        textarea.setAttribute('placeholder', w < PLACEHOLDER_COMPACT_WIDTH ? 'Message...' : 'Message Odysseus...');
+        textarea.setAttribute('placeholder', t(w < PLACEHOLDER_COMPACT_WIDTH ? 'chat.message_compact' : 'chat.message_placeholder'));
       }
       // Hide entire bottom toolbar (tools, mode toggle) — only send button remains
       if (inputBottom) {
@@ -3849,7 +3858,7 @@ function startOdysseusApp() {
     if (!hasText && !hasFiles && _isSttEnabled()) {
       clearTimeout(sendBtn._collapseTimer);
       sendBtn.innerHTML = _micIcon;
-      sendBtn.title = 'Record voice';
+      sendBtn.title = t('chat.record_voice');
       newMode = 'mic';
       sendBtn.classList.add('mic-mode');
       sendBtn.classList.remove('newchat-mode', 'newchat-expanded');
@@ -3858,7 +3867,7 @@ function startOdysseusApp() {
       // Group chat: always show send button, never newchat mode
       if (groupModule && groupModule.isActive()) {
         sendBtn.innerHTML = _sendIcon;
-        sendBtn.title = 'Send to group';
+        sendBtn.title = t('chat.send_group');
         newMode = 'idle';
         sendBtn.classList.remove('mic-mode', 'newchat-mode', 'newchat-expanded');
       } else {
@@ -3867,14 +3876,16 @@ function startOdysseusApp() {
       if (isEmptySession) {
         // Already on new chat — show arrow in muted style (ready to type)
         sendBtn.innerHTML = _sendIcon;
-        sendBtn.title = 'Send message';
+        sendBtn.title = t('chat.send_message');
         newMode = 'idle';
         sendBtn.classList.add('newchat-mode'); // muted gray style
         sendBtn.classList.remove('mic-mode', 'newchat-expanded');
         clearTimeout(sendBtn._expandTimer);
       } else {
-        sendBtn.innerHTML = _newChatIcon + '<span class="send-btn-label">+ New</span>';
-        sendBtn.title = 'New chat';
+        sendBtn.innerHTML = _newChatIcon + '<span class="send-btn-label"></span>';
+        const newChatLabel = sendBtn.querySelector('.send-btn-label');
+        if (newChatLabel) newChatLabel.textContent = `+ ${t('nav.new')}`;
+        sendBtn.title = t('nav.new_chat');
         newMode = 'newchat';
         sendBtn.classList.add('newchat-mode');
         sendBtn.classList.remove('mic-mode');
@@ -3897,7 +3908,7 @@ function startOdysseusApp() {
         setTimeout(() => {
           if (sendBtn.dataset.mode !== 'send') return;
           sendBtn.innerHTML = _sendIcon;
-          sendBtn.title = 'Send message';
+          sendBtn.title = t('chat.send_message');
           sendBtn.classList.remove('mic-mode', 'newchat-mode', 'anim-spin-swap');
           sendBtn.classList.add('anim-spin');
           sendBtn.addEventListener('animationend', () => sendBtn.classList.remove('anim-spin'), { once: true });

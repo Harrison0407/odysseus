@@ -1,3 +1,16 @@
+import {
+  formatDateTime,
+  formatFileSize,
+  formatNumber,
+  getLocale,
+  getTimezone,
+  languageLabel,
+  normalizeLocale,
+  resolveAnalysisLanguage,
+  subscribe as subscribeLocale,
+  t,
+} from './i18n.js';
+
 const ENDPOINT = '/api/marketmatch/stt/transcribe';
 const ANALYSIS_ENDPOINT = '/api/marketmatch/calls/analyze';
 const DOCUMENT_ENDPOINT = '/api/document';
@@ -25,17 +38,39 @@ export const MAX_CAPTURE_VIDEO_BYTES = 100 * 1024 * 1024;
 export const MAX_CAPTURE_CAPTION_CHARS = 500;
 export const MAX_CAPTURE_NOTES_CHARS = 4000;
 export const CAPTURE_TYPES = Object.freeze([
-  'Meeting',
-  'Field Observation',
-  'Walkthrough',
-  'Training',
-  'Voice Note',
-  'Supplier Conversation',
-  'Other',
+  'meeting',
+  'field_observation',
+  'walkthrough',
+  'training',
+  'voice_note',
+  'supplier_conversation',
+  'other',
 ]);
 const CAPTURE_MEDIA_TYPES = Object.freeze({
   photo: Object.freeze(['image/jpeg', 'image/png', 'image/webp']),
   video: Object.freeze(['video/mp4', 'video/webm', 'video/quicktime']),
+});
+const CAPTURE_VIDEO_RECORDING_MIME_TYPES = Object.freeze([
+  'video/webm;codecs=vp9,opus',
+  'video/webm;codecs=vp8,opus',
+  'video/webm',
+  'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+  'video/mp4',
+]);
+const TIMELINE_I18N_KEYS = Object.freeze({
+  CAPTURE_STARTED: 'capture.timeline.started',
+  CAPTURE_RECORDING_STARTED: 'capture.timeline.recording_started',
+  CAPTURE_RECORDING_STOPPED: 'capture.timeline.recording_stopped',
+  CAPTURE_RECORDING_CANCELLED: 'capture.timeline.recording_cancelled',
+  CAPTURE_TRANSCRIPTION_STARTED: 'capture.timeline.transcription_started',
+  CAPTURE_TRANSCRIPTION_COMPLETED: 'capture.timeline.transcription_completed',
+  CAPTURE_TRANSCRIPTION_FAILED: 'capture.timeline.transcription_failed',
+  CAPTURE_ANALYSIS_GENERATED: 'capture.timeline.analysis_generated',
+  CAPTURE_ANALYSIS_FAILED: 'capture.timeline.analysis_failed',
+  CAPTURE_PHOTO_ADDED: 'capture.timeline.photo_added',
+  CAPTURE_VIDEO_ADDED: 'capture.timeline.video_added',
+  CAPTURE_ATTACHMENT_REMOVED: 'capture.timeline.attachment_removed',
+  CAPTURE_SAVED_TO_LIBRARY: 'capture.timeline.saved',
 });
 const WAV_HEADER_BYTES = 44;
 const MAX_RECORDING_MILLISECONDS = Math.floor(
@@ -43,33 +78,24 @@ const MAX_RECORDING_MILLISECONDS = Math.floor(
 );
 
 const STATUS_MESSAGES = Object.freeze({
-  401: 'Your browser session has expired. Sign in again, then retry.',
-  403: 'Your account is not allowed to use Capture transcription.',
-  408: 'The audio upload timed out. Choose the file and try again.',
-  413: 'The WAV exceeds the pilot size or duration limit.',
-  415: 'This file is not the required canonical mono 16 kHz PCM WAV format.',
-  422: 'The file is not a valid canonical mono 16 kHz PCM WAV.',
-  429: 'Another transcription is already running. Try again when it finishes.',
-  502: 'The local transcription result could not be validated.',
-  503: 'The local transcription model is unavailable right now.',
-  504: 'Local transcription timed out. Try a shorter file.',
+  401: 'capture.error.session', 403: 'capture.error.forbidden', 408: 'capture.error.timeout',
+  413: 'capture.error.wav_size', 415: 'capture.error.wav_format', 422: 'capture.error.wav_invalid',
+  429: 'capture.error.busy', 502: 'capture.error.invalid_result',
+  503: 'capture.error.model_unavailable', 504: 'capture.error.timeout',
 });
 
-const GENERIC_FAILURE = 'Transcription could not be completed. Please try again.';
-const RECORDING_FAILURE = 'The recording could not be prepared safely. Please try again.';
-const DOCUMENT_SAVE_FAILURE = 'The Capture could not be saved. Please try again.';
-const HISTORY_FAILURE = 'Saved Captures could not be loaded. Please try again.';
-const ANALYSIS_FAILURE = 'Transcript analysis could not be generated. Please try again.';
-const ANALYSIS_INVALID_RESPONSE = 'The local analysis result could not be validated.';
+const GENERIC_FAILURE = 'capture.status.transcription_failed';
+const RECORDING_FAILURE = 'capture.error.recording_failed';
+const DOCUMENT_SAVE_FAILURE = 'capture.status.save_failed';
+const HISTORY_FAILURE = 'capture.history.failed';
+const ANALYSIS_FAILURE = 'capture.status.analysis_failed';
+const ANALYSIS_INVALID_RESPONSE = 'capture.status.analysis_invalid';
 
 const ANALYSIS_STATUS_MESSAGES = Object.freeze({
-  401: 'Your browser session has expired. Sign in again, then retry.',
-  403: 'Your account is not allowed to use Capture transcript analysis.',
-  413: 'This transcript is too long for the analysis pilot.',
-  422: 'This transcript cannot be analyzed. Review it and try again.',
+  401: 'capture.error.session', 403: 'capture.error.forbidden',
+  413: 'capture.status.analysis_too_long', 422: 'capture.status.analysis_failed',
   502: ANALYSIS_INVALID_RESPONSE,
-  503: 'Local transcript analysis is unavailable right now.',
-  504: 'Local transcript analysis timed out. Please try again.',
+  503: 'capture.error.model_unavailable', 504: 'capture.error.timeout',
 });
 const ANALYSIS_RESPONSE_LIMITS = Object.freeze({
   summary: 2000,
@@ -80,16 +106,15 @@ const ANALYSIS_RESPONSE_LIMITS = Object.freeze({
 });
 
 const DOCUMENT_STATUS_MESSAGES = Object.freeze({
-  400: 'Check the document title and try again.',
-  401: 'Your browser session has expired. Sign in again, then retry.',
-  403: 'Your account is not allowed to save documents.',
-  413: 'The transcript is too large to save as a document.',
-  422: 'Check the document title and try again.',
+  400: 'capture.status.title_required', 401: 'capture.error.session',
+  403: 'capture.error.forbidden', 413: 'capture.status.save_failed',
+  422: 'capture.status.title_required',
 });
 
 export class CallsUiError extends Error {
   constructor(code, message, status = 0) {
-    super(message);
+    super(typeof message === 'string' && (message.startsWith('capture.') || message.startsWith('common.'))
+      ? t(message) : message);
     this.name = 'CallsUiError';
     this.code = code;
     this.status = status;
@@ -121,7 +146,7 @@ export function resamplePcm(samples, sourceRate, targetRate = CALLS_WAV_SAMPLE_R
   const outputLength = Math.max(1, Math.round(samples.length * targetRate / sourceRate));
   if (targetRate === CALLS_WAV_SAMPLE_RATE
       && WAV_HEADER_BYTES + (outputLength * 2) > MAX_CALLS_WAV_BYTES) {
-    throw new CallsUiError('RECORDING_TOO_LARGE', 'The recording exceeds the 20 MiB pilot limit. Make a shorter recording.');
+    throw new CallsUiError('RECORDING_TOO_LARGE', 'capture.error.recording_too_large');
   }
   if (sourceRate === targetRate) return Float32Array.from(samples);
   const output = new Float32Array(outputLength);
@@ -164,11 +189,11 @@ export function float32ToPcm16(samples) {
 
 export function encodeCanonicalWav(samples) {
   if (!samples || !Number.isSafeInteger(samples.length) || samples.length === 0) {
-    throw new CallsUiError('RECORDING_EMPTY', 'No microphone audio was captured. Please record again.');
+    throw new CallsUiError('RECORDING_EMPTY', 'capture.error.recording_empty');
   }
   const dataBytes = samples.length * 2;
   if (WAV_HEADER_BYTES + dataBytes > MAX_CALLS_WAV_BYTES) {
-    throw new CallsUiError('RECORDING_TOO_LARGE', 'The recording exceeds the 20 MiB pilot limit. Make a shorter recording.');
+    throw new CallsUiError('RECORDING_TOO_LARGE', 'capture.error.recording_too_large');
   }
   const output = new Uint8Array(WAV_HEADER_BYTES + dataBytes);
   const view = new DataView(output.buffer);
@@ -201,10 +226,10 @@ export function encodeCanonicalWav(samples) {
 export function validateGeneratedWavBytes(bytes) {
   const byteLength = bytes && Number.isSafeInteger(bytes.byteLength) ? bytes.byteLength : 0;
   if (byteLength <= WAV_HEADER_BYTES) {
-    throw new CallsUiError('RECORDING_EMPTY', 'No microphone audio was captured. Please record again.');
+    throw new CallsUiError('RECORDING_EMPTY', 'capture.error.recording_empty');
   }
   if (byteLength > MAX_CALLS_WAV_BYTES) {
-    throw new CallsUiError('RECORDING_TOO_LARGE', 'The recording exceeds the 20 MiB pilot limit. Make a shorter recording.');
+    throw new CallsUiError('RECORDING_TOO_LARGE', 'capture.error.recording_too_large');
   }
   return true;
 }
@@ -225,23 +250,23 @@ export function recordingFilename(date = new Date()) {
 
 export async function decodeRecordingToCanonicalWav(blob, createAudioContext) {
   if (!blob || blob.size <= 0 || typeof blob.arrayBuffer !== 'function') {
-    throw new CallsUiError('RECORDING_EMPTY', 'No microphone audio was captured. Please record again.');
+    throw new CallsUiError('RECORDING_EMPTY', 'capture.error.recording_empty');
   }
   let context;
   try {
     context = typeof createAudioContext === 'function' ? createAudioContext() : null;
   } catch (_) {
-    throw new CallsUiError('AUDIO_UNSUPPORTED', 'Microphone audio processing is unavailable in this browser.');
+    throw new CallsUiError('AUDIO_UNSUPPORTED', 'capture.error.audio_unsupported');
   }
   if (!context || typeof context.decodeAudioData !== 'function') {
-    throw new CallsUiError('AUDIO_UNSUPPORTED', 'Microphone audio processing is unavailable in this browser.');
+    throw new CallsUiError('AUDIO_UNSUPPORTED', 'capture.error.audio_unsupported');
   }
   try {
     const decoded = await context.decodeAudioData(await blob.arrayBuffer());
     if (!decoded || !Number.isFinite(decoded.sampleRate) || decoded.sampleRate <= 0
         || !Number.isSafeInteger(decoded.numberOfChannels) || decoded.numberOfChannels <= 0
         || !Number.isSafeInteger(decoded.length) || decoded.length <= 0) {
-      throw new CallsUiError('RECORDING_EMPTY', 'No microphone audio was captured. Please record again.');
+      throw new CallsUiError('RECORDING_EMPTY', 'capture.error.recording_empty');
     }
     const channels = [];
     for (let index = 0; index < decoded.numberOfChannels; index += 1) {
@@ -266,21 +291,19 @@ export async function decodeRecordingToCanonicalWav(blob, createAudioContext) {
 
 export function validateCallsFile(file) {
   if (!file || typeof file.name !== 'string' || !/\.wav$/i.test(file.name)) {
-    return { ok: false, code: 'WAV_REQUIRED', message: 'Choose a .wav file.' };
+    return { ok: false, code: 'WAV_REQUIRED', message: t('capture.error.wav_format') };
   }
   if (!Number.isSafeInteger(file.size) || file.size <= 0) {
-    return { ok: false, code: 'EMPTY_FILE', message: 'The selected WAV file is empty.' };
+    return { ok: false, code: 'EMPTY_FILE', message: t('capture.error.wav_empty') };
   }
   if (file.size > MAX_CALLS_WAV_BYTES) {
-    return { ok: false, code: 'FILE_TOO_LARGE', message: 'Choose a WAV file no larger than 20 MiB.' };
+    return { ok: false, code: 'FILE_TOO_LARGE', message: t('capture.error.wav_size') };
   }
   return { ok: true };
 }
 
 export function formatEncodedSize(bytes) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
+  return formatFileSize(bytes);
 }
 
 export function formatCallsTimestamp(milliseconds) {
@@ -295,21 +318,11 @@ export function formatCallsTimestamp(milliseconds) {
 
 export function formatCallsLocalDateTime(date = new Date()) {
   const value = date instanceof Date && Number.isFinite(date.getTime()) ? date : new Date(0);
-  return [
-    value.getFullYear(),
-    '-',
-    String(value.getMonth() + 1).padStart(2, '0'),
-    '-',
-    String(value.getDate()).padStart(2, '0'),
-    ' ',
-    String(value.getHours()).padStart(2, '0'),
-    ':',
-    String(value.getMinutes()).padStart(2, '0'),
-  ].join('');
+  return formatDateTime(value);
 }
 
 export function defaultCallsDocumentTitle(date = new Date()) {
-  return `Capture — ${formatCallsLocalDateTime(date)}`;
+  return t('capture.default_title', { value: formatCallsLocalDateTime(date) });
 }
 
 export function captureMediaFingerprint(file) {
@@ -322,21 +335,19 @@ export function captureMediaFingerprint(file) {
 export function validateCaptureMediaFile(file, kind) {
   if (!file || typeof file !== 'object' || typeof file.name !== 'string'
       || !Number.isSafeInteger(file.size) || typeof file.type !== 'string') {
-    return { ok: false, code: 'MEDIA_INVALID', message: 'Choose a valid media file.' };
+    return { ok: false, code: 'MEDIA_INVALID', message: t('capture.status.preview_failed') };
   }
   if (!Object.prototype.hasOwnProperty.call(CAPTURE_MEDIA_TYPES, kind)) {
-    return { ok: false, code: 'MEDIA_INVALID', message: 'Choose a valid media file.' };
+    return { ok: false, code: 'MEDIA_INVALID', message: t('capture.status.preview_failed') };
   }
   if (file.size <= 0) {
-    return { ok: false, code: 'MEDIA_EMPTY', message: `The selected ${kind} is empty.` };
+    return { ok: false, code: 'MEDIA_EMPTY', message: t('capture.error.media_empty') };
   }
   if (!CAPTURE_MEDIA_TYPES[kind].includes(file.type.toLowerCase())) {
     return {
       ok: false,
       code: 'MEDIA_TYPE_UNSUPPORTED',
-      message: kind === 'photo'
-        ? 'Choose a JPEG, PNG or WebP photograph.'
-        : 'Choose an MP4, WebM or QuickTime video.',
+      message: t(`capture.status.${kind}_unsupported`),
     };
   }
   const limit = kind === 'photo' ? MAX_CAPTURE_PHOTO_BYTES : MAX_CAPTURE_VIDEO_BYTES;
@@ -344,7 +355,7 @@ export function validateCaptureMediaFile(file, kind) {
     return {
       ok: false,
       code: 'MEDIA_TOO_LARGE',
-      message: `Choose a ${kind} no larger than ${kind === 'photo' ? '20 MiB' : '100 MiB'}.`,
+      message: t(`capture.status.${kind}_oversize`),
     };
   }
   return { ok: true };
@@ -377,6 +388,8 @@ export function buildCaptureDocumentContent({
   notes = '',
   photos = [],
   videos = [],
+  interfaceLocale = getLocale(),
+  displayTimezone = getTimezone(),
 } = {}) {
   const value = result === null ? null : _validateSuccessPayload(result);
   const transcript = value
@@ -390,7 +403,10 @@ export function buildCaptureDocumentContent({
   const details = [
     `Capture title: ${_captureDocumentText(title, 'Untitled Capture')}`,
     `Capture type: ${_captureDocumentText(captureType, CAPTURE_TYPES[0])}`,
-    `Created: ${formatCallsLocalDateTime(createdAt)}`,
+    `Created: ${(createdAt instanceof Date ? createdAt : new Date(createdAt)).toISOString()}`,
+    `Interface locale at save time: ${normalizeLocale(interfaceLocale) || 'es'}`,
+    `Display timezone: ${typeof displayTimezone === 'string' && displayTimezone ? displayTimezone : 'UTC'}`,
+    `Detected transcript language: ${value ? value.language : 'und'}`,
   ];
   if (value) details.push(`Duration: ${formatCallsTimestamp(value.duration_ms)}`);
   return [
@@ -469,18 +485,18 @@ export function filterCallsHistoryDocuments(payload) {
 }
 
 export function formatCallsHistoryDate(value) {
-  if (typeof value !== 'string' || !value) return 'Date unavailable';
+  if (typeof value !== 'string' || !value) return '';
   const parsed = new Date(value);
-  if (!Number.isFinite(parsed.getTime())) return 'Date unavailable';
-  return parsed.toLocaleString();
+  if (!Number.isFinite(parsed.getTime())) return '';
+  return formatDateTime(parsed);
 }
 
 export function fixedCallsError(status) {
-  return STATUS_MESSAGES[status] || GENERIC_FAILURE;
+  return t(STATUS_MESSAGES[status] || GENERIC_FAILURE);
 }
 
 export function fixedCallsAnalysisError(status) {
-  return ANALYSIS_STATUS_MESSAGES[status] || ANALYSIS_FAILURE;
+  return t(ANALYSIS_STATUS_MESSAGES[status] || ANALYSIS_FAILURE);
 }
 
 function _validateSuccessPayload(value) {
@@ -496,12 +512,36 @@ function _validateSuccessPayload(value) {
         || typeof segment.text !== 'string') {
       throw new CallsUiError('MALFORMED_RESPONSE', GENERIC_FAILURE);
     }
-    return { start_ms: segment.start_ms, end_ms: segment.end_ms, text: segment.text };
+    const normalized = segment.language === undefined ? null : segment.language;
+    if (normalized !== null && !['es', 'en', 'zh-Hans', 'und'].includes(normalized)) {
+      throw new CallsUiError('MALFORMED_RESPONSE', GENERIC_FAILURE);
+    }
+    return {
+      start_ms: segment.start_ms,
+      end_ms: segment.end_ms,
+      text: segment.text,
+      ...(normalized ? { language: normalized } : {}),
+    };
   });
   if (segments.map((segment) => segment.text).join('') !== value.transcript_text) {
     throw new CallsUiError('MALFORMED_RESPONSE', GENERIC_FAILURE);
   }
-  return { duration_ms: value.duration_ms, transcript_text: value.transcript_text, segments };
+  const language = value.language === undefined ? 'und' : value.language;
+  if (!['es', 'en', 'zh-Hans', 'und'].includes(language)) {
+    throw new CallsUiError('MALFORMED_RESPONSE', GENERIC_FAILURE);
+  }
+  const confidence = value.language_confidence;
+  if (confidence !== undefined && confidence !== null
+      && (!Number.isFinite(confidence) || confidence < 0 || confidence > 1)) {
+    throw new CallsUiError('MALFORMED_RESPONSE', GENERIC_FAILURE);
+  }
+  return {
+    duration_ms: value.duration_ms,
+    transcript_text: value.transcript_text,
+    segments,
+    language,
+    language_confidence: confidence == null ? null : confidence,
+  };
 }
 
 export async function requestCallsTranscription(file, { fetchImpl = globalThis.fetch, signal } = {}) {
@@ -518,7 +558,7 @@ export async function requestCallsTranscription(file, { fetchImpl = globalThis.f
     });
   } catch (error) {
     if (error && error.name === 'AbortError') {
-      throw new CallsUiError('CANCELLED', 'Transcription cancelled.');
+      throw new CallsUiError('CANCELLED', 'capture.status.transcription_cancelled');
     }
     throw new CallsUiError('REQUEST_FAILED', GENERIC_FAILURE);
   }
@@ -606,16 +646,20 @@ function _analysisTextCharacters(value) {
 
 export async function requestCallsAnalysis(
   transcript,
-  { fetchImpl = globalThis.fetch, signal } = {},
+  { outputLanguage = 'es', fetchImpl = globalThis.fetch, signal } = {},
 ) {
   if (typeof transcript !== 'string' || !transcript.trim()) {
-    throw new CallsUiError('ANALYSIS_EMPTY', 'There is no transcript text to analyze.');
+    throw new CallsUiError('ANALYSIS_EMPTY', 'capture.status.analysis_empty');
   }
   if (_analysisTextCharacters(transcript) > MAX_CALLS_ANALYSIS_TRANSCRIPT_CHARS) {
     throw new CallsUiError(
       'ANALYSIS_TOO_LONG',
-      'This transcript is longer than the 12,000-character analysis pilot limit.',
+      'capture.status.analysis_too_long',
     );
+  }
+  const canonicalOutputLanguage = normalizeLocale(outputLanguage);
+  if (!canonicalOutputLanguage) {
+    throw new CallsUiError('ANALYSIS_LANGUAGE_INVALID', ANALYSIS_FAILURE);
   }
   let response;
   try {
@@ -623,12 +667,12 @@ export async function requestCallsAnalysis(
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transcript }),
+      body: JSON.stringify({ transcript, output_language: canonicalOutputLanguage }),
       signal,
     });
   } catch (error) {
     if (error && error.name === 'AbortError') {
-      throw new CallsUiError('ANALYSIS_CANCELLED', 'Transcript analysis cancelled.');
+      throw new CallsUiError('ANALYSIS_CANCELLED', 'capture.status.analysis_cancelled');
     }
     throw new CallsUiError('ANALYSIS_REQUEST_FAILED', ANALYSIS_FAILURE);
   }
@@ -653,25 +697,25 @@ export function formatCallsAnalysisText(value) {
   const analysis = _validateAnalysisPayload(value);
   const listText = (items) => items.length
     ? items.map((item) => `- ${item}`).join('\n')
-    : 'None identified.';
+    : t('common.none_identified');
   const actions = analysis.action_items.length
     ? analysis.action_items.map((item, index) => [
-      `${index + 1}. Task: ${item.task}`,
-      `Owner: ${item.owner === null ? 'Not stated.' : item.owner}`,
-      `Due date: ${item.due_date === null ? 'Not stated.' : item.due_date}`,
+      `${index + 1}. ${t('capture.analysis.task', { value: item.task })}`,
+      t('capture.analysis.owner', { value: item.owner === null ? t('capture.analysis.not_stated') : item.owner }),
+      t('capture.analysis.due_date', { value: item.due_date === null ? t('capture.analysis.not_stated') : item.due_date }),
     ].join('\n')).join('\n\n')
-    : 'None identified.';
+    : t('common.none_identified');
   return [
-    'Summary',
+    t('capture.analysis.summary'),
     analysis.summary,
     '',
-    'Decisions',
+    t('capture.analysis.decisions'),
     listText(analysis.decisions),
     '',
-    'Action Items',
+    t('capture.analysis.actions'),
     actions,
     '',
-    'Open Questions',
+    t('capture.analysis.questions'),
     listText(analysis.open_questions),
   ].join('\n');
 }
@@ -685,12 +729,14 @@ export async function requestCallsDocumentSave(
     notes = '',
     photos = [],
     videos = [],
+    interfaceLocale = getLocale(),
+    displayTimezone = getTimezone(),
   },
   { fetchImpl = globalThis.fetch, signal } = {},
 ) {
   const normalizedTitle = typeof title === 'string' ? title.trim() : '';
   if (!normalizedTitle) {
-    throw new CallsUiError('DOCUMENT_TITLE_REQUIRED', 'Enter a Capture title before saving.');
+    throw new CallsUiError('DOCUMENT_TITLE_REQUIRED', 'capture.status.title_required');
   }
   const content = buildCaptureDocumentContent({
     title: normalizedTitle,
@@ -700,6 +746,8 @@ export async function requestCallsDocumentSave(
     notes,
     photos,
     videos,
+    interfaceLocale,
+    displayTimezone,
   });
   let response;
   try {
@@ -716,7 +764,7 @@ export async function requestCallsDocumentSave(
     });
   } catch (error) {
     if (error && error.name === 'AbortError') {
-      throw new CallsUiError('SAVE_CANCELLED', 'Save cancelled.');
+      throw new CallsUiError('SAVE_CANCELLED', 'capture.status.save_cancelled');
     }
     throw new CallsUiError('DOCUMENT_SAVE_FAILED', DOCUMENT_SAVE_FAILURE);
   }
@@ -724,7 +772,7 @@ export async function requestCallsDocumentSave(
     const status = response && Number.isInteger(response.status) ? response.status : 0;
     throw new CallsUiError(
       `DOCUMENT_HTTP_${status || 'ERROR'}`,
-      DOCUMENT_STATUS_MESSAGES[status] || DOCUMENT_SAVE_FAILURE,
+      t(DOCUMENT_STATUS_MESSAGES[status] || DOCUMENT_SAVE_FAILURE),
       status,
     );
   }
@@ -751,16 +799,16 @@ export async function requestCallsHistory({ fetchImpl = globalThis.fetch, signal
     });
   } catch (error) {
     if (error && error.name === 'AbortError') {
-      throw new CallsUiError('HISTORY_CANCELLED', 'History loading cancelled.');
+      throw new CallsUiError('HISTORY_CANCELLED', 'capture.history.cancelled');
     }
     throw new CallsUiError('HISTORY_REQUEST_FAILED', HISTORY_FAILURE);
   }
   if (!response || response.ok !== true) {
     const status = response && Number.isInteger(response.status) ? response.status : 0;
     const message = status === 401
-      ? 'Your browser session has expired. Sign in again, then retry.'
+      ? 'capture.history.session'
       : status === 403
-        ? 'Your account is not allowed to view saved documents.'
+        ? 'capture.history.forbidden'
         : HISTORY_FAILURE;
     throw new CallsUiError(`HISTORY_HTTP_${status || 'ERROR'}`, message, status);
   }
@@ -777,6 +825,35 @@ export function setElementText(element, value) {
   if (element) element.textContent = String(value ?? '');
 }
 
+export function selectCaptureVideoMimeType(MediaRecorderClass = globalThis.MediaRecorder) {
+  if (!MediaRecorderClass || typeof MediaRecorderClass.isTypeSupported !== 'function') return null;
+  return CAPTURE_VIDEO_RECORDING_MIME_TYPES.find((type) => MediaRecorderClass.isTypeSupported(type)) || null;
+}
+
+export function capturePhotoBlobFromVideo(video, doc = globalThis.document) {
+  return new Promise((resolve, reject) => {
+    const width = Number(video && video.videoWidth);
+    const height = Number(video && video.videoHeight);
+    if (!doc || !Number.isFinite(width) || width <= 0 || !Number.isFinite(height) || height <= 0) {
+      reject(new Error('camera frame unavailable'));
+      return;
+    }
+    const canvas = doc.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context || typeof context.drawImage !== 'function' || typeof canvas.toBlob !== 'function') {
+      reject(new Error('camera capture unavailable'));
+      return;
+    }
+    context.drawImage(video, 0, 0, width, height);
+    canvas.toBlob((blob) => {
+      if (blob && blob.type === 'image/jpeg') resolve(blob);
+      else reject(new Error('camera capture failed'));
+    }, 'image/jpeg', 0.92);
+  });
+}
+
 export function createCallsController({
   view,
   fetchImpl = globalThis.fetch,
@@ -791,6 +868,8 @@ export function createCallsController({
   },
   decodeRecording = decodeRecordingToCanonicalWav,
   createWavFile = (bytes, name) => new File([bytes], name, { type: 'audio/wav' }),
+  createMediaFile = (parts, name, options) => new File(parts, name, options),
+  capturePhotoFrame = null,
   createObjectURL = (file) => globalThis.URL && globalThis.URL.createObjectURL
     ? globalThis.URL.createObjectURL(file) : null,
   revokeObjectURL = (url) => {
@@ -842,11 +921,35 @@ export function createCallsController({
   let mediaFingerprints = new Set();
   let mediaSequence = 0;
   let timelineSequence = 1;
-  let timeline = [{ id: 'capture-event-1', message: 'Capture started.', at: captureCreatedAt }];
+  let timeline = [{ id: 'capture-event-1', code: 'CAPTURE_STARTED', params: {}, at: captureCreatedAt }];
+  let historyDocuments = [];
+  let analysisLanguage = 'auto';
+  let resolvedAnalysisOutputLanguage = getLocale();
+  let cameraMode = null;
+  let cameraStream = null;
+  let cameraFacingMode = 'environment';
+  let cameraGeneration = 0;
+  let cameraRecorder = null;
+  let cameraRecordingState = 'idle';
+  let cameraRecordingChunks = [];
+  let cameraRecordingBytes = 0;
+  let cameraRecordingOversized = false;
+  let cameraRecordingMime = null;
+  let cameraSwitchSupported = false;
 
   const callView = (method, ...args) => {
     if (view && typeof view[method] === 'function') view[method](...args);
   };
+
+  function syncResolvedAnalysisLanguage() {
+    resolvedAnalysisOutputLanguage = resolveAnalysisLanguage(
+      analysisLanguage,
+      result && result.language,
+      result ? result.segments.map((segment) => segment.language).filter(Boolean) : [],
+    ) || 'es';
+    callView('setResolvedAnalysisLanguage', resolvedAnalysisOutputLanguage);
+    return resolvedAnalysisOutputLanguage;
+  }
 
   function captureDetails() {
     return {
@@ -865,21 +968,22 @@ export function createCallsController({
     callView('setCaptureSaveReady', hasSavableCapture() && !saved);
   }
 
-  function addTimelineEvent(message) {
+  function addTimelineEvent(code, params = {}) {
     timelineSequence += 1;
     timeline.push({
       id: `capture-event-${timelineSequence}`,
-      message,
+      code,
+      params: { ...params },
       at: new Date(now()),
     });
-    callView('renderTimeline', timeline.slice());
+    callView('renderTimeline', timeline.map((item) => ({ ...item, params: { ...item.params } })));
   }
 
   function markCaptureChanged() {
     if (saved) {
       saved = false;
       callView('setSaved', false);
-      callView('setSaveStatus', 'Capture changed. Save explicitly when ready.', 'idle');
+      callView('setSaveStatus', t('capture.status.changed'), 'idle');
     }
     syncCaptureSaveAvailability();
   }
@@ -909,8 +1013,8 @@ export function createCallsController({
     mediaFingerprints = new Set();
     renderMedia('photo');
     renderMedia('video');
-    callView('setMediaStatus', 'photo', 'No photos added.', 'idle');
-    callView('setMediaStatus', 'video', 'No videos added.', 'idle');
+    callView('setMediaStatus', 'photo', t('capture.photos.empty'), 'idle');
+    callView('setMediaStatus', 'video', t('capture.videos.empty'), 'idle');
     if (hadMedia && saved) {
       saved = false;
       callView('setSaved', false);
@@ -928,13 +1032,13 @@ export function createCallsController({
     }
     const fingerprint = captureMediaFingerprint(file);
     if (!fingerprint || mediaFingerprints.has(fingerprint)) {
-      callView('setMediaStatus', kind, `That ${kind} is already in this Capture.`, 'error');
+      callView('setMediaStatus', kind, t(`capture.status.${kind}_duplicate`), 'error');
       return false;
     }
     let url = null;
     try { url = createObjectURL(file); } catch (_) { url = null; }
     if (!url) {
-      callView('setMediaStatus', kind, `The ${kind} preview could not be prepared safely.`, 'error');
+      callView('setMediaStatus', kind, t('capture.status.preview_failed'), 'error');
       return false;
     }
     mediaSequence += 1;
@@ -949,15 +1053,15 @@ export function createCallsController({
       lastModified: Number.isFinite(file.lastModified) ? file.lastModified : 0,
       addedAt: new Date(now()),
       caption: '',
-      persistence: 'In memory only; not saved.',
+      persistence: 'IN_MEMORY_ONLY',
       fingerprint,
     };
     if (kind === 'photo') photos.push(item);
     else videos.push(item);
     mediaFingerprints.add(fingerprint);
     renderMedia(kind);
-    callView('setMediaStatus', kind, `${kind === 'photo' ? 'Photo' : 'Video'} added in memory.`, 'success');
-    addTimelineEvent(`${kind === 'photo' ? 'Photo' : 'Video'} added.`);
+    callView('setMediaStatus', kind, t(`capture.status.${kind}_added`), 'success');
+    addTimelineEvent(kind === 'photo' ? 'CAPTURE_PHOTO_ADDED' : 'CAPTURE_VIDEO_ADDED', { filename: file.name });
     markCaptureChanged();
     return true;
   }
@@ -980,8 +1084,8 @@ export function createCallsController({
       try { revokeObjectURL(removed.url); } catch (_) { /* best-effort release */ }
     }
     renderMedia(kind);
-    callView('setMediaStatus', kind, `${kind === 'photo' ? 'Photo' : 'Video'} removed.`, 'cancelled');
-    addTimelineEvent('Attachment removed.');
+    callView('setMediaStatus', kind, t(`capture.status.${kind}_removed`), 'cancelled');
+    addTimelineEvent('CAPTURE_ATTACHMENT_REMOVED', { filename: removed.name });
     markCaptureChanged();
     return true;
   }
@@ -1005,12 +1109,13 @@ export function createCallsController({
     timelineSequence += 1;
     timeline = [{
       id: `capture-event-${timelineSequence}`,
-      message: 'Capture started.',
+      code: 'CAPTURE_STARTED',
+      params: {},
       at: captureCreatedAt,
     }];
     callView('renderCaptureDetails', captureDetails());
-    callView('renderTimeline', timeline.slice());
-    callView('setCaptureStatus', 'Capture is ready.', 'idle');
+    callView('renderTimeline', timeline.map((item) => ({ ...item, params: { ...item.params } })));
+    callView('setCaptureStatus', t('capture.status.ready'), 'idle');
     syncCaptureSaveAvailability();
   }
 
@@ -1019,6 +1124,261 @@ export function createCallsController({
     for (const track of value.getTracks()) {
       try { track.stop(); } catch (_) { /* best-effort release */ }
     }
+  }
+
+  function cameraStatusKey() {
+    if (cameraMode === 'photo') return 'capture.camera.ready_photo';
+    if (cameraRecordingState === 'recording') return 'capture.camera.video_recording';
+    if (cameraRecordingState === 'processing') return 'capture.camera.video_processing';
+    return 'capture.camera.ready_video';
+  }
+
+  function renderCameraState() {
+    if (!cameraMode) return;
+    callView('setCaptureCameraState', cameraMode, cameraRecordingState, {
+      canSwitch: cameraSwitchSupported && cameraRecordingState === 'ready',
+      status: t(cameraStatusKey()),
+    });
+  }
+
+  function stopCameraResources({ closeView = true } = {}) {
+    cameraGeneration += 1;
+    const activeRecorder = cameraRecorder;
+    cameraRecorder = null;
+    if (activeRecorder && activeRecorder.state !== 'inactive') {
+      try { activeRecorder.stop(); } catch (_) { /* best-effort recorder stop */ }
+    }
+    stopTracks(cameraStream);
+    cameraStream = null;
+    cameraMode = null;
+    cameraRecordingState = 'idle';
+    cameraRecordingChunks = [];
+    cameraRecordingBytes = 0;
+    cameraRecordingOversized = false;
+    cameraRecordingMime = null;
+    cameraSwitchSupported = false;
+    if (closeView) callView('closeCaptureCamera');
+  }
+
+  function cameraConstraints(mode) {
+    return {
+      video: { facingMode: { ideal: cameraFacingMode } },
+      audio: mode === 'video',
+    };
+  }
+
+  async function openCaptureCamera(mode) {
+    if (!['photo', 'video'].includes(mode) || cameraMode || active || saveActive || analysisActive
+        || ['permission', 'recording', 'processing'].includes(recordingState)) return false;
+    const mediaStatusKind = mode;
+    if (!isSecureContext) {
+      callView('setMediaStatus', mediaStatusKind, t('capture.camera.secure_context'), 'error');
+      return false;
+    }
+    if (!mediaDevices || typeof mediaDevices.getUserMedia !== 'function') {
+      callView('setMediaStatus', mediaStatusKind, t('capture.camera.unavailable'), 'error');
+      return false;
+    }
+    if (mode === 'video' && !selectCaptureVideoMimeType(MediaRecorderClass)) {
+      callView('setMediaStatus', mediaStatusKind, t('capture.camera.recorder_unsupported'), 'error');
+      return false;
+    }
+    const run = ++cameraGeneration;
+    cameraMode = mode;
+    cameraRecordingState = 'permission';
+    callView('openCaptureCamera', mode, null, { canSwitch: false });
+    callView('setCaptureCameraState', mode, 'permission', {
+      canSwitch: false,
+      status: t(mode === 'video' ? 'capture.camera.permission_wait_av' : 'capture.camera.permission_wait'),
+    });
+    callView('setMediaStatus', mode, t(mode === 'video'
+      ? 'capture.camera.permission_wait_av' : 'capture.camera.permission_wait'), 'loading');
+    try {
+      const acquired = await mediaDevices.getUserMedia(cameraConstraints(mode));
+      if (run !== cameraGeneration || cameraMode !== mode) {
+        stopTracks(acquired);
+        return false;
+      }
+      cameraStream = acquired;
+      cameraRecordingState = 'ready';
+      const canSwitch = Boolean(mediaDevices.getSupportedConstraints
+        && mediaDevices.getSupportedConstraints().facingMode);
+      cameraSwitchSupported = canSwitch;
+      callView('openCaptureCamera', mode, acquired, { canSwitch });
+      callView('setCaptureCameraState', mode, 'ready', {
+        canSwitch,
+        status: t(cameraStatusKey()),
+      });
+      return true;
+    } catch (error) {
+      if (run !== cameraGeneration) return false;
+      const denied = error && ['NotAllowedError', 'SecurityError'].includes(error.name);
+      stopCameraResources();
+      callView('setMediaStatus', mode, t(denied
+        ? (mode === 'video' ? 'capture.camera.permission_denied_av' : 'capture.camera.permission_denied')
+        : 'capture.camera.unavailable'), 'error');
+      return false;
+    }
+  }
+
+  async function switchCaptureCamera() {
+    if (!cameraMode || cameraRecordingState !== 'ready' || !cameraStream || !cameraSwitchSupported) return false;
+    const mode = cameraMode;
+    const oldStream = cameraStream;
+    const run = ++cameraGeneration;
+    cameraFacingMode = cameraFacingMode === 'environment' ? 'user' : 'environment';
+    cameraStream = null;
+    stopTracks(oldStream);
+    callView('setCaptureCameraState', mode, 'permission', {
+      canSwitch: false,
+      status: t(mode === 'video' ? 'capture.camera.permission_wait_av' : 'capture.camera.permission_wait'),
+    });
+    try {
+      const acquired = await mediaDevices.getUserMedia(cameraConstraints(mode));
+      if (run !== cameraGeneration || cameraMode !== mode) {
+        stopTracks(acquired);
+        return false;
+      }
+      cameraStream = acquired;
+      cameraRecordingState = 'ready';
+      callView('openCaptureCamera', mode, acquired, { canSwitch: true });
+      renderCameraState();
+      return true;
+    } catch (_) {
+      stopCameraResources();
+      callView('setMediaStatus', mode, t('capture.camera.unavailable'), 'error');
+      return false;
+    }
+  }
+
+  function capturedFilename(kind, mime) {
+    const stamp = new Date(now()).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+    const extension = kind === 'photo' ? 'jpg' : mime === 'video/mp4' ? 'mp4' : 'webm';
+    return `Capture-${kind}-${stamp}.${extension}`;
+  }
+
+  async function captureCameraPhoto() {
+    if (cameraMode !== 'photo' || cameraRecordingState !== 'ready' || !cameraStream) return false;
+    const run = cameraGeneration;
+    cameraRecordingState = 'processing';
+    callView('setCaptureCameraState', 'photo', 'processing', {
+      canSwitch: false,
+      status: t('capture.camera.video_processing'),
+    });
+    try {
+      const blob = typeof capturePhotoFrame === 'function'
+        ? await capturePhotoFrame()
+        : view && typeof view.capturePhotoBlob === 'function'
+          ? await view.capturePhotoBlob()
+          : null;
+      if (run !== cameraGeneration) return false;
+      if (!blob || blob.type !== 'image/jpeg') throw new Error('invalid camera photo');
+      const file = createMediaFile([blob], capturedFilename('photo', 'image/jpeg'), {
+        type: 'image/jpeg', lastModified: now(),
+      });
+      stopCameraResources();
+      return addCaptureMedia('photo', file);
+    } catch (_) {
+      if (run === cameraGeneration) {
+        stopCameraResources();
+        callView('setMediaStatus', 'photo', t('capture.camera.photo_failed'), 'error');
+      }
+      return false;
+    }
+  }
+
+  function finishCameraVideo(run) {
+    if (run !== cameraGeneration || cameraMode !== 'video') return false;
+    const chunksToSave = cameraRecordingChunks.slice();
+    const mimeWithCodecs = cameraRecordingMime;
+    const oversized = cameraRecordingOversized || cameraRecordingBytes > MAX_CAPTURE_VIDEO_BYTES;
+    stopTracks(cameraStream);
+    cameraStream = null;
+    cameraRecorder = null;
+    if (oversized) {
+      stopCameraResources();
+      callView('setMediaStatus', 'video', t('capture.status.video_oversize'), 'error');
+      return false;
+    }
+    try {
+      const baseMime = mimeWithCodecs.split(';')[0].toLowerCase();
+      const blob = new BlobClass(chunksToSave, { type: baseMime });
+      if (!blob.size) throw new Error('empty video');
+      const file = createMediaFile([blob], capturedFilename('video', baseMime), {
+        type: baseMime, lastModified: now(),
+      });
+      stopCameraResources();
+      const added = addCaptureMedia('video', file);
+      if (added) callView('setMediaStatus', 'video', t('capture.camera.video_complete'), 'success');
+      return added;
+    } catch (_) {
+      stopCameraResources();
+      callView('setMediaStatus', 'video', t('capture.camera.video_failed'), 'error');
+      return false;
+    }
+  }
+
+  function startCaptureVideoRecording() {
+    if (cameraMode !== 'video' || cameraRecordingState !== 'ready' || !cameraStream) return false;
+    const mimeType = selectCaptureVideoMimeType(MediaRecorderClass);
+    if (!mimeType) {
+      callView('setMediaStatus', 'video', t('capture.camera.recorder_unsupported'), 'error');
+      return false;
+    }
+    const run = cameraGeneration;
+    try {
+      cameraRecorder = new MediaRecorderClass(cameraStream, { mimeType });
+      cameraRecordingChunks = [];
+      cameraRecordingBytes = 0;
+      cameraRecordingOversized = false;
+      cameraRecordingMime = mimeType;
+      cameraRecorder.ondataavailable = (event) => {
+        if (run !== cameraGeneration || !event.data || !event.data.size) return;
+        cameraRecordingBytes += event.data.size;
+        if (cameraRecordingBytes <= MAX_CAPTURE_VIDEO_BYTES) cameraRecordingChunks.push(event.data);
+        else {
+          cameraRecordingOversized = true;
+          if (cameraRecorder && cameraRecorder.state !== 'inactive') {
+            try { cameraRecorder.stop(); } catch (_) { /* handled by final validation */ }
+          }
+        }
+      };
+      cameraRecorder.onerror = () => {
+        if (run !== cameraGeneration) return;
+        stopCameraResources();
+        callView('setMediaStatus', 'video', t('capture.camera.video_failed'), 'error');
+      };
+      cameraRecorder.onstop = () => finishCameraVideo(run);
+      cameraRecorder.start(1000);
+      cameraRecordingState = 'recording';
+      renderCameraState();
+      return true;
+    } catch (_) {
+      stopCameraResources();
+      callView('setMediaStatus', 'video', t('capture.camera.video_failed'), 'error');
+      return false;
+    }
+  }
+
+  function stopCaptureVideoRecording() {
+    if (cameraMode !== 'video' || cameraRecordingState !== 'recording' || !cameraRecorder) return false;
+    cameraRecordingState = 'processing';
+    renderCameraState();
+    try { cameraRecorder.stop(); } catch (_) {
+      stopCameraResources();
+      callView('setMediaStatus', 'video', t('capture.camera.video_failed'), 'error');
+      return false;
+    }
+    stopTracks(cameraStream);
+    return true;
+  }
+
+  function closeCaptureCamera({ announce = false } = {}) {
+    if (!cameraMode && !cameraStream && !cameraRecorder) return false;
+    const mode = cameraMode;
+    stopCameraResources();
+    if (announce && mode) callView('setMediaStatus', mode, t('capture.camera.cancelled'), 'cancelled');
+    return true;
   }
 
   function clearRecordingTimer() {
@@ -1120,6 +1480,7 @@ export function createCallsController({
       });
       if (run !== historyGeneration || !panelVisible) return false;
       historyHasLoaded = true;
+      historyDocuments = documents;
       callView('renderHistory', documents, openHistoryDocument);
       return true;
     } catch (error) {
@@ -1147,7 +1508,7 @@ export function createCallsController({
       await openDocument(documentId);
       return true;
     } catch (_) {
-      callView('setHistoryError', 'The saved Capture could not be opened. Please try again.');
+      callView('setHistoryError', t('capture.history.open_failed'));
       return false;
     }
   }
@@ -1159,6 +1520,7 @@ export function createCallsController({
     result = null;
     clearSaveState();
     view.clearResult();
+    syncResolvedAnalysisLanguage();
     discardRecordedSelection();
     setRecordingState('idle');
     if (!validation.ok) {
@@ -1173,7 +1535,7 @@ export function createCallsController({
     selectedFile = file;
     selectedSource = 'upload';
     view.showSelected(file.name, formatEncodedSize(file.size));
-    view.setStatus('Ready to transcribe. The file will not be saved.', 'selected');
+    view.setStatus(t('capture.status.file_ready'), 'selected');
     view.setReady(true, 'upload');
     syncCaptureSaveAvailability();
     return true;
@@ -1182,12 +1544,12 @@ export function createCallsController({
   async function startRecording() {
     if (active || saveActive || ['permission', 'recording', 'processing'].includes(recordingState)) return false;
     if (!isSecureContext) {
-      callView('setRecordingStatus', 'Microphone recording requires HTTPS or localhost.', 'error');
+      callView('setRecordingStatus', t('capture.status.microphone_secure'), 'error');
       return false;
     }
     if (!mediaDevices || typeof mediaDevices.getUserMedia !== 'function'
         || typeof MediaRecorderClass !== 'function' || typeof BlobClass !== 'function') {
-      callView('setRecordingStatus', 'Microphone recording is unavailable in this browser.', 'error');
+      callView('setRecordingStatus', t('capture.status.microphone_unavailable'), 'error');
       return false;
     }
 
@@ -1201,10 +1563,11 @@ export function createCallsController({
     clearSaveState();
     callView('clearUpload');
     callView('clearResult');
+    syncResolvedAnalysisLanguage();
     callView('setReady', false, 'upload');
     syncCaptureSaveAvailability();
     setRecordingState('permission');
-    callView('setRecordingStatus', 'Waiting for microphone permission…', 'loading');
+    callView('setRecordingStatus', t('capture.status.permission_wait'), 'loading');
 
     let nextStream;
     try {
@@ -1214,11 +1577,11 @@ export function createCallsController({
       setRecordingState('idle');
       const name = error && error.name;
       if (name === 'NotAllowedError' || name === 'SecurityError') {
-        callView('setRecordingStatus', 'Microphone permission was denied. Allow access and try again.', 'error');
+        callView('setRecordingStatus', t('capture.status.permission_denied'), 'error');
       } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
-        callView('setRecordingStatus', 'No microphone is available.', 'error');
+        callView('setRecordingStatus', t('capture.status.no_microphone'), 'error');
       } else {
-        callView('setRecordingStatus', 'The microphone could not be started. Check the device and try again.', 'error');
+        callView('setRecordingStatus', t('capture.status.microphone_failed'), 'error');
       }
       return false;
     }
@@ -1230,7 +1593,7 @@ export function createCallsController({
         || nextStream.getTracks().length === 0) {
       stopTracks(nextStream);
       setRecordingState('idle');
-      callView('setRecordingStatus', 'No microphone is available.', 'error');
+      callView('setRecordingStatus', t('capture.status.no_microphone'), 'error');
       return false;
     }
 
@@ -1246,15 +1609,15 @@ export function createCallsController({
       recorder.onerror = () => failCapture(new CallsUiError('RECORDING_FAILED', RECORDING_FAILURE));
       recorder.start(250);
     } catch (_) {
-      failCapture(new CallsUiError('AUDIO_UNSUPPORTED', 'Microphone recording is unavailable in this browser.'));
+      failCapture(new CallsUiError('AUDIO_UNSUPPORTED', 'capture.status.microphone_unavailable'));
       return false;
     }
 
     recordingStartedAt = now();
     callView('setRecordingElapsed', 0);
     setRecordingState('recording');
-    callView('setRecordingStatus', 'Recording. Speak clearly, then choose Stop recording.', 'recording');
-    addTimelineEvent('Recording started.');
+    callView('setRecordingStatus', t('capture.status.recording'), 'recording');
+    addTimelineEvent('CAPTURE_RECORDING_STARTED');
     if (typeof setIntervalFn === 'function') {
       timer = setIntervalFn(() => {
         const elapsed = Math.max(0, now() - recordingStartedAt);
@@ -1272,7 +1635,7 @@ export function createCallsController({
     const localStream = stream;
     clearRecordingTimer();
     setRecordingState('processing');
-    callView('setRecordingStatus', 'Preparing canonical WAV audio…', 'loading');
+    callView('setRecordingStatus', t('capture.status.preparing_wav'), 'loading');
 
     const stopped = new Promise((resolve, reject) => {
       localRecorder.onstop = resolve;
@@ -1291,7 +1654,7 @@ export function createCallsController({
       if (run !== recordingGeneration) return false;
       validateGeneratedWavBytes(prepared.bytes);
       if (!Number.isSafeInteger(prepared.durationMs) || prepared.durationMs <= 0) {
-        throw new CallsUiError('RECORDING_EMPTY', 'No microphone audio was captured. Please record again.');
+        throw new CallsUiError('RECORDING_EMPTY', 'capture.error.recording_empty');
       }
       const file = createWavFile(prepared.bytes, recordingFilename(new Date(now())));
       const validation = validateCallsFile(file);
@@ -1304,8 +1667,8 @@ export function createCallsController({
       setRecordingState('ready');
       callView('showRecording', file.name, formatEncodedSize(file.size), prepared.durationMs, previewUrl);
       callView('setReady', true, 'recording');
-      callView('setRecordingStatus', 'Recording ready. Review it, then transcribe.', 'success');
-      addTimelineEvent('Recording stopped.');
+      callView('setRecordingStatus', t('capture.status.recording_ready'), 'success');
+      addTimelineEvent('CAPTURE_RECORDING_STOPPED');
       return true;
     } catch (error) {
       if (run !== recordingGeneration) return false;
@@ -1332,10 +1695,11 @@ export function createCallsController({
     clearAnalysisState();
     clearSaveState();
     callView('clearResult');
+    syncResolvedAnalysisLanguage();
     setRecordingState('idle');
     if (announce) {
-      callView('setRecordingStatus', 'Recording cancelled and discarded.', 'cancelled');
-      addTimelineEvent('Recording cancelled.');
+      callView('setRecordingStatus', t('capture.status.recording_cancelled'), 'cancelled');
+      addTimelineEvent('CAPTURE_RECORDING_CANCELLED');
     }
     syncCaptureSaveAvailability();
     return true;
@@ -1355,8 +1719,8 @@ export function createCallsController({
     const run = ++generation;
     controller = createAbortController();
     view.setBusy(true);
-    setTranscriptionStatus('Transcribing locally…', 'loading');
-    addTimelineEvent('Transcription started.');
+    setTranscriptionStatus(t('capture.status.transcribing'), 'loading');
+    addTimelineEvent('CAPTURE_TRANSCRIPTION_STARTED');
     try {
       const next = await requestCallsTranscription(selectedFile, {
         fetchImpl,
@@ -1365,21 +1729,22 @@ export function createCallsController({
       if (run !== generation) return false;
       result = next;
       resultCreatedAt = new Date(now());
+      syncResolvedAnalysisLanguage();
       view.renderResult(next);
       callView('showSave', captureTitle, true);
       callView('showAnalysisReady', next.transcript_text.length > 0);
       setTranscriptionStatus(
-        next.segments.length ? 'Transcription complete.' : 'Transcription complete. No speech was detected.',
+        t(next.segments.length ? 'capture.status.transcription_complete' : 'capture.status.transcription_silence'),
         'success',
       );
-      addTimelineEvent('Transcription completed.');
+      addTimelineEvent('CAPTURE_TRANSCRIPTION_COMPLETED');
       markCaptureChanged();
       return true;
     } catch (error) {
       if (run !== generation) return false;
       const safe = error instanceof CallsUiError ? error : new CallsUiError('REQUEST_FAILED', GENERIC_FAILURE);
       setTranscriptionStatus(safe.message, safe.code === 'CANCELLED' ? 'cancelled' : 'error');
-      if (safe.code !== 'CANCELLED') addTimelineEvent('Transcription failed.');
+      if (safe.code !== 'CANCELLED') addTimelineEvent('CAPTURE_TRANSCRIPTION_FAILED');
       return false;
     } finally {
       if (run === generation) {
@@ -1401,11 +1766,11 @@ export function createCallsController({
         || ['permission', 'recording', 'processing'].includes(recordingState)) return false;
     const normalizedTitle = typeof title === 'string' ? title.trim() : '';
     if (!normalizedTitle) {
-      callView('setSaveStatus', 'Enter a Capture title before saving.', 'error');
+      callView('setSaveStatus', t('capture.status.title_required'), 'error');
       return false;
     }
     if (!hasSavableCapture()) {
-      callView('setSaveStatus', 'Add notes, media or a transcript before saving.', 'error');
+      callView('setSaveStatus', t('capture.status.content_required'), 'error');
       return false;
     }
     captureTitle = normalizedTitle;
@@ -1413,7 +1778,7 @@ export function createCallsController({
     const run = ++saveGeneration;
     saveController = createAbortController();
     callView('setSaveBusy', true);
-    callView('setSaveStatus', 'Saving Capture to Library…', 'loading');
+    callView('setSaveStatus', t('capture.status.saving'), 'loading');
     try {
       await requestCallsDocumentSave(
         {
@@ -1430,8 +1795,8 @@ export function createCallsController({
       if (run !== saveGeneration) return false;
       saved = true;
       callView('setSaved', true);
-      callView('setSaveStatus', 'Capture saved to Library. Visual media was not persisted.', 'success');
-      addTimelineEvent('Capture saved to Library.');
+      callView('setSaveStatus', t('capture.status.saved'), 'success');
+      addTimelineEvent('CAPTURE_SAVED_TO_LIBRARY');
       if (panelVisible) {
         if (historyActive) historyRefreshPending = true;
         else void loadHistory({ refreshing: true });
@@ -1457,14 +1822,14 @@ export function createCallsController({
         || ['permission', 'recording', 'processing'].includes(recordingState)) return false;
     const transcript = result.transcript_text;
     if (typeof transcript !== 'string' || !transcript.trim()) {
-      callView('setAnalysisStatus', 'There is no transcript text to analyze.', 'error');
+      callView('setAnalysisStatus', t('capture.status.analysis_empty'), 'error');
       return false;
     }
     if (_analysisTextCharacters(transcript) > MAX_CALLS_ANALYSIS_TRANSCRIPT_CHARS) {
       callView('beginAnalysisAttempt');
       callView(
         'setAnalysisStatus',
-        'This transcript is longer than the 12,000-character analysis pilot limit.',
+        t('capture.status.analysis_too_long'),
         'error',
       );
       callView('setAnalysisBusy', false);
@@ -1472,21 +1837,23 @@ export function createCallsController({
     }
     analysisActive = true;
     analysis = null;
+    syncResolvedAnalysisLanguage();
     const run = ++analysisGeneration;
     analysisController = createAbortController();
     callView('beginAnalysisAttempt');
     callView('setAnalysisBusy', true);
-    callView('setAnalysisStatus', 'Generating a reviewable draft locally…', 'loading');
+    callView('setAnalysisStatus', t('capture.status.analysis_generating'), 'loading');
     try {
       const next = await requestCallsAnalysis(transcript, {
+        outputLanguage: resolvedAnalysisOutputLanguage,
         fetchImpl,
         signal: analysisController.signal,
       });
       if (run !== analysisGeneration) return false;
       analysis = next;
       callView('renderAnalysis', next);
-      callView('setAnalysisStatus', 'Transcript analysis ready for review.', 'success');
-      addTimelineEvent('Transcript analysis generated.');
+      callView('setAnalysisStatus', t('capture.status.analysis_ready'), 'success');
+      addTimelineEvent('CAPTURE_ANALYSIS_GENERATED');
       return true;
     } catch (error) {
       if (run !== analysisGeneration) return false;
@@ -1494,7 +1861,7 @@ export function createCallsController({
         ? error : new CallsUiError('ANALYSIS_REQUEST_FAILED', ANALYSIS_FAILURE);
       if (safe.code !== 'ANALYSIS_CANCELLED') {
         callView('setAnalysisStatus', safe.message, 'error');
-        addTimelineEvent('Transcript analysis failed.');
+        addTimelineEvent('CAPTURE_ANALYSIS_FAILED');
       }
       return false;
     } finally {
@@ -1510,12 +1877,83 @@ export function createCallsController({
     if (!analysis || analysisActive || typeof copyText !== 'function') return false;
     try {
       await copyText(formatCallsAnalysisText(analysis));
-      callView('setAnalysisStatus', 'Transcript analysis copied.', 'success');
+      callView('setAnalysisStatus', t('capture.status.analysis_copied'), 'success');
       return true;
     } catch (_) {
-      callView('setAnalysisStatus', 'Transcript analysis could not be copied.', 'error');
+      callView('setAnalysisStatus', t('capture.status.analysis_copy_failed'), 'error');
       return false;
     }
+  }
+
+  function setAnalysisLanguage(value) {
+    if (value !== 'auto' && !normalizeLocale(value)) return false;
+    if (analysisActive) clearAnalysisState();
+    analysisLanguage = value;
+    analysis = null;
+    callView('clearAnalysis');
+    syncResolvedAnalysisLanguage();
+    callView('setAnalysisLanguage', analysisLanguage);
+    callView('showAnalysisReady', Boolean(result && result.transcript_text));
+    return true;
+  }
+
+  function onLocaleChanged() {
+    callView('renderCaptureDetails', captureDetails());
+    callView('renderTimeline', timeline.map((item) => ({ ...item, params: { ...item.params } })));
+    renderMedia('photo');
+    renderMedia('video');
+    callView(
+      'setCaptureStatus',
+      t(hasSavableCapture() ? 'capture.status.changed' : 'capture.status.ready'),
+      'idle',
+    );
+    callView(
+      'setMediaStatus',
+      'photo',
+      t(photos.length ? 'capture.status.photo_added' : 'capture.photos.empty'),
+      photos.length ? 'success' : 'idle',
+    );
+    callView(
+      'setMediaStatus',
+      'video',
+      t(videos.length ? 'capture.status.video_added' : 'capture.videos.empty'),
+      videos.length ? 'success' : 'idle',
+    );
+    if (active) setTranscriptionStatus(t('capture.status.transcribing'), 'loading');
+    else if (result) {
+      setTranscriptionStatus(
+        t(result.segments.length ? 'capture.status.transcription_complete' : 'capture.status.transcription_silence'),
+        'success',
+      );
+    } else if (selectedFile) setTranscriptionStatus(t('capture.status.file_ready'), 'selected');
+    else setTranscriptionStatus(t('capture.transcription.initial'), 'idle');
+    const recordingStatusKeys = {
+      permission: 'capture.status.permission_wait',
+      recording: 'capture.status.recording',
+      processing: 'capture.status.preparing_wav',
+      ready: 'capture.status.recording_ready',
+    };
+    callView(
+      'setRecordingStatus',
+      t(recordingStatusKeys[recordingState] || 'capture.voice.ready_initial'),
+      ['permission', 'processing'].includes(recordingState)
+        ? 'loading' : recordingState === 'recording' ? 'recording' : recordingState === 'ready' ? 'success' : 'idle',
+    );
+    if (historyHasLoaded) callView('renderHistory', historyDocuments, openHistoryDocument);
+    if (result) callView('renderResult', result);
+    if (analysis) {
+      callView('renderAnalysis', analysis);
+      callView('setAnalysisStatus', t('capture.status.analysis_ready'), 'success');
+    } else if (analysisActive) {
+      callView('setAnalysisStatus', t('capture.status.analysis_generating'), 'loading');
+    }
+    if (saved) callView('setSaveStatus', t('capture.status.saved'), 'success');
+    else if (saveActive) callView('setSaveStatus', t('capture.status.saving'), 'loading');
+    else callView('setSaveStatus', t('capture.save.initial'), 'idle');
+    syncResolvedAnalysisLanguage();
+    callView('setAnalysisLanguage', analysisLanguage);
+    renderCameraState();
+    return true;
   }
 
   function reset() {
@@ -1526,6 +1964,7 @@ export function createCallsController({
     clearAnalysisState();
     clearSaveState();
     recordingGeneration += 1;
+    closeCaptureCamera();
     discardCapture();
     discardRecordedSelection();
     selectedFile = null;
@@ -1533,12 +1972,14 @@ export function createCallsController({
     result = null;
     setRecordingState('idle');
     view.reset();
+    syncResolvedAnalysisLanguage();
     resetCaptureSession();
     return true;
   }
 
   function onPanelHidden() {
     panelVisible = false;
+    closeCaptureCamera();
     if (historyActive) abortHistory();
     if (active) cancel();
     if (analysisActive) {
@@ -1547,10 +1988,10 @@ export function createCallsController({
     }
     if (saveActive) {
       clearSaveState({ clearView: false });
-      callView('setSaveStatus', 'Save cancelled when Capture was closed.', 'cancelled');
+      callView('setSaveStatus', t('capture.status.save_cancelled'), 'cancelled');
     }
     if (cancelRecording({ announce: false })) {
-      callView('setRecordingStatus', 'Recording stopped and discarded when Capture was hidden.', 'cancelled');
+      callView('setRecordingStatus', t('capture.status.recording_cancelled'), 'cancelled');
     }
     if (selectedSource === 'recording') {
       discardRecordedSelection();
@@ -1587,6 +2028,7 @@ export function createCallsController({
     panelVisible = false;
     abortHistory();
     recordingGeneration += 1;
+    closeCaptureCamera();
     discardCapture();
     revokePreview();
     clearAllMedia();
@@ -1602,10 +2044,10 @@ export function createCallsController({
     if (!result || !result.transcript_text || typeof copyText !== 'function') return false;
     try {
       await copyText(result.transcript_text);
-      view.setStatus('Transcript copied.', 'success');
+      view.setStatus(t('capture.status.transcript_copied'), 'success');
       return true;
     } catch (_) {
-      view.setStatus('Transcript could not be copied.', 'error');
+      view.setStatus(t('capture.status.transcript_copy_failed'), 'error');
       return false;
     }
   }
@@ -1617,10 +2059,18 @@ export function createCallsController({
     reset,
     copyTranscript,
     generateAnalysis,
+    setAnalysisLanguage,
+    onLocaleChanged,
     copyAnalysis,
     addCaptureMedia,
     updateMediaCaption,
     removeCaptureMedia,
+    openCaptureCamera,
+    switchCaptureCamera,
+    captureCameraPhoto,
+    startCaptureVideoRecording,
+    stopCaptureVideoRecording,
+    closeCaptureCamera,
     updateCaptureDetails,
     saveToLibrary,
     loadHistory,
@@ -1635,6 +2085,7 @@ export function createCallsController({
     isSaveActive: () => saveActive,
     isHistoryActive: () => historyActive,
     isAnalysisActive: () => analysisActive,
+    isCameraOpen: () => Boolean(cameraMode),
     getRecordingState: () => recordingState,
   };
 }
@@ -1651,6 +2102,7 @@ function _domView(doc) {
   const resultSection = byId('calls-result');
   const transcript = byId('calls-transcript');
   const summary = byId('calls-result-summary');
+  const transcriptLanguage = byId('calls-transcript-language');
   const empty = byId('calls-empty-result');
   const segmentsWrap = byId('calls-segments-wrap');
   const segmentsList = byId('calls-segments');
@@ -1665,6 +2117,8 @@ function _domView(doc) {
   const analysisDecisions = byId('calls-analysis-decisions');
   const analysisActions = byId('calls-analysis-actions');
   const analysisQuestions = byId('calls-analysis-questions');
+  const analysisLanguageInput = byId('calls-analysis-language');
+  const analysisLanguageResolved = byId('calls-analysis-language-resolved');
   const saveSection = byId('calls-save');
   const saveTitle = byId('calls-save-title');
   const saveButton = byId('calls-save-btn');
@@ -1674,13 +2128,20 @@ function _domView(doc) {
   const captureCreated = byId('calls-capture-created');
   const captureStatus = byId('calls-capture-status');
   const photoInput = byId('calls-photo-input');
-  const photoCameraInput = byId('calls-photo-camera-input');
+  const photoCameraButton = byId('calls-photo-camera-btn');
   const photoStatus = byId('calls-photo-status');
   const photoList = byId('calls-photo-list');
   const videoInput = byId('calls-video-input');
-  const videoCameraInput = byId('calls-video-camera-input');
+  const videoCameraButton = byId('calls-video-camera-btn');
   const videoStatus = byId('calls-video-status');
   const videoList = byId('calls-video-list');
+  const cameraPanel = byId('calls-camera-panel');
+  const cameraPreview = byId('calls-camera-preview');
+  const cameraStatus = byId('calls-camera-status');
+  const cameraPhotoCapture = byId('calls-camera-photo-capture-btn');
+  const cameraVideoStart = byId('calls-camera-video-start-btn');
+  const cameraVideoStop = byId('calls-camera-video-stop-btn');
+  const cameraSwitch = byId('calls-camera-switch-btn');
   const timelineList = byId('calls-timeline-list');
   const historyRefresh = byId('calls-history-refresh-btn');
   const historyStatus = byId('calls-history-status');
@@ -1707,15 +2168,19 @@ function _domView(doc) {
   let analysisReady = false;
   let analysisAttempted = false;
   let analysisComplete = false;
+  let cameraUiOpen = false;
+  let cameraUiMode = null;
+  let cameraUiState = 'idle';
+  let cameraCanSwitch = false;
 
   const captureBusy = () => ['permission', 'recording', 'processing'].includes(recordingUiState);
   const syncControls = () => {
-    const operationBusy = transcriptionBusy || saveBusy || analysisBusy || captureBusy();
+    const operationBusy = transcriptionBusy || saveBusy || analysisBusy || captureBusy() || cameraUiOpen;
     fileInput.disabled = operationBusy;
     photoInput.disabled = operationBusy;
-    photoCameraInput.disabled = operationBusy;
+    photoCameraButton.disabled = operationBusy;
     videoInput.disabled = operationBusy;
-    videoCameraInput.disabled = operationBusy;
+    videoCameraButton.disabled = operationBusy;
     captureTypeInput.disabled = operationBusy;
     captureNotesInput.disabled = operationBusy;
     submit.disabled = operationBusy || !uploadReady;
@@ -1730,6 +2195,15 @@ function _domView(doc) {
     analysisGenerate.disabled = operationBusy || !analysisReady || analysisAttempted;
     analysisRegenerate.disabled = operationBusy || !analysisReady;
     analysisCopy.disabled = operationBusy || !analysisComplete;
+    analysisLanguageInput.disabled = transcriptionBusy || saveBusy || captureBusy();
+    cameraPhotoCapture.hidden = cameraUiMode !== 'photo';
+    cameraPhotoCapture.disabled = cameraUiState !== 'ready';
+    cameraVideoStart.hidden = cameraUiMode !== 'video' || cameraUiState !== 'ready';
+    cameraVideoStart.disabled = cameraUiState !== 'ready';
+    cameraVideoStop.hidden = cameraUiMode !== 'video' || cameraUiState !== 'recording';
+    cameraVideoStop.disabled = cameraUiState !== 'recording';
+    cameraSwitch.hidden = !cameraCanSwitch || cameraUiState !== 'ready';
+    cameraSwitch.disabled = cameraUiState !== 'ready';
   };
 
   const clearAnalysis = () => {
@@ -1740,9 +2214,9 @@ function _domView(doc) {
     analysisSection.hidden = true;
     analysisResult.hidden = true;
     analysisGenerate.hidden = false;
-    analysisGenerate.textContent = 'Generate transcript analysis';
+    analysisGenerate.textContent = t('capture.analysis.generate');
     analysisRegenerate.hidden = true;
-    analysisRegenerate.textContent = 'Regenerate analysis';
+    analysisRegenerate.textContent = t('capture.analysis.regenerate');
     analysisCopy.hidden = true;
     setElementText(analysisStatus, '');
     analysisStatus.dataset.state = 'idle';
@@ -1758,8 +2232,8 @@ function _domView(doc) {
     saveReady = false;
     saveComplete = false;
     saveSection.hidden = false;
-    saveButton.textContent = 'Save Capture to Library';
-    setElementText(saveStatus, 'Add notes, media or a transcript before saving.');
+    saveButton.textContent = t('capture.save.action');
+    setElementText(saveStatus, t('capture.save.initial'));
     saveStatus.dataset.state = 'idle';
     syncControls();
   };
@@ -1768,6 +2242,7 @@ function _domView(doc) {
     resultSection.hidden = true;
     setElementText(transcript, '');
     setElementText(summary, '');
+    setElementText(transcriptLanguage, '');
     segmentsList.replaceChildren();
     segmentsWrap.hidden = true;
     empty.hidden = true;
@@ -1781,7 +2256,7 @@ function _domView(doc) {
       saveTitle.value = value.title;
       captureTypeInput.value = value.type;
       captureNotesInput.value = value.notes;
-      setElementText(captureCreated, `Created ${formatCallsLocalDateTime(value.createdAt)} · In memory`);
+      setElementText(captureCreated, t('capture.details.created', { value: formatCallsLocalDateTime(value.createdAt) }));
     },
     setCaptureStatus(message, kind) {
       setElementText(captureStatus, message);
@@ -1792,13 +2267,8 @@ function _domView(doc) {
     renderCaptureMedia(kind, items, onCaption, onRemove) {
       const list = kind === 'photo' ? photoList : videoList;
       if (items.length === 0) {
-        if (kind === 'photo') {
-          photoInput.value = '';
-          photoCameraInput.value = '';
-        } else {
-          videoInput.value = '';
-          videoCameraInput.value = '';
-        }
+        if (kind === 'photo') photoInput.value = '';
+        else videoInput.value = '';
       }
       list.replaceChildren();
       for (const [index, media] of items.entries()) {
@@ -1819,8 +2289,8 @@ function _domView(doc) {
         if (kind === 'photo') {
           previewWrap.type = 'button';
           previewWrap.setAttribute('aria-expanded', 'false');
-          previewWrap.setAttribute('aria-label', `Enlarge photo ${index + 1}`);
-          preview.alt = media.caption || `Capture photograph ${index + 1}: ${media.name}`;
+          previewWrap.setAttribute('aria-label', t('capture.photo.preview_large_aria', { filename: media.name }));
+          preview.alt = media.caption || t('capture.photo.preview_aria', { position: index + 1, filename: media.name });
           previewWrap.addEventListener('click', () => {
             const expanded = item.classList.toggle('calls-media-item-expanded');
             previewWrap.setAttribute('aria-expanded', String(expanded));
@@ -1828,21 +2298,21 @@ function _domView(doc) {
         } else {
           preview.controls = true;
           preview.preload = 'metadata';
-          preview.setAttribute('aria-label', `Capture video ${index + 1}: ${media.name}`);
+          preview.setAttribute('aria-label', t('capture.video.preview_aria', { position: index + 1, filename: media.name }));
         }
         previewWrap.appendChild(preview);
         details.className = 'calls-media-details';
         setElementText(name, media.name);
         setElementText(
           meta,
-          `${kind === 'photo' ? 'Photo' : 'Video'} · ${formatEncodedSize(media.size)} · Added ${formatCallsLocalDateTime(media.addedAt)}`,
+          `${t(`capture.media.${kind}`)} · ${formatEncodedSize(media.size)} · ${t('capture.media.added', { value: formatCallsLocalDateTime(media.addedAt) })}`,
         );
         persistence.className = 'calls-media-persistence';
-        setElementText(persistence, media.persistence);
+        setElementText(persistence, t('capture.media.memory_only'));
         captionLabel.className = 'calls-field';
         captionLabel.setAttribute('for', `${media.id}-caption`);
         const captionText = doc.createElement('span');
-        setElementText(captionText, `${kind === 'photo' ? 'Photo' : 'Video'} caption`);
+        setElementText(captionText, t('capture.media.caption'));
         caption.id = `${media.id}-caption`;
         caption.type = 'text';
         caption.maxLength = MAX_CAPTURE_CAPTION_CHARS;
@@ -1852,13 +2322,48 @@ function _domView(doc) {
         captionLabel.append(captionText, caption);
         remove.type = 'button';
         remove.className = 'calls-button calls-media-remove';
-        setElementText(remove, 'Remove');
-        remove.setAttribute('aria-label', `Remove ${kind} ${media.name}`);
+        setElementText(remove, t('common.remove'));
+        remove.setAttribute('aria-label', t('capture.media.remove_aria', { filename: media.name }));
         remove.addEventListener('click', () => onRemove(kind, media.id));
         details.append(name, meta, persistence, captionLabel, remove);
         item.append(previewWrap, details);
         list.appendChild(item);
       }
+    },
+    openCaptureCamera(mode, stream, { canSwitch = false } = {}) {
+      cameraUiOpen = true;
+      cameraUiMode = mode;
+      cameraUiState = 'ready';
+      cameraCanSwitch = canSwitch;
+      cameraPanel.hidden = false;
+      cameraPreview.srcObject = stream || null;
+      if (stream) {
+        const playResult = cameraPreview.play();
+        if (playResult && typeof playResult.catch === 'function') playResult.catch(() => {});
+      }
+      syncControls();
+    },
+    setCaptureCameraState(mode, state, { canSwitch = false, status: message = '' } = {}) {
+      cameraUiMode = mode;
+      cameraUiState = state;
+      cameraCanSwitch = canSwitch;
+      setElementText(cameraStatus, message);
+      cameraStatus.dataset.state = state === 'recording' ? 'recording' : state === 'processing' ? 'loading' : 'idle';
+      syncControls();
+    },
+    closeCaptureCamera() {
+      cameraUiOpen = false;
+      cameraUiMode = null;
+      cameraUiState = 'idle';
+      cameraCanSwitch = false;
+      try { cameraPreview.pause(); } catch (_) { /* best-effort preview cleanup */ }
+      cameraPreview.srcObject = null;
+      cameraPanel.hidden = true;
+      setElementText(cameraStatus, '');
+      syncControls();
+    },
+    capturePhotoBlob() {
+      return capturePhotoBlobFromVideo(cameraPreview, doc);
     },
     setMediaStatus(kind, message, state) {
       const element = kind === 'photo' ? photoStatus : videoStatus;
@@ -1874,15 +2379,15 @@ function _domView(doc) {
         const time = doc.createElement('time');
         const message = doc.createElement('span');
         time.dateTime = event.at.toISOString();
-        setElementText(time, event.at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-        setElementText(message, event.message);
+        setElementText(time, formatDateTime(event.at, { year: undefined, month: undefined, day: undefined }));
+        setElementText(message, t(TIMELINE_I18N_KEYS[event.code] || 'capture.timeline.started', event.params || {}));
         item.append(time, message);
         timelineList.appendChild(item);
       }
     },
     showSelected(name, size) {
       selected.hidden = !name;
-      setElementText(selected, name ? `${name} · ${size} encoded` : '');
+      setElementText(selected, name ? `${name} · ${size}` : '');
       uploadReady = Boolean(name);
       syncControls();
     },
@@ -1894,8 +2399,8 @@ function _domView(doc) {
     setBusy(busy) {
       transcriptionBusy = busy;
       modal.querySelector('.calls-modal-content').setAttribute('aria-busy', String(busy));
-      submit.textContent = busy ? 'Transcribing…' : 'Transcribe';
-      recordSubmit.textContent = busy ? 'Transcribing…' : 'Transcribe recorded audio';
+      submit.textContent = busy ? t('capture.status.transcribing') : t('capture.transcribe');
+      recordSubmit.textContent = busy ? t('capture.status.transcribing') : t('capture.voice.transcribe_recording');
       cancel.hidden = !busy;
       syncControls();
     },
@@ -1907,7 +2412,18 @@ function _domView(doc) {
     },
     renderResult(value) {
       resultSection.hidden = false;
-      setElementText(summary, `${formatCallsTimestamp(value.duration_ms)} duration · ${value.segments.length} ${value.segments.length === 1 ? 'segment' : 'segments'}`);
+      setElementText(summary, t('capture.transcript.summary', {
+        duration: formatCallsTimestamp(value.duration_ms), count: formatNumber(value.segments.length),
+      }));
+      const confidence = value.language !== 'und' && Number.isFinite(value.language_confidence)
+        ? formatNumber(value.language_confidence * 100, { maximumFractionDigits: 0 })
+        : null;
+      setElementText(transcriptLanguage, t(
+        confidence === null
+          ? 'capture.transcript.detected_language'
+          : 'capture.transcript.detected_language_confidence',
+        { language: languageLabel(value.language), confidence },
+      ));
       setElementText(transcript, value.transcript_text);
       empty.hidden = value.transcript_text.length !== 0 || value.segments.length !== 0;
       transcript.hidden = value.transcript_text.length === 0;
@@ -1938,8 +2454,8 @@ function _domView(doc) {
       setElementText(
         analysisStatus,
         enabled
-          ? 'Generate only when you are ready to review an AI-produced draft.'
-          : 'No transcript text is available to analyze.',
+          ? t('capture.analysis.boundary')
+          : t('capture.status.analysis_empty'),
       );
       analysisStatus.dataset.state = enabled ? 'idle' : 'error';
       syncControls();
@@ -1965,8 +2481,8 @@ function _domView(doc) {
         analysisGenerate.hidden = true;
         analysisRegenerate.hidden = false;
       }
-      analysisGenerate.textContent = busy ? 'Generating…' : 'Generate transcript analysis';
-      analysisRegenerate.textContent = busy ? 'Generating…' : 'Regenerate analysis';
+      analysisGenerate.textContent = busy ? t('capture.status.analysis_generating') : t('capture.analysis.generate');
+      analysisRegenerate.textContent = busy ? t('capture.status.analysis_generating') : t('capture.analysis.regenerate');
       syncControls();
     },
     setAnalysisStatus(message, kind) {
@@ -1977,7 +2493,7 @@ function _domView(doc) {
     },
     renderAnalysis(value) {
       const appendList = (element, values) => {
-        const items = values.length ? values : ['None identified.'];
+        const items = values.length ? values : [t('common.none_identified')];
         for (const itemValue of items) {
           const item = doc.createElement('li');
           setElementText(item, itemValue);
@@ -1992,7 +2508,7 @@ function _domView(doc) {
       appendList(analysisQuestions, value.open_questions);
       if (value.action_items.length === 0) {
         const item = doc.createElement('li');
-        setElementText(item, 'None identified.');
+        setElementText(item, t('common.none_identified'));
         analysisActions.appendChild(item);
       } else {
         for (const action of value.action_items) {
@@ -2000,11 +2516,15 @@ function _domView(doc) {
           const task = doc.createElement('p');
           const owner = doc.createElement('p');
           const dueDate = doc.createElement('p');
-          setElementText(task, `Task: ${action.task}`);
-          setElementText(owner, `Owner: ${action.owner === null ? 'Not stated.' : action.owner}`);
+          setElementText(task, t('capture.analysis.task', { value: action.task }));
+          setElementText(owner, t('capture.analysis.owner', {
+            value: action.owner === null ? t('capture.analysis.not_stated') : action.owner,
+          }));
           setElementText(
             dueDate,
-            `Due date: ${action.due_date === null ? 'Not stated.' : action.due_date}`,
+            t('capture.analysis.due_date', {
+              value: action.due_date === null ? t('capture.analysis.not_stated') : action.due_date,
+            }),
           );
           item.append(task, owner, dueDate);
           analysisActions.appendChild(item);
@@ -2015,6 +2535,14 @@ function _domView(doc) {
       analysisCopy.hidden = false;
       syncControls();
     },
+    setAnalysisLanguage(value) {
+      analysisLanguageInput.value = value;
+    },
+    setResolvedAnalysisLanguage(value) {
+      setElementText(analysisLanguageResolved, t('capture.analysis.resolved_language', {
+        language: languageLabel(value),
+      }));
+    },
     showSave(title, ready = true) {
       saveReady = Boolean(ready);
       saveComplete = false;
@@ -2024,8 +2552,8 @@ function _domView(doc) {
       setElementText(
         saveStatus,
         saveReady
-          ? 'Review Capture details, then save explicitly when ready.'
-          : 'Add notes, media or a transcript before saving.',
+          ? t('capture.status.changed')
+          : t('capture.save.initial'),
       );
       saveStatus.dataset.state = 'idle';
       syncControls();
@@ -2037,8 +2565,8 @@ function _domView(doc) {
         setElementText(
           saveStatus,
           saveReady
-            ? 'Review Capture details, then save explicitly when ready.'
-            : 'Add notes, media or a transcript before saving.',
+            ? t('capture.status.changed')
+            : t('capture.save.initial'),
         );
         saveStatus.dataset.state = 'idle';
       }
@@ -2046,7 +2574,7 @@ function _domView(doc) {
     },
     setSaveBusy(busy) {
       saveBusy = busy;
-      saveButton.textContent = busy ? 'Saving…' : 'Save Capture to Library';
+      saveButton.textContent = busy ? t('capture.status.saving') : t('capture.save.action');
       syncControls();
     },
     setSaved(value) {
@@ -2061,9 +2589,11 @@ function _domView(doc) {
     },
     setHistoryLoading(busy, refreshing) {
       historyRefresh.disabled = busy;
-      historyRefresh.textContent = busy ? (refreshing ? 'Refreshing…' : 'Loading…') : 'Refresh history';
+      historyRefresh.textContent = busy
+        ? t(refreshing ? 'capture.history.refreshing' : 'capture.history.loading')
+        : t('capture.history.refresh');
       if (busy) {
-        setElementText(historyStatus, refreshing ? 'Refreshing saved Captures…' : 'Loading saved Captures…');
+        setElementText(historyStatus, t(refreshing ? 'capture.history.refreshing' : 'capture.history.loading'));
         historyStatus.dataset.state = 'loading';
         historyStatus.setAttribute('role', 'status');
         historyStatus.setAttribute('aria-live', 'polite');
@@ -2088,8 +2618,8 @@ function _domView(doc) {
           meta,
           `MarketMatch Capture · ${formatCallsHistoryDate(documentValue.updated_at || documentValue.created_at)}`,
         );
-        setElementText(open, 'Open');
-        open.setAttribute('aria-label', `Open ${documentValue.title} from Library`);
+        setElementText(open, t('common.open'));
+        open.setAttribute('aria-label', t('capture.history.open_aria', { title: documentValue.title }));
         open.addEventListener('click', () => onOpen(documentValue.id));
         details.append(title, meta);
         item.append(details, open);
@@ -2100,9 +2630,7 @@ function _domView(doc) {
       historyEmpty.hidden = !empty;
       setElementText(
         historyStatus,
-        empty
-          ? 'Saved Captures loaded. No Capture records were found.'
-          : `${documents.length} saved ${documents.length === 1 ? 'Capture' : 'Captures'} loaded.`,
+        empty ? t('capture.history.empty') : t('capture.history.loaded', { count: formatNumber(documents.length) }),
       );
       historyStatus.dataset.state = 'success';
       historyStatus.setAttribute('role', 'status');
@@ -2145,7 +2673,7 @@ function _domView(doc) {
       recordDetails.hidden = false;
       setElementText(
         recordDetails,
-        `${name} · ${size} encoded · ${formatCallsTimestamp(durationMs)} duration`,
+        `${name} · ${size} · ${formatCallsTimestamp(durationMs)}`,
       );
       if (url) {
         recordPreview.src = url;
@@ -2172,13 +2700,13 @@ function _domView(doc) {
       this.clearRecording();
       transcriptionBusy = false;
       recordingUiState = 'idle';
-      submit.textContent = 'Transcribe';
-      recordSubmit.textContent = 'Transcribe recorded audio';
+      submit.textContent = t('capture.transcribe');
+      recordSubmit.textContent = t('capture.voice.transcribe_recording');
       cancel.hidden = true;
       recordIndicator.hidden = true;
       clearResult();
-      this.setStatus('Select a canonical WAV file to begin.', 'idle');
-      this.setRecordingStatus('Start a recording when you are ready.', 'idle');
+      this.setStatus(t('capture.transcription.initial'), 'idle');
+      this.setRecordingStatus(t('capture.voice.ready_initial'), 'idle');
       syncControls();
     },
   };
@@ -2212,10 +2740,11 @@ export function init(doc = globalThis.document, { openDocument } = {}) {
   const saveTitle = doc.getElementById('calls-save-title');
   const captureType = doc.getElementById('calls-capture-type');
   const captureNotes = doc.getElementById('calls-capture-notes');
+  const analysisLanguage = doc.getElementById('calls-analysis-language');
   const photoInput = doc.getElementById('calls-photo-input');
-  const photoCameraInput = doc.getElementById('calls-photo-camera-input');
+  const photoCameraButton = doc.getElementById('calls-photo-camera-btn');
   const videoInput = doc.getElementById('calls-video-input');
-  const videoCameraInput = doc.getElementById('calls-video-camera-input');
+  const videoCameraButton = doc.getElementById('calls-video-camera-btn');
   const show = () => {
     modal.classList.remove('hidden');
     modal.setAttribute('aria-hidden', 'false');
@@ -2242,18 +2771,18 @@ export function init(doc = globalThis.document, { openDocument } = {}) {
     controller.addCaptureMedia('photo', photoInput.files && photoInput.files[0]);
     photoInput.value = '';
   });
-  photoCameraInput.addEventListener('change', () => {
-    controller.addCaptureMedia('photo', photoCameraInput.files && photoCameraInput.files[0]);
-    photoCameraInput.value = '';
-  });
+  photoCameraButton.addEventListener('click', () => controller.openCaptureCamera('photo'));
   videoInput.addEventListener('change', () => {
     controller.addCaptureMedia('video', videoInput.files && videoInput.files[0]);
     videoInput.value = '';
   });
-  videoCameraInput.addEventListener('change', () => {
-    controller.addCaptureMedia('video', videoCameraInput.files && videoCameraInput.files[0]);
-    videoCameraInput.value = '';
-  });
+  videoCameraButton.addEventListener('click', () => controller.openCaptureCamera('video'));
+  doc.getElementById('calls-camera-photo-capture-btn').addEventListener('click', () => controller.captureCameraPhoto());
+  doc.getElementById('calls-camera-video-start-btn').addEventListener('click', () => controller.startCaptureVideoRecording());
+  doc.getElementById('calls-camera-video-stop-btn').addEventListener('click', () => controller.stopCaptureVideoRecording());
+  doc.getElementById('calls-camera-switch-btn').addEventListener('click', () => controller.switchCaptureCamera());
+  doc.getElementById('calls-camera-cancel-btn').addEventListener('click', () => controller.closeCaptureCamera({ announce: true }));
+  doc.getElementById('calls-camera-close-btn').addEventListener('click', () => controller.closeCaptureCamera({ announce: true }));
   saveTitle.addEventListener('input', () => {
     controller.updateCaptureDetails({ title: saveTitle.value });
   });
@@ -2262,6 +2791,9 @@ export function init(doc = globalThis.document, { openDocument } = {}) {
   });
   captureNotes.addEventListener('input', () => {
     controller.updateCaptureDetails({ notes: captureNotes.value });
+  });
+  analysisLanguage.addEventListener('change', () => {
+    controller.setAnalysisLanguage(analysisLanguage.value);
   });
   doc.getElementById('calls-submit-btn').addEventListener('click', () => controller.submit());
   doc.getElementById('calls-cancel-btn').addEventListener('click', () => controller.cancel());
@@ -2285,7 +2817,9 @@ export function init(doc = globalThis.document, { openDocument } = {}) {
   doc.getElementById('calls-history-refresh-btn').addEventListener('click', () => controller.loadHistory({ refreshing: true }));
   modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
   doc.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && !modal.classList.contains('hidden')) close();
+    if (event.key !== 'Escape' || modal.classList.contains('hidden')) return;
+    if (controller.isCameraOpen()) controller.closeCaptureCamera({ announce: true });
+    else close();
   });
   if (typeof globalThis.MutationObserver === 'function') {
     const observer = new globalThis.MutationObserver(() => {
@@ -2296,9 +2830,12 @@ export function init(doc = globalThis.document, { openDocument } = {}) {
     observer.observe(modal, { attributes: true, attributeFilter: ['class', 'style'] });
   }
   if (typeof globalThis.addEventListener === 'function') {
-    globalThis.addEventListener('pagehide', () => controller.destroy());
-    globalThis.addEventListener('beforeunload', () => controller.destroy());
+    const unsubscribeLocale = subscribeLocale(() => controller.onLocaleChanged());
+    const destroy = () => { unsubscribeLocale(); controller.destroy(); };
+    globalThis.addEventListener('pagehide', destroy);
+    globalThis.addEventListener('beforeunload', destroy);
   }
+  controller.setAnalysisLanguage('auto');
   return controller;
 }
 

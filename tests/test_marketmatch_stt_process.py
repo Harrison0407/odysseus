@@ -50,6 +50,15 @@ def _success_child(input_connection, result_connection):
     result_connection.close()
 
 
+def _versioned_success_child(input_connection, result_connection, protocol_version):
+    _read_input(input_connection)
+    payload = json.loads(_message(text=f"v{protocol_version}"))
+    if protocol_version >= 2:
+        payload.update({"language": "en", "language_confidence": 0.93})
+    result_connection.send_bytes(process_module._encode_worker_message(payload))
+    result_connection.close()
+
+
 def _large_result_child(input_connection, result_connection):
     _read_input(input_connection)
     text = "x" * (128 * 1024)
@@ -137,6 +146,19 @@ def _canonical_wav(sample=0):
     )
 
 
+def _canonical_wav_frames(sample_count, sample=0):
+    pcm = struct.pack(f"<{sample_count}h", *([sample] * sample_count))
+    return (
+        b"RIFF"
+        + struct.pack("<I", 36 + len(pcm))
+        + b"WAVEfmt "
+        + struct.pack("<IHHIIHH", 16, 1, 1, 16_000, 32_000, 2, 16)
+        + b"data"
+        + struct.pack("<I", len(pcm))
+        + pcm
+    )
+
+
 @pytest.fixture(autouse=True)
 def _clean_workers():
     shutdown_active_workers()
@@ -153,6 +175,18 @@ async def test_spawned_child_success():
     assert result.duration_ms == 1
     assert result.transcript_text == "ok"
     assert result.segments == ((0, 1, "ok"),)
+    assert active_worker_count() == 0
+
+
+async def test_updated_parent_requests_version_two_from_default_worker(monkeypatch):
+    monkeypatch.setattr(process_module, "_marketmatch_stt_child", _versioned_success_child)
+    result = await transcribe_in_spawned_process(
+        b"fixture",
+        deadline=time.monotonic() + 5,
+    )
+    assert result.transcript_text == "v2"
+    assert result.language == "en"
+    assert result.language_confidence == 0.93
     assert active_worker_count() == 0
 
 
@@ -206,7 +240,7 @@ def test_actual_child_canonical_success_with_injected_backend(monkeypatch):
     monkeypatch.setattr(
         process_module,
         "_fixed_local_base_backend",
-        lambda waveform: ((0.0, len(waveform) / 16_000, "ok"),),
+        lambda waveform, language_metadata=None: ((0.0, len(waveform) / 16_000, "ok"),),
     )
 
     process_module._marketmatch_stt_child(receive, send)
@@ -214,9 +248,63 @@ def test_actual_child_canonical_success_with_injected_backend(monkeypatch):
     assert receive.closed is True
     assert send.closed is True
     assert len(send.messages) == 1
+    assert set(json.loads(send.messages[0])) == {"duration_ms", "segments", "transcript_text"}
     decoded = process_module._decode_parent_result(send.messages[0])
     assert decoded.transcript_text == "ok"
     assert decoded.segments == ((0, 0, "ok"),)
+
+
+def test_updated_parent_can_request_extended_worker_language_protocol(monkeypatch):
+    receive = _MemoryReceiveConnection(_canonical_wav())
+    send = _MemorySendConnection()
+    monkeypatch.setattr(process_module, "_scrub_worker_environment", lambda: None)
+
+    def backend(waveform, language_metadata=None):
+        language_metadata.update({"language": "es", "language_confidence": 0.88})
+        return ((0.0, len(waveform) / 16_000, "hola"),)
+
+    monkeypatch.setattr(process_module, "_fixed_local_base_backend", backend)
+    process_module._marketmatch_stt_child(receive, send, 2)
+
+    payload = json.loads(send.messages[0])
+    assert set(payload) == {
+        "duration_ms", "segments", "transcript_text", "language", "language_confidence",
+    }
+    assert payload["language"] == "es"
+    assert payload["language_confidence"] == 0.88
+
+
+def test_version_two_worker_uses_und_and_null_only_when_engine_metadata_is_absent(monkeypatch):
+    receive = _MemoryReceiveConnection(_canonical_wav())
+    send = _MemorySendConnection()
+    monkeypatch.setattr(process_module, "_scrub_worker_environment", lambda: None)
+    monkeypatch.setattr(
+        process_module,
+        "_fixed_local_base_backend",
+        lambda waveform, language_metadata=None: ((0.0, len(waveform) / 16_000, "原文"),),
+    )
+
+    process_module._marketmatch_stt_child(receive, send, 2)
+
+    payload = json.loads(send.messages[0])
+    assert payload["transcript_text"] == "原文"
+    assert payload["language"] == "und"
+    assert payload["language_confidence"] is None
+
+
+def test_two_argument_worker_protocol_remains_compatible_with_legacy_parent(monkeypatch):
+    receive = _MemoryReceiveConnection(_canonical_wav())
+    send = _MemorySendConnection()
+    monkeypatch.setattr(process_module, "_scrub_worker_environment", lambda: None)
+
+    def backend(waveform, language_metadata=None):
+        language_metadata.update({"language": "en", "language_confidence": 0.75})
+        return ((0.0, len(waveform) / 16_000, "hello"),)
+
+    monkeypatch.setattr(process_module, "_fixed_local_base_backend", backend)
+    process_module._marketmatch_stt_child(receive, send)
+
+    assert set(json.loads(send.messages[0])) == {"duration_ms", "segments", "transcript_text"}
 
 
 async def test_hard_timeout_terminates_and_reaps_child():
@@ -375,6 +463,90 @@ def test_fixed_backend_uses_only_local_cpu_int8_base(monkeypatch):
         }
     assert captured["waveform"] is waveform
     assert result == ((0.0, 1.0, "ok"),)
+
+
+def test_fixed_backend_clamps_whisper_frame_overshoot_to_short_wav_duration(monkeypatch):
+    calls = 0
+
+    class Model:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def transcribe(self, _waveform):
+            nonlocal calls
+            calls += 1
+            segment = types.SimpleNamespace(start=0.0, end=1.0, text="short speech")
+            info = types.SimpleNamespace(language="en", language_probability=0.9)
+            return [segment], info
+
+    monkeypatch.setitem(os.sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=Model))
+    metadata = {}
+    result = tuple(process_module._fixed_local_base_backend(np.zeros(4_000), metadata))
+
+    assert calls == 1
+    assert result == ((0.0, 0.25, "short speech"),)
+    assert metadata == {"language": "en", "language_confidence": 0.9}
+
+
+def test_v2_worker_accepts_short_wav_when_whisper_end_uses_padded_frame(monkeypatch):
+    receive = _MemoryReceiveConnection(_canonical_wav_frames(4_000))
+    send = _MemorySendConnection()
+    monkeypatch.setattr(process_module, "_scrub_worker_environment", lambda: None)
+
+    class Model:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def transcribe(self, _waveform):
+            segment = types.SimpleNamespace(start=0.0, end=1.0, text="short speech")
+            info = types.SimpleNamespace(language="en", language_probability=0.9)
+            return [segment], info
+
+    monkeypatch.setitem(os.sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=Model))
+    process_module._marketmatch_stt_child(receive, send, 2)
+
+    payload = json.loads(send.messages[0])
+    assert payload == {
+        "duration_ms": 250,
+        "segments": [{"start_ms": 0, "end_ms": 250, "text": "short speech"}],
+        "transcript_text": "short speech",
+        "language": "en",
+        "language_confidence": 0.9,
+    }
+    decoded = process_module._decode_parent_result(send.messages[0])
+    assert decoded.segments == ((0, 250, "short speech"),)
+
+
+@pytest.mark.parametrize("raw_language", ["zh", "zh-CN", "zh-Hans"])
+def test_fixed_backend_exposes_genuine_global_language_metadata(monkeypatch, raw_language):
+    class Model:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def transcribe(self, _waveform):
+            segment = types.SimpleNamespace(start=0, end=1, text="原文")
+            info = types.SimpleNamespace(language=raw_language, language_probability=0.875)
+            return [segment], info
+
+    monkeypatch.setitem(os.sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=Model))
+    metadata = {}
+    result = tuple(process_module._fixed_local_base_backend(np.zeros(16_000), metadata))
+    assert result == ((0.0, 1.0, "原文"),)
+    assert metadata == {"language": "zh-Hans", "language_confidence": 0.875}
+
+
+def test_parent_accepts_language_metadata_without_segment_language_invention():
+    payload = process_module._encode_worker_message({
+        "duration_ms": 1000,
+        "segments": [{"start_ms": 0, "end_ms": 1000, "text": "hola"}],
+        "transcript_text": "hola",
+        "language": "es-DO",
+        "language_confidence": 0.91,
+    })
+    result = process_module._decode_parent_result(payload)
+    assert result.language == "es"
+    assert result.language_confidence == 0.91
+    assert result.segments == ((0, 1000, "hola"),)
 
 
 def test_worker_environment_drops_application_secrets(monkeypatch):

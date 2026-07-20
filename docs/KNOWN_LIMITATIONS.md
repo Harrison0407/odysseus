@@ -83,14 +83,22 @@ The independent Milestone 1 Charter Review that followed found no standalone
 charter existed and raised twelve findings (CHTR-001–CHTR-012). A
 **Milestone 1 Charter Definition and Reconciliation** cycle then produced a
 complete, standalone charter — `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md`
-— resolving all twelve findings at the design level. This was
+(version 1) — resolving all twelve findings at the design level. This was
 documentation-only: no application code, template, test, or migration
-changed. The exact next action is **an independent Fable 5 Charter
-revalidation session** against the commit introducing that Charter. A1–A6
-— Configurable Procurement Gates — remains approved and planned but is
-**not authorized** by this acceptance or by the Charter's own authorship;
-implementation has not started. The existing `ProcurementPackage.Status`
-is a separate state machine and must not be represented as A1–A6 gate
+changed. That version was then independently revalidated; the result was
+**MILESTONE 1 CHARTER REQUIRES CORRECTION**, with twelve new findings
+(REVAL-001–REVAL-012) found in the Charter's own text (a
+`GateAttempt`↔`EvidenceBundle` cardinality contradiction, two incompatible
+canonical-default-policy definitions, an override-revocation gap in the
+post-A2 cascade, and others). A documentation-only **Milestone 1 Charter
+Correction Cycle** produced Charter version 2, resolving all twelve —
+again with no application code, template, test, or migration changed. The
+exact next action is **a new, independent Fable 5 Charter revalidation
+session** against the commit introducing version 2. A1–A6 — Configurable
+Procurement Gates — remains approved and planned but is **not authorized**
+by this acceptance or by the Charter's own authorship; implementation has
+not started. The existing `ProcurementPackage.Status` is a separate state
+machine and must not be represented as A1–A6 gate
 execution.
 
 ### Privileged-audit N+1 query characteristic (accepted, non-blocking)
@@ -131,7 +139,9 @@ Current unresolved limitations, grouped by official roadmap disposition:
 - **Milestone 1:** configurable, versioned A1–A6 gate definitions, evidence
   schemas, progression, exceptions, expiry/revocation, and live validation.
   The design for all of this is now specified in
-  `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md`; none of it is
+  `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md` (version 2, corrected
+  after independent revalidation found twelve findings in version 1 —
+  REVAL-001–REVAL-012, all now resolved in version 2); none of it is
   implemented yet — this remains a full open limitation until Milestone 1
   is actually built, tested, and completed per that Charter's §20.
 - **Milestone 2:** complete `es`/`en`/`zh-Hans` internationalization

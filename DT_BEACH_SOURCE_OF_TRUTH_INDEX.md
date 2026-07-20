@@ -100,12 +100,16 @@ The commit containing this revision; obtain its immutable hash with
 
 **Milestone 1 Charter Definition and Reconciliation is complete, locally,
 documentation-only** — see `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md`
-(charter version 1) and `DT_BEACH_CURRENT_STATE.md` for the full
-CHTR-001–CHTR-012 disposition table. That Charter has not yet been
-independently revalidated and is not owner-approved.
+and `DT_BEACH_CURRENT_STATE.md` for the full disposition tables. Charter
+version 1 was independently revalidated; the result was MILESTONE 1
+CHARTER REQUIRES CORRECTION (CHTR-001–CHTR-012 remained resolved, but
+twelve new findings, REVAL-001–REVAL-012, were found in version 1's own
+text). A documentation-only Milestone 1 Charter Correction Cycle produced
+Charter version 2, resolving all twelve REVAL findings. Charter version 2
+has not yet been independently revalidated and is not owner-approved.
 
-**Next governing activity: an independent Milestone 1 Charter
-revalidation session against the commit introducing the Charter document.**
+**Next governing activity: a new, independent Milestone 1 Charter
+revalidation session against the commit introducing Charter version 2.**
 A1–A6 implementation is not authorized and has not started.
 
 Tests (as independently reproduced during the cycle-3 revalidation that

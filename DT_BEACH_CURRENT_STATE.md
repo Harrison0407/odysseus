@@ -99,14 +99,43 @@ complete standalone charter has now been authored at
 | CHTR-012 | Accept — deterministic evidence-classification and safe-projection rule specified |
 
 **No application code, template, test, or migration was written or modified
-during this cycle.** A1–A6 remain entirely unimplemented. This Charter has
-**not** been independently revalidated and has **not** been owner-approved.
-Milestone 1 implementation remains **not authorized**.
+during this cycle.** A1–A6 remain entirely unimplemented.
 
-Exact next action: **run an independent Fable 5 Charter revalidation
-session against the commit introducing
-`docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md`. Do not begin A1–A6
-implementation.**
+**Update — independent Milestone 1 Charter Revalidation completed, result:
+MILESTONE 1 CHARTER REQUIRES CORRECTION.** An independent revalidation of
+Charter version 1 (commit `b0cdf1cc4f6fb17dea206430ee0f1643710d2090`) found
+twelve new findings, REVAL-001 through REVAL-012 — internal contradictions
+and omissions in the Charter's own text (e.g. a `GateAttempt`↔`EvidenceBundle`
+cardinality contradiction, two incompatible canonical-default-policy
+definitions, a post-A2 invalidation cascade that left active procurement-gate
+overrides unrevoked) — distinct from the original CHTR-001–CHTR-012 review.
+A documentation-only **Milestone 1 Charter Correction Cycle** then produced
+Charter version 2, resolving all twelve:
+
+| Finding | Disposition |
+|---|---|
+| REVAL-001 | Accept — `GateAttempt` no longer carries an `evidence_bundle` FK; evidence attaches only via generic target, one or more bundles per attempt |
+| REVAL-002 | Accept — `EvidenceBundle`/`EvidenceItem` left unmodified; deterministic tuple-based bundle grouping added in the policy schema instead |
+| REVAL-003 | Accept — `is_canonical_default` is now the sole canonical-default determinant; `organization = NULL` redefined as mere eligibility, never the marker itself |
+| REVAL-004 | Accept — post-A2 critical-change cascade now also revokes every active A3–A6 override, system-attributed, audited |
+| REVAL-005 | Accept — explicit organization-scoped-capability exception added for creating a package's first `A1` attempt |
+| REVAL-006 | Accept — gate-level `overridable` and requirement-level `non_overridable_requirements` now explicitly composed, fail-closed on malformed config |
+| REVAL-007 | Accept — exact locked `attempt_number` allocation algorithm specified |
+| REVAL-008 | Accept — approving an override now closes the underlying attempt; expiry/revocation never reopens it |
+| REVAL-009 | Accept — `PackageFreezeRevision.policy_version` rationale rewritten truthfully; field retained |
+| REVAL-010 | Accept — publication now rejects any `gate_schema` missing or adding to the exact six `A1`–`A6` keys |
+| REVAL-011 | Accept — one shared, enumerated frozen-field code registry now governs both `ChangeRequest.field_name` and `frozen_fields` keys |
+| REVAL-012 | Accept — completion criterion corrected from "§1–§17" to "§1–§19" |
+
+**No application code, template, test, or migration was written or modified
+during this correction cycle either.** A1–A6 remain entirely unimplemented.
+Charter version 2 has **not** been independently revalidated and has
+**not** been owner-approved. Milestone 1 implementation remains **not
+authorized**.
+
+Exact next action: **run a new, independent Fable 5 Charter revalidation
+session against the commit introducing Charter version 2. Do not begin
+A1–A6 implementation.**
 
 ---
 

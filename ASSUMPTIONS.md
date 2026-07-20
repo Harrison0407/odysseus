@@ -823,3 +823,30 @@ instead, exactly as required, and is **not** listed here as a resolved assumptio
   implementer choosing to compute gate state on every read with no
   persisted cache row at all would not contradict the Charter; this
   assumption merely records the anticipated common case.
+- **A80. The Milestone 1 Charter's shared frozen-field code registry
+  (Charter §8.2, resolving REVAL-011) is assumed to live at
+  `apps.procurement_gates.constants.FROZEN_FIELD_CODES` as a plain Python
+  constant, not a database-backed model.** The Charter requires one
+  canonical, enumerated vocabulary shared by `ChangeRequest.field_name`
+  validation and `PackageFreezeRevision.frozen_fields` keys, but does not
+  mandate where that vocabulary lives. A Python-level constant is assumed
+  because the registry changes only with a future Charter amendment, not
+  per-tenant or at runtime — consistent with this codebase's existing
+  convention of Python-level constants for similarly stable vocabularies
+  (e.g. `governance.KNOWN_ROLE_CODES`, `governance.ALL_CAPABILITY_CODES`).
+  An implementer choosing a database-backed registry instead would not
+  contradict the Charter, provided the single-shared-vocabulary and
+  fail-closed-on-unknown-value rules are preserved.
+- **A81. The Milestone 1 Charter Correction Cycle's database-level
+  uniqueness constraint on `(package, gate_code, attempt_number)`
+  (Charter §9.2, resolving REVAL-007) is assumed to be a standard
+  unconditional `unique_together`/`UniqueConstraint`, distinct from and in
+  addition to the partial (`closed_at IS NULL`-scoped) constraint that
+  enforces "at most one open attempt per gate."** The Charter requires
+  both properties (no two attempts for the same gate ever share a number,
+  regardless of open/closed state; and at most one attempt is open at a
+  time) but does not spell out that these are necessarily two separate
+  database constraints rather than one cleverly combined one. Labeled as
+  an assumption because an implementer could satisfy both properties with
+  a different constraint shape without contradicting the Charter's
+  substantive requirement.

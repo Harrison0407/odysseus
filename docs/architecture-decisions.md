@@ -30,6 +30,22 @@ its table. This ADR does not reopen, weaken, or contradict ADR-020;
 Milestone 1. See the Charter for the full model definition and the
 non-overridable-controls list it is bound by.
 
+**Correction addendum (2026-07-20, Milestone 1 Charter Correction Cycle,
+resolves REVAL-004/REVAL-008):** the independent Milestone 1 Charter
+Revalidation of Charter version 1 found this decision's original text
+incomplete on two lifecycle points, since corrected in Charter version 2
+without reopening any part of the decision above. First, approving a
+`ProcurementGateOverride` closes its underlying `GateAttempt`
+(`closed_at` set), exactly as a `GateDecision` would — an override was
+not previously stated to close anything, leaving the "at most one open
+attempt per gate" rule's interaction with overrides undefined. Second, the
+post-A2 critical-change invalidation cascade (Charter §8.1) now also
+revokes every currently-active `ProcurementGateOverride` on the affected
+package's A3–A6 attempts, system-attributed (`revoked_by = NULL`), so an
+override granted under stale technical terms cannot silently survive a
+critical change. Neither correction touches `apps.workflow.GateOverride`
+or its foreign keys.
+
 ## ADR-043 — Foundation correction cycle 3: role_assignment-derived CapabilityGrant scope, retrieval-safe privileged-audit columns, unbounded-completeness scan
 **Decision:** Three narrow corrections to the privileged-audit mechanism
 introduced by ADR-042, found by an independent Fable revalidation of

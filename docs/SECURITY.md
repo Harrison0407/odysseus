@@ -45,6 +45,19 @@ control rules for Procurement Gates A1–A6:
   — SQLite evidence alone is explicitly disallowed from being represented
   as PostgreSQL validation.
 
+**Correction cycle update (2026-07-20):** an independent revalidation of
+Charter version 1 found, and Charter version 2 corrected, two
+security-relevant gaps: (1) the post-A2 critical-change cascade now also
+revokes every currently-active `ProcurementGateOverride` on the affected
+package's A3–A6 attempts, so an override granted under stale technical
+terms can never silently survive a critical change (Charter §8.1 step 4);
+(2) a package's very first `A1` gate attempt is authorized through an
+explicit organization-scoped capability rather than an impossible
+package-scoped one, since no package-scoped role can exist before `A1`
+creates it (Charter §13). Both remain design-only — neither has been
+implemented, and Charter version 2 has not itself been independently
+revalidated.
+
 None of this has been implemented. A1–A6 do not exist in the codebase as of
 this entry; this section documents the approved design only.
 

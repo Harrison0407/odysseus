@@ -32,12 +32,16 @@ remain explicitly open (see `docs/KNOWN_LIMITATIONS.md`) — foundation
 acceptance does not represent them as complete. The independent Milestone 1
 Charter Review that followed raised twelve findings (CHTR-001–CHTR-012); a
 Milestone 1 Charter Definition and Reconciliation cycle then produced a
-complete, standalone charter at
+complete, standalone charter (version 1) at
 `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md` resolving all twelve,
-documentation-only. The exact next action is an independent Fable 5
-Charter revalidation session against the commit introducing that document.
-A1–A6 implementation remains not started and is not authorized by this
-acceptance or by the Charter's own authorship;
+documentation-only. An independent Milestone 1 Charter Revalidation of
+version 1 then returned MILESTONE 1 CHARTER REQUIRES CORRECTION with
+twelve new findings (REVAL-001–REVAL-012, found in the Charter's own text);
+a Milestone 1 Charter Correction Cycle produced version 2, resolving all
+twelve, again documentation-only. The exact next action is a new,
+independent Fable 5 Charter revalidation session against the commit
+introducing version 2. A1–A6 implementation remains not started and is not
+authorized by this acceptance or by the Charter's own authorship;
 `ProcurementPackage.Status` is not evidence of gate execution.
 
 ## Priority 0 capabilities (spec section 5)

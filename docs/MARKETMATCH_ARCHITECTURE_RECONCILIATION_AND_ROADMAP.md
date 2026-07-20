@@ -70,10 +70,13 @@ This is the official next implementation milestone. This section states
 intent and priority; the binding operational design — models, policy
 versioning, migration rules, override architecture, audit taxonomy,
 authorization, concurrency, tests, and live validation — is
-`docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md` (added 2026-07-20,
-documentation-only, not yet independently revalidated). Where that Charter
-and this section differ on mechanism, the Charter governs; this section's
-statement of intent is unchanged by it.
+`docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md` (version 2 as of
+2026-07-20, corrected via a documentation-only Charter Correction Cycle
+after an independent revalidation of version 1 found twelve findings,
+REVAL-001–REVAL-012, all now resolved; version 2 itself not yet
+independently revalidated). Where that Charter and this section differ on
+mechanism, the Charter governs; this section's statement of intent is
+unchanged by it.
 
 Canonical gates:
 

@@ -1670,3 +1670,79 @@ documented order.
     session against the commit introducing
     `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md`. Do not begin A1–A6
     implementation.
+
+57. **Milestone 1 Charter Correction Cycle — documentation-only.** Dated
+    2026-07-20. No application code, template, test, or migration was
+    touched.
+
+    The independent Milestone 1 Charter Revalidation that followed entry
+    56 reread Charter version 1 (commit
+    `b0cdf1cc4f6fb17dea206430ee0f1643710d2090`) fresh against itself and
+    against the actual reused model code, and returned **MILESTONE 1
+    CHARTER REQUIRES CORRECTION** with twelve new findings, REVAL-001
+    through REVAL-012 — internal contradictions and omissions in version
+    1's own text, distinct from the original CHTR-001–CHTR-012 review,
+    which remained resolved. The most severe: a `GateAttempt`↔`EvidenceBundle`
+    cardinality contradiction between §5.1 and §9.2 (REVAL-001); an
+    assumption that `EvidenceBundle` stores per-requirement
+    `minimum_count`/`required_verifier_capability`/`minimum_review_state`
+    when the actual, reused model stores these only bundle-wide
+    (REVAL-002); two incompatible definitions of "the canonical default
+    policy" within §3 itself (REVAL-003); and a post-A2 invalidation
+    cascade that invalidated `GateDecision` rows but never revoked active
+    `ProcurementGateOverride` rows on A3–A6, letting a stale exception
+    silently survive a critical change (REVAL-004).
+
+    This cycle corrected all twelve findings in Charter version 2:
+    `GateAttempt` no longer carries an `evidence_bundle` FK (evidence
+    attaches only via generic target, one or more bundles per attempt,
+    grouped deterministically by a `(required_verifier_capability,
+    minimum_review_state, minimum_count)` tuple, with `EvidenceBundle`/
+    `EvidenceItem` left completely unmodified); `is_canonical_default` is
+    now the sole canonical-default determinant, with `organization = NULL`
+    redefined as mere eligibility; the post-A2 cascade now also revokes
+    every active A3–A6 override, system-attributed and audited; a package's
+    first `A1` attempt is now authorized through an explicit
+    organization-scoped exception (REVAL-005); the two overlapping
+    override-eligibility flags are now explicitly composed
+    (`overridable` + `non_overridable_requirements`, REVAL-006); an exact
+    locked `attempt_number` allocation algorithm is specified (REVAL-007);
+    approving an override now closes its `GateAttempt`, and expiry/
+    revocation never reopens it (REVAL-008); the `PackageFreezeRevision.policy_version`
+    field's rationale was rewritten truthfully (REVAL-009); policy
+    publication now rejects any `gate_schema` missing or adding to the
+    exact six `A1`–`A6` keys (REVAL-010); one shared, enumerated
+    frozen-field code registry now governs both `ChangeRequest.field_name`
+    validation and `frozen_fields` keys (REVAL-011); and the completion
+    cross-reference was corrected from "§1–§17" to "§1–§19" (REVAL-012).
+    §21.2 of the Charter records the complete disposition table.
+
+    Documentation reconciled in the same commit: `DT_BEACH_CURRENT_STATE.md`,
+    `DT_BEACH_SOURCE_OF_TRUTH_INDEX.md`, `README.md`, `ASSUMPTIONS.md`
+    (A80, A81), `docs/architecture-decisions.md` (ADR-044 correction
+    addendum, not reopened), `docs/SECURITY.md`, and
+    `docs/KNOWN_LIMITATIONS.md`.
+
+    Fresh evidence for this cycle: HEAD confirmed at
+    `b0cdf1cc4f6fb17dea206430ee0f1643710d2090` before editing; branch
+    `integration/dt-beach-supply-control-1.0.0`; upstream
+    `origin/integration/dt-beach-supply-control-1.0.0`; ahead/behind `0/0`;
+    working tree clean before editing. `manage.py check` passed;
+    `makemigrations --check --dry-run` reported no changes detected;
+    `migrate --check` passed, 72/72 migrations applied, 0 pending —
+    unchanged, as expected for a documentation-only cycle. The full
+    regression suite was **not** rerun for this cycle, by design — it was
+    already independently reproduced at **511/511** during the
+    revalidation that led to entry 55's foundation acceptance, and
+    documentation changes cannot alter Python test outcomes; that figure
+    is carried forward here, not re-claimed as freshly rerun.
+
+    **Status distinctions, precise:** Charter version 2 is *authored* and
+    *corrected against every accepted revalidation finding* (this entry);
+    it is **not** *independently revalidated* and **not** *owner approved*.
+    A1–A6 remain entirely *unimplemented* — nothing in this entry changes
+    that. Milestone 1 implementation is **not authorized** by this entry.
+
+    Exact next action: run a new, independent Fable 5 Charter revalidation
+    session against the commit introducing Charter version 2. Do not begin
+    A1–A6 implementation.

@@ -131,8 +131,17 @@ Reconciliation** cycle has now produced a complete, standalone charter —
 findings. This was a documentation-only cycle: no application code,
 template, test, or migration changed, and A1–A6 remain unimplemented.
 
-Exact next action: **run an independent Fable 5 Charter revalidation
-session against the commit introducing the Charter document. Do not begin
+That Charter (version 1) was then independently revalidated; the result
+was **MILESTONE 1 CHARTER REQUIRES CORRECTION** — twelve new findings,
+REVAL-001 through REVAL-012, were found in the Charter's own text (not in
+the original CHTR review), including a `GateAttempt`↔`EvidenceBundle`
+cardinality contradiction and two incompatible canonical-default-policy
+definitions. A documentation-only **Milestone 1 Charter Correction Cycle**
+produced Charter version 2, resolving all twelve REVAL findings — again
+with no application code, template, test, or migration changed.
+
+Exact next action: **run a new, independent Fable 5 Charter revalidation
+session against the commit introducing Charter version 2. Do not begin
 A1–A6 implementation.**
 
 Milestone 1 remains planned and approved; neither foundation acceptance nor

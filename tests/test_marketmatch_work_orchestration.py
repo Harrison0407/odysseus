@@ -777,11 +777,48 @@ def test_module_is_pure_reuses_all_committed_kernels_and_has_no_runtime_engine()
 
 def test_no_production_route_import_migration_or_runtime_data_change_contract():
     root = Path(__file__).parents[1]
-    production = [p for p in (root / "src").rglob("*.py")
-                  if p.name != "marketmatch_work_orchestration.py"]
-    production += list((root / "routes").rglob("*.py"))
-    assert all("marketmatch_work_orchestration" not in p.read_text(encoding="utf-8")
-               for p in production)
+
+    def imports_work_kernel(source: str) -> bool:
+        tree = ast.parse(source)
+        return any(
+            (
+                isinstance(node, ast.ImportFrom)
+                and (
+                    node.module in {
+                        "src.marketmatch_work_orchestration",
+                        "marketmatch_work_orchestration",
+                    }
+                    or (
+                        node.module == "src"
+                        and any(
+                            alias.name == "marketmatch_work_orchestration"
+                            for alias in node.names
+                        )
+                    )
+                )
+            )
+            or (
+                isinstance(node, ast.Import)
+                and any(
+                    alias.name in {
+                        "src.marketmatch_work_orchestration",
+                        "marketmatch_work_orchestration",
+                    }
+                    for alias in node.names
+                )
+            )
+            for node in ast.walk(tree)
+        )
+
+    tenancy_kernel = root / "src" / "marketmatch_tenancy.py"
+    assert imports_work_kernel(tenancy_kernel.read_text(encoding="utf-8"))
+    route_modules = [root / "app.py", *(root / "routes").rglob("*.py")]
+    assert all(not imports_work_kernel(path.read_text(encoding="utf-8"))
+               for path in route_modules)
+    assert imports_work_kernel(
+        "from src.marketmatch_work_orchestration import WorkItem\n"
+    )
+    assert imports_work_kernel("from src import marketmatch_work_orchestration\n")
     assert not any("work_orchestration" in p.name for p in (root / "alembic" / "versions").glob("*.py"))
 
 

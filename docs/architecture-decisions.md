@@ -2,6 +2,66 @@
 
 Newest first.
 
+## ADR-046 — Milestone 1 Change Request decisions route through a new
+orchestration service; package hold state is split into governance and
+gate-native sources; `has_capability` gains an organization-scope
+extension; override expiry detection is split from reconciliation;
+`GateAttempt` is declared non-deletable
+
+**Decision:** `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md` version 4
+adds five binding rules, all documentation-only as of this entry (no
+application code changed): (1)
+`apps.procurement_gates.services.decide_gate_aware_change` becomes the
+sole Milestone 1 entry point for approving or rejecting a
+`governance.ChangeRequest` against a gate-governed package, mirroring
+`request_gate_aware_change`'s shape; the existing
+`apps.procurement.package_views.change_request_decide` view must be
+rewired to call it rather than `apps.governance.services.approve_change_request`/
+`reject_change_request` directly (Charter §8.2.3). (2)
+`ProcurementPackage.is_on_hold` is now derived from two distinct sources —
+existing governance holds (pending `ChangeRequest`, non-`STANDARD`
+`RiskFlag`), queried via a new, minimal
+`apps.governance.services.has_unresolved_governance_holds`, and
+gate-native `PackageHoldCause` rows for A1–A6-specific lifecycle causes
+only — combined by a single `recompute_package_hold_state` projection
+(Charter §8.4). (3) `apps.governance.services.has_capability` gains an
+additive, keyword-only `organization=` scope, mutually exclusive with
+`package=`, so the `A1` bootstrap authorization path names an evaluation
+mode the function actually supports (Charter §13). (4)
+`apps.procurement_gates.services.compute_gate_state` is stated to be
+completely side-effect-free; a new two-phase
+`apps.procurement_gates.services.reconcile_expired_overrides` performs
+override-expiry detection (unlocked) and reconciliation (locked,
+cascading, audited) as a separate service (Charter §11.5). (5)
+`GateAttempt` is declared an immutable, non-deletable historical
+aggregate row, with an explicit model-level/`pre_delete` prohibition
+distinct from, and stronger than, ordinary `on_delete=PROTECT` (Charter
+§3.5).
+
+**Why:** the independent Milestone 1 Charter Version 3 Revalidation
+(against commit `f59237b6ba0c18e210c54f01cd79e98ea40e1709`, the commit
+introducing version 3) found that (1) no orchestration existed for
+*deciding* a Change Request — the one real HTTP decision path called the
+foundation's approve/reject functions directly, leaving §8.1's
+invalidation cascade unreachable from it (NF-NEW-1); (2) version 3's hold
+design implied mirroring `RiskFlag`/`ChangeRequest` rows into
+`PackageHoldCause`, and inaccurately limited risk-driven holds to
+`HIGH_RISK` alone when the existing foundation also holds on
+`CONTROLLED_OPAQUE` (NF-NEW-2); (3) `has_capability` has no
+organization-scoped evaluation path at all, so §13's named `A1`-bootstrap
+mechanism was unsupported by the actual accepted function (NF-NEW-3); (4)
+lazy expiry detection was described as happening inside
+`compute_gate_state`, a function this Charter otherwise treats as a pure
+read, without resolving whether that read path also locks and mutates
+(NF-NEW-4); and (5) `GateAttempt`'s only stated deletion protection was an
+`on_delete=PROTECT` table entry, which cannot protect the generic-target
+`EvidenceBundle`/`EvidenceItem` rows that reference a `GateAttempt` via
+`content_type`/`object_id` rather than a real foreign key (NF-NEW-5).
+None of these five corrections reopens or contradicts ADR-044 or ADR-045
+above; `apps.workflow.GateOverride`, `apps.governance.services.request_change`,
+`approve_change_request`, `reject_change_request`, and the existing
+`has_capability` call shape all remain unmodified by all of them.
+
 ## ADR-045 — Milestone 1 Change Requests route through a new orchestration
 service, never the foundation's `request_change` directly; `A2` becomes
 unconditionally non-overridable; a downstream-invalidation cascade is

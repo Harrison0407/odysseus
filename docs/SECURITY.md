@@ -73,8 +73,36 @@ the package on every Change Request creation; Charter version 3 adds
 `apps.procurement_gates.services.request_gate_aware_change` as the sole
 Milestone 1 Change Request entry point to resolve this without modifying
 the accepted foundation (Charter §8.2.1, resolves NF-1). All three remain
-design-only — none has been implemented, and Charter version 3 has not
-itself been independently revalidated.
+design-only — none has been implemented.
+
+**Correction cycle 3 update (2026-07-20):** an independent revalidation of
+Charter version 3 found that no orchestration wrapper existed for
+*deciding* (approving/rejecting) a Change Request against a gate-governed
+package — the one real HTTP path called
+`apps.governance.services.approve_change_request`/`reject_change_request`
+directly, bypassing §8.1's cascade entirely (NF-NEW-1); that the
+hold-state design implied duplicating `RiskFlag`/`ChangeRequest` rows into
+`PackageHoldCause` and inaccurately limited risk-driven holds to
+`HIGH_RISK` alone, omitting the existing `CONTROLLED_OPAQUE` level
+(NF-NEW-2); and that `apps.governance.services.has_capability` has no
+organization-scoped evaluation path at all, so the `A1` bootstrap design
+named in Charter §13 was unsupported by the actual accepted function
+(NF-NEW-3) — all three treated as blocking. It additionally found that
+lazy override-expiry detection was ambiguously specified against a
+function this Charter otherwise treats as a pure read (NF-NEW-4), and
+that `GateAttempt`'s deletion protection did not, and structurally could
+not, cover its generic-target `EvidenceBundle`/`EvidenceItem` references
+(NF-NEW-5) — both accepted as non-blocking. Charter version 4 adds
+`apps.procurement_gates.services.decide_gate_aware_change` as the sole
+decision entry point (Charter §8.2.3); a new, minimal
+`apps.governance.services.has_unresolved_governance_holds` plus a unified
+`recompute_package_hold_state` projection (Charter §8.4); a minimal
+`has_capability(package=None, organization=None)` extension (Charter
+§13); a two-phase `reconcile_expired_overrides` service that keeps
+`compute_gate_state` purely read-only (Charter §11.5); and an explicit,
+independent `GateAttempt` non-deletion policy (Charter §3.5). All five
+remain design-only — none has been implemented, and Charter version 4 has
+not itself been independently revalidated.
 
 None of this has been implemented. A1–A6 do not exist in the codebase as of
 this entry; this section documents the approved design only.

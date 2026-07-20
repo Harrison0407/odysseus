@@ -112,11 +112,17 @@ CHARTER VERSION 2 REQUIRES CORRECTION (ten findings: REVAL-004-RESIDUAL,
 REVAL-005-RESIDUAL, REVAL-008-RESIDUAL, REVAL-009-TRACE,
 REVAL-011-ENFORCEMENT, NF-1, NF-2, NF-3, NF-4, NF-7). A documentation-only
 Milestone 1 Charter Correction Cycle 2 produced Charter version 3,
-resolving all ten. Charter version 3 has not yet been independently
-revalidated and is not owner-approved.
+resolving all ten. Charter version 3 was itself independently revalidated
+(commit `f59237b6ba0c18e210c54f01cd79e98ea40e1709`); the result was
+MILESTONE 1 CHARTER VERSION 3 REQUIRES CORRECTION (three blocking
+findings — NF-NEW-1, NF-NEW-2, NF-NEW-3 — two additional accepted
+findings — NF-NEW-4, NF-NEW-5 — and one editorial line-citation defect).
+A documentation-only Milestone 1 Charter Correction Cycle 3 produced
+Charter version 4, resolving all six. Charter version 4 has not yet been
+independently revalidated and is not owner-approved.
 
 **Next governing activity: a new, independent Milestone 1 Charter
-revalidation session against the commit introducing Charter version 3.**
+revalidation session against the commit introducing Charter version 4.**
 A1–A6 implementation is not authorized and has not started.
 
 Tests (as independently reproduced during the cycle-3 revalidation that

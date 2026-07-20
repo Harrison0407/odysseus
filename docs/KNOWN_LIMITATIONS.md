@@ -92,10 +92,19 @@ changed. That version was then independently revalidated; the result was
 canonical-default-policy definitions, an override-revocation gap in the
 post-A2 cascade, and others). A documentation-only **Milestone 1 Charter
 Correction Cycle** produced Charter version 2, resolving all twelve —
-again with no application code, template, test, or migration changed. The
-exact next action is **a new, independent Fable 5 Charter revalidation
-session** against the commit introducing version 2. A1–A6 — Configurable
-Procurement Gates — remains approved and planned but is **not authorized**
+again with no application code, template, test, or migration changed.
+Version 2 was itself independently revalidated and returned MILESTONE 1
+CHARTER VERSION 2 REQUIRES CORRECTION (ten findings); a **Milestone 1
+Charter Correction Cycle 2** produced Charter version 3, resolving all
+ten. Version 3 was itself independently revalidated and returned
+MILESTONE 1 CHARTER VERSION 3 REQUIRES CORRECTION (three blocking
+findings, two additional accepted findings, one editorial defect); a
+**Milestone 1 Charter Correction Cycle 3** produced Charter version 4,
+resolving all six — again with no application code, template, test, or
+migration changed. The exact next action is **a new, independent Fable 5
+Charter revalidation session** against the commit introducing version 4.
+A1–A6 — Configurable Procurement Gates — remains approved and planned but
+is **not authorized**
 by this acceptance or by the Charter's own authorship; implementation has
 not started. The existing `ProcurementPackage.Status` is a separate state
 machine and must not be represented as A1–A6 gate
@@ -139,13 +148,16 @@ Current unresolved limitations, grouped by official roadmap disposition:
 - **Milestone 1:** configurable, versioned A1–A6 gate definitions, evidence
   schemas, progression, exceptions, expiry/revocation, and live validation.
   The design for all of this is now specified in
-  `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md` (version 3, corrected
+  `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md` (version 4, corrected
   after independent revalidation found twelve findings in version 1 —
-  REVAL-001–REVAL-012, all resolved in version 2 — and then found ten
-  further findings in version 2 itself — NF-1, REVAL-004-RESIDUAL,
+  REVAL-001–REVAL-012, all resolved in version 2 — then found ten further
+  findings in version 2 itself — NF-1, REVAL-004-RESIDUAL,
   REVAL-005-RESIDUAL, REVAL-008-RESIDUAL, REVAL-009-TRACE,
   REVAL-011-ENFORCEMENT, NF-2, NF-3, NF-4, NF-7 — all resolved in version
-  3); none of it is implemented yet — this remains a full open limitation
+  3, and then found three blocking findings, two additional accepted
+  findings, and one editorial defect in version 3 itself — NF-NEW-1,
+  NF-NEW-2, NF-NEW-3, NF-NEW-4, NF-NEW-5 — all resolved in version 4);
+  none of it is implemented yet — this remains a full open limitation
   until Milestone 1 is actually built, tested, and completed per that
   Charter's §20.
 - **Milestone 2:** complete `es`/`en`/`zh-Hans` internationalization

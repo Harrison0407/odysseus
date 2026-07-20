@@ -168,6 +168,35 @@ Exact next action: **run a new, independent Fable 5 Charter revalidation
 session against the commit introducing Charter version 3. Do not begin
 A1–A6 implementation.**
 
+**Update — independent Milestone 1 Charter Version 3 Revalidation
+completed, result: MILESTONE 1 CHARTER VERSION 3 REQUIRES CORRECTION.** An
+independent revalidation of Charter version 3 (commit
+`f59237b6ba0c18e210c54f01cd79e98ea40e1709`, the commit introducing
+version 3) found three blocking findings and two additional accepted
+findings — distinct from the ten findings resolved in version 3 itself —
+plus one editorial line-citation defect. A documentation-only **Milestone
+1 Charter Correction Cycle 3** then produced Charter version 4, resolving
+all six:
+
+| Finding | Disposition |
+|---|---|
+| NF-NEW-1 | Accept — added `apps.procurement_gates.services.decide_gate_aware_change` as the sole Milestone 1 Change Request decision entry point, mirroring `request_gate_aware_change`; the existing `change_request_decide` view must be rewired to call it |
+| NF-NEW-2 | Accept — defined two distinct hold-source categories (existing governance sources via a new `has_unresolved_governance_holds`, and gate-native `PackageHoldCause` rows) combined by a unified `recompute_package_hold_state` projection; corrected the `HIGH_RISK`-only inaccuracy and the "non-critical changes never touch hold state" overclaim |
+| NF-NEW-3 | Accept — added a minimal `has_capability(package=None, organization=None)` extension with mutual exclusivity and exact-organization-match rules |
+| NF-NEW-4 | Accept — split `compute_gate_state` (now explicitly pure) from a new two-phase `reconcile_expired_overrides` (unlocked detection, then locked reconciliation) |
+| NF-NEW-5 | Accept — declared `GateAttempt` immutable and non-deletable (model-level guard, `pre_delete` guard, no admin/service path, migration-only exception), since `on_delete=PROTECT` cannot protect its generic-target `EvidenceBundle`/`EvidenceItem` references |
+| Editorial | Accept — replaced brittle, commit-pinned line-number citations for `apps.governance.services` functions with stable module/function-name references |
+
+**No application code, template, test, or migration was written or
+modified during this correction cycle either.** A1–A6 remain entirely
+unimplemented. Charter version 4 has **not** been independently
+revalidated and has **not** been owner-approved. Milestone 1
+implementation remains **not authorized**.
+
+Exact next action: **run a new, independent Fable 5 Charter revalidation
+session against the commit introducing Charter version 4. Do not begin
+A1–A6 implementation.**
+
 ---
 
 ## Historical record: Foundation correction cycle 3 mechanism

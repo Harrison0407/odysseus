@@ -44,8 +44,14 @@ REQUIRES CORRECTION with ten further findings (NF-1, REVAL-004-RESIDUAL,
 REVAL-005-RESIDUAL, REVAL-008-RESIDUAL, REVAL-009-TRACE,
 REVAL-011-ENFORCEMENT, NF-2, NF-3, NF-4, NF-7); a Milestone 1 Charter
 Correction Cycle 2 produced version 3, resolving all ten, again
-documentation-only. The exact next action is a new, independent Fable 5
-Charter revalidation session against the commit introducing version 3.
+documentation-only. An independent Milestone 1 Charter Version 3
+Revalidation then returned MILESTONE 1 CHARTER VERSION 3 REQUIRES
+CORRECTION with three blocking findings (NF-NEW-1, NF-NEW-2, NF-NEW-3),
+two additional accepted findings (NF-NEW-4, NF-NEW-5), and one editorial
+line-citation defect; a Milestone 1 Charter Correction Cycle 3 produced
+version 4, resolving all six, again documentation-only. The exact next
+action is a new, independent Fable 5 Charter revalidation session against
+the commit introducing version 4.
 A1–A6 implementation remains not started and is not authorized by this
 acceptance or by the Charter's own authorship; `ProcurementPackage.Status`
 is not evidence of gate execution.

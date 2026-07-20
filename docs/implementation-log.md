@@ -1852,3 +1852,128 @@ documented order.
     Exact next action: run a new, independent Fable 5 Charter revalidation
     session against the commit introducing Charter version 3. Do not begin
     A1–A6 implementation.
+
+59. **Milestone 1 Charter Correction Cycle 3 — documentation-only.** Dated
+    2026-07-20. No application code, template, test, or migration was
+    touched.
+
+    The independent Milestone 1 Charter Version 3 Revalidation that
+    followed entry 58 reread Charter version 3 (commit
+    `f59237b6ba0c18e210c54f01cd79e98ea40e1709`) fresh against the actual
+    repository — `apps.governance.services.request_change`/
+    `approve_change_request`/`reject_change_request`/`_package_has_unresolved_holds`/
+    `has_capability`, `apps.governance.models.RiskFlag.Level`,
+    `apps.procurement.package_views.change_request_decide`, and the
+    absence of any `apps.procurement_gates` app or `GenericForeignKey`
+    usage anywhere in the codebase — and returned **MILESTONE 1 CHARTER
+    VERSION 3 REQUIRES CORRECTION** with three blocking findings, two
+    additional accepted findings, and one editorial defect:
+
+    - **NF-NEW-1 (Critical, blocking):** no mandatory gate-aware
+      `ChangeRequest` *decision* orchestration existed — the one real HTTP
+      decision path, `change_request_decide`, calls
+      `apps.governance.services.approve_change_request`/
+      `reject_change_request` directly, bypassing §8.1's invalidation
+      cascade entirely.
+    - **NF-NEW-2 (Critical, blocking):** competing and incomplete
+      package-hold mechanisms — §8.4 implied `RiskFlag`/`ChangeRequest`
+      rows must be mirrored into `PackageHoldCause` to count, and §8.3
+      inaccurately limited risk-driven holds to `HIGH_RISK` alone, when
+      `_package_has_unresolved_holds` actually excludes only `STANDARD`
+      (also holding on the existing `CONTROLLED_OPAQUE` level).
+    - **NF-NEW-3 (Critical, blocking):** `apps.governance.services.has_capability`
+      has no organization-scoped evaluation path at all — passing no
+      `package` matches *any* active grant for that capability code with
+      no organization check — so §13's named `A1`-bootstrap mechanism
+      ("organization-scoped `CapabilityGrant`... via
+      `CapabilityGrant.organization`") was unsupported by the actual
+      accepted function.
+    - **NF-NEW-4 (High, accepted):** lazy override-expiry detection was
+      described as happening inside `compute_gate_state`/`GateEvaluation`,
+      a function this Charter otherwise treats as a pure, side-effect-free
+      read, without resolving whether that read path also acquires locks
+      and performs mutation.
+    - **NF-NEW-5 (High, accepted):** `GateAttempt`'s only stated deletion
+      protection was an `on_delete=PROTECT` table entry, which cannot
+      protect the generic-target `EvidenceBundle`/`EvidenceItem` rows that
+      reference a `GateAttempt` via `content_type`/`object_id` rather than
+      a real foreign key.
+    - **Editorial (Low):** the `apps/governance/services.py:677-688`
+      citation (and the `apps.governance.services`, "lines 706-880"
+      citation in §14.1) drift under any unrelated edit above them in the
+      file and were, in fact, already off by a line or two at each
+      boundary versus the actual function body.
+
+    This cycle corrected all six in Charter version 4:
+    `apps.procurement_gates.services.decide_gate_aware_change` is now the
+    sole Milestone 1 Change Request decision entry point, mirroring
+    `request_gate_aware_change`'s shape — a locked approval transaction
+    that authorizes before retrieval, invokes the unmodified
+    `approve_change_request`, and conditionally runs §8.1's cascade only
+    for critical changes reaching `A2`; a locked rejection transaction
+    that never runs the cascade; and a binding requirement that
+    `change_request_decide` be rewired to call the wrapper (§8.1, §8.2.3,
+    NF-NEW-1). Package hold state is now split into existing governance
+    sources (queried via a new, minimal, additive
+    `apps.governance.services.has_unresolved_governance_holds`, preserving
+    `_package_has_unresolved_holds`'s exact semantics and never importing
+    `apps.procurement_gates`) and gate-native `PackageHoldCause` rows,
+    combined by a renamed, unified `recompute_package_hold_state`
+    projection; §8.3's `HIGH_RISK`-only inaccuracy is corrected, and
+    §8.2.1/§8.2.2's "non-critical changes never touch hold state" claim is
+    corrected to state precisely what is and is not true (§8.2.1 step 7,
+    §8.2.2, §8.3, §8.4, §9.5 step 5, NF-NEW-2). `has_capability` gains an
+    additive `has_capability(user, capability_code, *, package=None,
+    organization=None)` extension — mutually exclusive, exact-organization-match,
+    all existing callers unchanged — and the `A1`-bootstrap table row now
+    names the exact required call (§13, NF-NEW-3).
+    `apps.procurement_gates.services.compute_gate_state` is now stated
+    explicitly to be completely side-effect-free; a new two-phase
+    `apps.procurement_gates.services.reconcile_expired_overrides`
+    (unlocked detection, then locked reconciliation, cascade, hold,
+    audit, recompute, commit) performs the actual expiry mutation, with
+    named mandatory invocation points and an eighth PostgreSQL-required
+    concurrency scenario (§9.5 step 1, §11.5, §15.1, §15.2, NF-NEW-4).
+    `GateAttempt` is now declared an immutable, non-deletable historical
+    aggregate row — model-level `delete()` override, `pre_delete` guard,
+    no admin/service deletion path, migration-only cleanup as the sole
+    exception — with an explicit statement that ordinary
+    `on_delete=PROTECT` does not cover this case (§3.5, NF-NEW-5). The
+    brittle line-number citations were replaced with stable
+    module/function-name references only (§8.2.1, §14.1, editorial).
+    §21.4 of the Charter records the complete disposition table.
+
+    Documentation reconciled in the same commit: `DT_BEACH_CURRENT_STATE.md`,
+    `DT_BEACH_SOURCE_OF_TRUTH_INDEX.md`,
+    `docs/architecture-decisions.md` (ADR-046, new entry, does not reopen
+    ADR-044 or ADR-045), `docs/SECURITY.md`, `docs/KNOWN_LIMITATIONS.md`,
+    `docs/REQUIREMENTS_TRACEABILITY.md`, and
+    `docs/MARKETMATCH_ARCHITECTURE_RECONCILIATION_AND_ROADMAP.md`.
+
+    Fresh evidence for this cycle: HEAD confirmed at
+    `f59237b6ba0c18e210c54f01cd79e98ea40e1709` before editing; branch
+    `integration/dt-beach-supply-control-1.0.0`; upstream
+    `origin/integration/dt-beach-supply-control-1.0.0`; ahead/behind `0/0`;
+    working tree clean before editing; no `apps.procurement_gates`
+    directory or app present; no `GenericForeignKey` usage anywhere in the
+    repository (confirmed by repository-wide grep). `manage.py check`
+    passed (0 issues); `makemigrations --check --dry-run` reported no
+    changes detected; `migrate --check` passed, 72/72 migrations applied,
+    0 pending — unchanged, as expected for a documentation-only cycle; the
+    final diff touches eight Markdown files only (`git diff --name-only`
+    contains no `.py`, `.html`, or `migrations/` path). The full regression
+    suite was **not** rerun for this cycle, by the same design entry 58
+    already established — documentation changes cannot alter Python test
+    outcomes, and this cycle's own fresh evidence above independently
+    confirms zero application code, template, or migration files changed.
+
+    **Status distinctions, precise:** Charter version 4 is *authored* and
+    *corrected against every accepted Version 3 Revalidation finding*
+    (this entry); it is **not** *independently revalidated* and **not**
+    *owner approved*. A1–A6 remain entirely *unimplemented* — nothing in
+    this entry changes that. Milestone 1 implementation is **not
+    authorized** by this entry.
+
+    Exact next action: run a new, independent Fable 5 Charter revalidation
+    session against the commit introducing Charter version 4. Do not begin
+    A1–A6 implementation.

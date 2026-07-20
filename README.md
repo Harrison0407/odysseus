@@ -19,8 +19,10 @@ independently-discovered gaps, CTCF-AUDIT-017 and CTCF-CR-PROJ-018 — and 15
 from foundation correction cycle 3, which closed three further gaps found by
 independently revalidating cycle 2's own privileged-audit mechanism:
 CTCF-AUDIT-SCOPE-021, CTCF-AUDIT-RETRIEVAL-022, CTCF-AUDIT-WINDOW-023).
-Independent revalidation of this correction cycle is the next required
-control point. What is not yet built is listed honestly in
+This correction cycle was independently revalidated and, on 2026-07-20,
+explicitly owner-accepted by Harrison — the foundation is now closed. The
+independent Milestone 1 Charter review is the next required control
+point. What is not yet built is listed honestly in
 `docs/KNOWN_LIMITATIONS.md`; the official milestone order is governed by
 `docs/MARKETMATCH_ARCHITECTURE_RECONCILIATION_AND_ROADMAP.md`.
 
@@ -103,19 +105,28 @@ required in cycles 2 or 3.
 ## Current milestone handoff
 
 Latest completed product milestone:
-**Controlled Transparency, Commercial Confidentiality & Authorization Foundation**.
+**Controlled Transparency, Commercial Confidentiality & Authorization
+Foundation — CLOSED AND OWNER-ACCEPTED (2026-07-20)**.
 
 Foundation correction cycle 3 closed three independently-discovered and
 reproduced gaps in cycle 2's own privileged-audit mechanism
 (CTCF-AUDIT-SCOPE-021, CTCF-AUDIT-RETRIEVAL-022, CTCF-AUDIT-WINDOW-023);
-see `docs/KNOWN_LIMITATIONS.md` and ADR-043.
+see `docs/KNOWN_LIMITATIONS.md` and ADR-043. An independent Fable
+revalidation of that correction (commit `2c52b0b83340fda2eaa84700eaeddfbe0839d6d8`)
+found no new Critical/High blocker, and Harrison recorded explicit owner
+and business acceptance of the foundation on that basis — see
+`DT_BEACH_CURRENT_STATE.md` for the full acceptance text. PostgreSQL was
+not validated in that process (SQLite only, no Docker daemon available)
+and remains an open limitation, not represented as complete; no
+production deployment of this foundation has occurred or is claimed.
 
-Exact next action: **run a new, independent Fable 5 revalidation session
-against the resulting commit. Do not begin Milestone 1 during that
-revalidation.**
+Exact next action: **run the independent Milestone 1 Charter review
+against the current documentation baseline. Do not begin A1–A6
+implementation.**
 
-Milestone 1 remains planned and approved but must not begin until that
-independent revalidation accepts the foundation.
+Milestone 1 remains planned and approved; foundation acceptance does not
+itself authorize A1–A6 implementation, which begins only after the
+Charter review.
 
 ## Production deployment
 

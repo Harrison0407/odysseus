@@ -1,5 +1,21 @@
 # Security
 
+## Foundation status (2026-07-20)
+
+The Controlled Transparency, Commercial Confidentiality & Authorization
+Foundation's security controls (including foundation correction cycles 2
+and 3 below) were independently revalidated at commit
+`2c52b0b83340fda2eaa84700eaeddfbe0839d6d8`, and Harrison recorded explicit
+owner and business acceptance of the foundation on that basis — see
+`DT_BEACH_CURRENT_STATE.md` for the full acceptance text. This acceptance
+covers the application-level authorization/confidentiality controls
+described below; it does **not** cover, and does not represent as
+complete, PostgreSQL runtime validation (every cycle was validated against
+SQLite only), database-level audit append-only enforcement, backup
+restoration, deployed proxy/cache validation, or production log-sentinel
+analysis — see `docs/KNOWN_LIMITATIONS.md` for the full, current list of
+open operational and security validations.
+
 ## Implemented and verified in this delivery
 
 - **Authentication:** Django session auth; no custom auth backend risk surface.

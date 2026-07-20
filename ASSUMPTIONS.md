@@ -767,6 +767,19 @@ instead, exactly as required, and is **not** listed here as a resolved assumptio
   re-tuning if that scale grows moderately; a persisted/indexed scope
   column (per A74) remains the correct fix if volume ever makes even this
   unbounded-but-batched scan too slow.
+  **Measured, not merely estimated, as of the 2026-07-20 independent
+  revalidation:** a batch of all-resolvable-but-unauthorized candidate
+  events costs approximately 65 SQL queries for 31 such events (~2.10
+  queries/event), via disposable adversarial test data (`CaptureQueriesContext`);
+  unresolvable (orphan) candidate events are effectively free by
+  comparison, since `_resolve_audit_event_scope` short-circuits before any
+  target fetch. Harrison recorded explicit owner acceptance of this
+  characteristic on 2026-07-20 as a **Low-severity, non-blocking,
+  pilot-scale performance limitation** — this is not a claim of
+  production-scale validation, and the trigger for reconsideration
+  (meaningful audit-volume or measured-latency growth) remains exactly as
+  stated above, unchanged by the acceptance. See
+  `docs/KNOWN_LIMITATIONS.md` for the full disposition.
 - **A77. `governance.services._resolve_scope_for_target`'s `CapabilityGrant`
   branch does not consult `RoleAssignment.project` when resolving scope
   through `role_assignment` (CTCF-AUDIT-SCOPE-021).** `RoleAssignment.

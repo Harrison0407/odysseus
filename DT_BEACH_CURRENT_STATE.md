@@ -2,13 +2,90 @@
 
 Last updated: 2026-07-20
 
-## Foundation remediation status
+## Foundation status: CLOSED AND OWNER-ACCEPTED
 
-**Foundation correction cycle 3 is complete. Three independently-discovered
-and reproduced gaps in the cycle-2 privileged-audit mechanism
-(CTCF-AUDIT-SCOPE-021, CTCF-AUDIT-RETRIEVAL-022, CTCF-AUDIT-WINDOW-023)
-have been corrected. This correction has not yet been independently
-revalidated. Milestone 1 has not begun.**
+**The Controlled Transparency, Commercial Confidentiality & Authorization
+Foundation is closed and owner-accepted. Foundation correction cycles 2
+and 3 have both been independently revalidated. Milestone 1 implementation
+has not begun.**
+
+Accepted foundation implementation commit:
+
+`2c52b0b83340fda2eaa84700eaeddfbe0839d6d8`
+
+### Harrison's explicit owner and business acceptance
+
+Recorded 2026-07-20, America/Santo_Domingo:
+
+> I explicitly accept Foundation Correction Cycles 2 and 3 at commit
+> 2c52b0b83340fda2eaa84700eaeddfbe0839d6d8.
+>
+> I accept the independently validated Controlled Transparency, Commercial
+> Confidentiality & Authorization Foundation as technically complete for the
+> current roadmap gate.
+>
+> I accept the measured privileged-audit linear N+1 query characteristic as a
+> non-blocking, pilot-scale performance limitation.
+>
+> PostgreSQL runtime validation, database-level audit append-only enforcement,
+> backup restoration, deployed proxy/cache validation, production log-sentinel
+> analysis, and all other documented owner or production validations remain open
+> limitations and are not represented as complete.
+>
+> CTCF-ASSERT-HTTP-019 remains deferred. No Verification Assertion revocation HTTP
+> route is approved or implemented.
+>
+> The Controlled Transparency, Commercial Confidentiality & Authorization
+> Foundation is now closed.
+>
+> The next authorized activity is the independent Milestone 1 Charter review only.
+>
+> Procurement Gates A1–A6 implementation is not authorized yet.
+
+### Independent validation evidence backing this acceptance
+
+An independent Fable revalidation of commit `2c52b0b` reproduced, fresh:
+
+| Check | Result |
+|---|---|
+| `manage.py check` | Passed; no issues |
+| `makemigrations --check --dry-run` | Passed; no model changes detected |
+| `migrate --check` | Passed; no unapplied migrations |
+| `showmigrations --plan` | **72/72 applied**, 0 pending |
+| Focused foundation/remediation suite | **53 passed, 0 failed** (SQLite) |
+| Cycle 2+3 suite (`test_privileged_audit_scope.py` + `test_change_request_projection.py`) | **39 passed, 0 failed** (SQLite) |
+| Full regression suite | **511 passed, 0 failed** (SQLite) |
+
+No new Critical or High foundation blocker was found. One newly-measured,
+non-blocking performance characteristic was identified and is now
+owner-accepted: resolving scope for a batch of all-resolvable-but-unauthorized
+privileged-audit candidate events costs approximately 65 SQL queries for 31
+such events (~2.10 queries/event) — a **Low** severity, pilot-scale
+performance limitation, not a confidentiality defect (see
+`docs/KNOWN_LIMITATIONS.md` and `ASSUMPTIONS.md` A76).
+
+PostgreSQL was **not** validated (no Docker daemon in the validation
+environment) — this remains an open limitation, not represented as
+complete. `CTCF-ASSERT-HTTP-019` remains deferred; no Verification
+Assertion revocation HTTP route exists or is approved.
+
+### Active activity
+
+**Independent Milestone 1 Charter Review.**
+
+Exact next action: review and reconcile the Milestone 1 Charter before any
+implementation authorization. Milestone 1 implementation itself has **not**
+started and is **not** authorized by this acceptance.
+
+---
+
+## Historical record: Foundation correction cycle 3 mechanism
+
+Foundation correction cycle 3 corrected three independently-discovered and
+reproduced gaps in the cycle-2 privileged-audit mechanism
+(CTCF-AUDIT-SCOPE-021, CTCF-AUDIT-RETRIEVAL-022, CTCF-AUDIT-WINDOW-023).
+This correction has since been independently revalidated (see acceptance
+above).
 
 Cycle 3 began from clean, synchronized HEAD
 `84b12a2187d93f2ccd9992780a5a4b73e54e7cc6` on
@@ -33,8 +110,9 @@ intentionally service-only, with no HTTP route added
 (CTCF-ASSERT-HTTP-019, deferred by explicit decision, not by oversight,
 unchanged by this cycle).
 
-Validation after this correction cycle (local, not yet independently
-revalidated):
+Local validation at the time this cycle was implemented (since superseded
+by the independent revalidation evidence recorded in the acceptance
+section above):
 
 | Check | Command | Result |
 |---|---|---|
@@ -60,13 +138,14 @@ neither mode bypasses capability/classification rules; a
 controlled-transparency agreement becomes executable through an active,
 field-scoped Disclosure Grant.
 
-Exact next action:
+That independent revalidation was subsequently performed (against this same
+commit, `2c52b0b`) and, together with Harrison's explicit acceptance
+recorded above, closed this correction cycle and the foundation as a
+whole. See "Foundation status: CLOSED AND OWNER-ACCEPTED" at the top of
+this document for the current, authoritative next action:
 
-**Run a new, independent Fable 5 revalidation session against the
-resulting commit. Do not begin Milestone 1 during that revalidation.**
-
-Only a successful independent revalidation may establish readiness to begin
-**Milestone 1 — Configurable Procurement Gates A1–A6**.
+**Run the independent Milestone 1 Charter review against the current
+documentation baseline. Do not begin A1–A6 implementation.**
 
 ## Gate 0 status
 

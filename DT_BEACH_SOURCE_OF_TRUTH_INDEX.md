@@ -80,18 +80,33 @@ introduced):
 
 `84b12a2187d93f2ccd9992780a5a4b73e54e7cc6`
 
-Latest application-behavior commit — foundation correction cycle 3
-(closes CTCF-AUDIT-SCOPE-021, CTCF-AUDIT-RETRIEVAL-022, and
-CTCF-AUDIT-WINDOW-023 found during that revalidation; not yet
-independently revalidated):
+**Accepted foundation implementation baseline — foundation correction
+cycle 3** (closes CTCF-AUDIT-SCOPE-021, CTCF-AUDIT-RETRIEVAL-022, and
+CTCF-AUDIT-WINDOW-023 found during revalidation of cycle 2; itself
+independently revalidated on 2026-07-20 with no new Critical/High
+blocker, then **explicitly owner-accepted by Harrison** — see
+`DT_BEACH_CURRENT_STATE.md` and `docs/implementation-log.md` entry 55):
+
+`2c52b0b83340fda2eaa84700eaeddfbe0839d6d8`
+
+**Foundation status: owner accepted and closed** as of 2026-07-20.
+
+**Documentation-only acceptance commit** (records Harrison's acceptance
+text into the source-of-truth documents; no application code, template,
+test, or migration changed):
 
 The commit containing this revision; obtain its immutable hash with
-`git rev-parse HEAD`. Its parent is `84b12a2187d93f2ccd9992780a5a4b73e54e7cc6`.
+`git rev-parse HEAD`. Its parent is `2c52b0b83340fda2eaa84700eaeddfbe0839d6d8`.
 
-Tests:
+**Next governing activity: the independent Milestone 1 Charter review.**
+A1–A6 implementation is not authorized and has not started.
+
+Tests (as independently reproduced during the cycle-3 revalidation that
+led to acceptance):
 
 `511/511 passing` (472 from the foundation remediation, 24 from
-foundation correction cycle 2, 15 from foundation correction cycle 3)
+foundation correction cycle 2, 15 from foundation correction cycle 3);
+72/72 migrations applied; SQLite only — PostgreSQL not validated.
 
 Migrations:
 
@@ -103,9 +118,11 @@ Ahead / behind after fetch:
 
 The commits after `58889c8` through Gate 0 were documentation-only. The
 foundation remediation (`a89a9f7`) and both correction cycles (`84b12a2`
-and this cycle) are genuine application-behavior changes, each with their
+and `2c52b0b`) are genuine application-behavior changes, each with their
 own passing test evidence recorded above and in
-`docs/implementation-log.md`.
+`docs/implementation-log.md`. This acceptance commit is, like Gate 0,
+documentation-only — it records Harrison's explicit acceptance of the
+`2c52b0b` application-behavior baseline without changing it.
 
 Application behavior is authoritative only when:
 

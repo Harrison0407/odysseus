@@ -32,26 +32,81 @@ decision), and CTCF-AUDIT-WINDOW-023 (the 1,000-event scan ceiling could
 silently omit an older authorized event behind enough newer unrelated
 ones).
 
-**Foundation correction cycle 3** (this entry) closes all three — see
-ADR-043 and `docs/SECURITY.md` for the mechanism. All three are narrow
-corrections to the cycle-2 mechanism, reusing the same existing
-relationships (`role_assignment.package`/`.organization_context`) and
-Django queryset primitives (`.only()`, deterministic cursor pagination);
-no second scope model, audit store, or authorization system was
-introduced, and no migration was required. The full suite now passes
-**511/511** (496 + 15 new adversarial tests, all in
-`tests/test_privileged_audit_scope.py`: `TestCapabilityGrantScopeInheritance`,
-`TestRetrievalBeforeAuthorization`, `TestScanWindowCompleteness`), locally
-verified only — this correction has **not yet been independently
-revalidated**; that is the exact next action. The latest completed
-product milestone remains **Controlled Transparency, Commercial
-Confidentiality & Authorization Foundation**.
+**Foundation correction cycle 3** closed all three — see ADR-043 and
+`docs/SECURITY.md` for the mechanism. All three are narrow corrections to
+the cycle-2 mechanism, reusing the same existing relationships
+(`role_assignment.package`/`.organization_context`) and Django queryset
+primitives (`.only()`, deterministic cursor pagination); no second scope
+model, audit store, or authorization system was introduced, and no
+migration was required. The full suite passed **511/511** (496 + 15 new
+adversarial tests, all in `tests/test_privileged_audit_scope.py`:
+`TestCapabilityGrantScopeInheritance`, `TestRetrievalBeforeAuthorization`,
+`TestScanWindowCompleteness`).
 
-The exact next action is **a new, independent Fable 5 revalidation session
-against the resulting commit**. Milestone 1 — Configurable Procurement
-Gates A1–A6 — remains approved and planned but is not authorized by this
-correction cycle. The existing `ProcurementPackage.Status` is a separate
-state machine and must not be represented as A1–A6 gate execution.
+## Foundation status: CLOSED AND OWNER-ACCEPTED (2026-07-20)
+
+An independent Fable revalidation of foundation correction cycle 3
+(commit `2c52b0b83340fda2eaa84700eaeddfbe0839d6d8`) reproduced all of the
+above fresh — 72/72 migrations applied, 53/53 focused, 39/39 Cycle 2+3,
+511/511 full — found no new Critical or High blocker, no regression, and
+no A1–A6/Milestone 2+ work. Based on that evidence, Harrison recorded
+explicit owner and business acceptance on 2026-07-20 (America/Santo_Domingo):
+the Controlled Transparency, Commercial Confidentiality & Authorization
+Foundation is accepted as **technically complete for the current roadmap
+gate** and is now **closed**. See `DT_BEACH_CURRENT_STATE.md` and
+`docs/implementation-log.md` entry 55 for the full acceptance text.
+
+Acceptance explicitly does **not** convert any of the following into
+claimed-complete evidence — they remain open, exactly as before:
+
+- Database-level append-only enforcement and deployed database privilege
+  inspection for `AuditEvent`.
+- Backup restoration testing in a disposable deployed-equivalent
+  environment.
+- Deployed proxy/cache behavior and production log-sentinel analysis.
+- **PostgreSQL runtime validation** — every cycle of this foundation,
+  including the final acceptance evidence, was validated against SQLite
+  only (no Docker daemon available in the validation environment); this
+  is not represented as PostgreSQL-validated.
+- Generalized `GateOverride` transition behavior assigned to Milestone 1.
+- **CTCF-ASSERT-HTTP-019** — `procurement.services.revoke_verification_assertion`
+  remains service-only; no HTTP route exists or is approved.
+- The newly-measured privileged-audit N+1 performance characteristic (see
+  the dedicated entry below) — accepted as non-blocking at current pilot
+  scale, not as resolved or as validated at production scale.
+
+The exact next action is **the independent Milestone 1 Charter review**,
+against the current documentation baseline. A1–A6 — Configurable
+Procurement Gates — remains approved and planned but is **not authorized**
+by this acceptance; implementation has not started. The existing
+`ProcurementPackage.Status` is a separate state machine and must not be
+represented as A1–A6 gate execution.
+
+### Privileged-audit N+1 query characteristic (accepted, non-blocking)
+
+Independently measured during the cycle-3 revalidation, using disposable
+adversarial test data: resolving scope for a batch of all-resolvable-
+but-unauthorized privileged-audit candidate events costs approximately
+**65 SQL queries for 31 such events (~2.10 queries/event)** — each
+candidate's actual target object must be fetched to resolve its
+organization/package scope (`governance.services._resolve_scope_for_target`),
+and for some target types (e.g. `DisclosureGrant`) an additional related-object
+fetch follows. Unresolvable (orphan) candidate events are effectively free
+by comparison, since they short-circuit before any target fetch.
+
+- **Classification:** Low-severity performance limitation. Not a
+  confidentiality defect — no evidence this affects what data reaches an
+  unauthorized viewer, only request latency for the viewer running the
+  query.
+- **Disposition:** owner-accepted as non-blocking at current pilot scale
+  (`docs/SECURITY.md`, `docs/KNOWN_LIMITATIONS.md` — a single small
+  server, ~8 named users).
+- **Trigger for reconsideration:** meaningful growth in privileged-event
+  volume, or measured request latency on the privileged-audit screen
+  becoming a real operational concern — not before. The documented
+  remediation path, if triggered, is a persisted/indexed scope column on
+  `AuditEvent` (`ASSUMPTIONS.md` A74/A76), not a re-introduction of the
+  incomplete fixed-window scan CTCF-AUDIT-WINDOW-023 removed.
 
 CTCF-ASSERT-HTTP-019 remains deferred by explicit decision of this cycle:
 no HTTP route was added for `procurement.services.revoke_verification_assertion`;

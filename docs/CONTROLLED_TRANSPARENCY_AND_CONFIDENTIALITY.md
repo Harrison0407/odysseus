@@ -1,5 +1,15 @@
 # Controlled Transparency, Commercial Confidentiality & Authorization Foundation
 
+**Status (2026-07-20): CLOSED AND OWNER-ACCEPTED.** This foundation,
+including corrections made in foundation correction cycles 2 and 3, was
+independently revalidated at commit
+`2c52b0b83340fda2eaa84700eaeddfbe0839d6d8` and explicitly owner-accepted
+by Harrison — see `DT_BEACH_CURRENT_STATE.md` for the acceptance text.
+PostgreSQL runtime validation and other production/operational
+validations remain open (see `docs/KNOWN_LIMITATIONS.md`) and are not
+represented as complete by this acceptance. The authorization and
+confidentiality model described below is unchanged by this status update.
+
 This document is the consolidated policy/glossary reference for the
 governance foundation added in this release (`apps.governance` +
 `apps.procurement` commercial layers + `apps.audit` evidence bundles).

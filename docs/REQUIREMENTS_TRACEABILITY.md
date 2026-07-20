@@ -7,23 +7,31 @@ manual. **Planned** = intentionally deferred past this delivery (see
 delivery per `ASSUMPTIONS.md` A1, not a claim that all 38 spec sections
 are production-complete).
 
-Foundation correction cycle 3 verification (2026-07-20, commit
-`84b12a2187d93f2ccd9992780a5a4b73e54e7cc6` plus this cycle's changes):
-**511 tests collected, 511 passed, 0 failed; migrations clean.** This
-supersedes the prior 496-test and 472-test figures below, both retained
-for historical accuracy. Historical milestone counts below are retained
-where they describe the evidence available at that point in the delivery.
+Foundation status (2026-07-20): **CLOSED AND OWNER-ACCEPTED**, commit
+`2c52b0b83340fda2eaa84700eaeddfbe0839d6d8`. **511 tests collected, 511
+passed, 0 failed; migrations clean (72/72 applied)** — independently
+reproduced during the Fable revalidation that led to Harrison's explicit
+acceptance (see `DT_BEACH_CURRENT_STATE.md` and `docs/implementation-log.md`
+entry 55). This supersedes the prior 496-test and 472-test figures below,
+both retained for historical accuracy. Historical milestone counts below
+are retained where they describe the evidence available at that point in
+the delivery.
 
-The latest completed product milestone is **Controlled Transparency,
-Commercial Confidentiality & Authorization Foundation**. Foundation
-correction cycle 2 closed two independently-discovered gaps
-(CTCF-AUDIT-017, CTCF-CR-PROJ-018) found during independent revalidation
-of the initial remediation. Foundation correction cycle 3 closed three
-further gaps (CTCF-AUDIT-SCOPE-021, CTCF-AUDIT-RETRIEVAL-022,
-CTCF-AUDIT-WINDOW-023) found by independently revalidating cycle 2's own
-privileged-audit mechanism — see `docs/KNOWN_LIMITATIONS.md` and ADR-043.
-The exact next action is a new, independent Fable 5 revalidation session
-against the resulting commit. A1–A6 are planned, not implemented;
+The Controlled Transparency, Commercial Confidentiality & Authorization
+Foundation is **independently revalidated and owner accepted** as the
+latest completed product milestone. Foundation correction cycle 2 closed
+two independently-discovered gaps (CTCF-AUDIT-017, CTCF-CR-PROJ-018) found
+during independent revalidation of the initial remediation. Foundation
+correction cycle 3 closed three further gaps (CTCF-AUDIT-SCOPE-021,
+CTCF-AUDIT-RETRIEVAL-022, CTCF-AUDIT-WINDOW-023) found by independently
+revalidating cycle 2's own privileged-audit mechanism — see
+`docs/KNOWN_LIMITATIONS.md` and ADR-043. All accepted Cycle 2 and Cycle 3
+security corrections are closed; technical foundation readiness is
+satisfied. PostgreSQL runtime validation and other production validations
+remain explicitly open (see `docs/KNOWN_LIMITATIONS.md`) — foundation
+acceptance does not represent them as complete. The exact next action is
+the independent Milestone 1 Charter review. A1–A6 implementation remains
+not started and is not authorized by this acceptance;
 `ProcurementPackage.Status` is not evidence of gate execution.
 
 ## Priority 0 capabilities (spec section 5)

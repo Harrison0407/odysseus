@@ -265,7 +265,7 @@
   that template were moved onto the new revision.
 
 - **Controlled Transparency / Confidentiality: deny-by-default,
-  classification-gated visibility, never a client-side hide.** A
+  package- and classification-gated visibility, never a client-side hide.** A
   package's factory-quote and internal-cost-sheet sections do not
   merely render `display:none` for an unauthorized viewer — the backing
   querysets are empty (`Quotation.objects.none()`) unless the requesting
@@ -273,14 +273,17 @@
   server for that request at all. Verified live: the rendered HTML for
   an unauthorized DT Beach client contained zero occurrences of the
   factory name, address, or quote reference, and the same package's
-  upstream factory Purchase Order returned zero results through the
-  existing, unmodified `/api/v1/purchase-orders/` endpoint (protected
-  by its pre-existing organization scoping, since the upstream PO is
-  hosted under a different organization than the client).
-- **An unauthorized package is always a 404, never a 403** — verified
-  live for a fully unrelated cross-organization user on the package
-  detail page, and confirmed the package's name never appears in that
-  same user's own package list (no existence leak through listing).
+  package-associated upstream factory Purchase Orders and linked
+  ManifestLines are now filtered by target package participation and
+  classification before serialization. Adversarial integration tests
+  prove zero-result lists/counts and 404 direct access for unrelated
+  same-organization and different-organization users.
+- **An unauthorized package is always a 404, never a 403.** Bare hosting-
+  organization equality is not authorization. Discovery requires an active
+  package role, an active package-scoped capability, or the existing
+  same-tenant `can_override_gates` executive authority. Same-organization and
+  different-organization adversaries are absent from both detail and list
+  responses.
 - **Sensitive capabilities are never role-implied** —
   `ROLE_DEFAULT_CAPABILITIES` deliberately excludes every APPROVE_*/
   AUTHORIZE_*/EXPORT_*/VIEW_PRIVILEGED_AUDIT-type action; each requires
@@ -288,10 +291,11 @@
   tests for every gated action (submit factory quote, approve client
   quote, freeze package, authorize disclosure, approve change request).
 - **Separation of duties enforced structurally, not by convention** — a
-  `ClientQuote`'s preparer cannot approve it themselves (proven live: an
+  `ClientQuote`'s preparer cannot approve it themselves even if the same actor
+  also holds `APPROVE_CLIENT_QUOTE` (proven by an adversarial regression); an
   authorized China-ops user's own approval attempt was denied and the
   quote remained in Draft, while a separately-granted buyer-approver
-  user's attempt succeeded), and an `EvidenceItem`'s uploader can never
+  user's attempt succeeded; an `EvidenceItem`'s uploader can never
   be its own verifier (`verify_evidence_item` raises on
   `uploaded_by == verifying_user` regardless of capability).
 - **Every denied privileged attempt is now recorded in the restricted
@@ -301,12 +305,28 @@
   entire function; the fix moves that boundary to start only after the
   permission check, verified by dedicated tests asserting a
   `PRIVILEGED_ACCESS_DENIED` `AuditEvent` exists after a denied attempt.
-- **A Disclosure Grant is field-scoped and revocable, never a blanket
-  reveal** — disclosing a manufacturer name never automatically reveals
+- **A Disclosure Grant is field-scoped, projected server-side, and revocable,
+  never a blanket reveal** — disclosing a manufacturer name never automatically reveals
   address, cost, markup, or margin (each would need its own grant);
-  revocation prevents future access but the historical row is never
-  deleted, verified live and by dedicated tests including a second
-  revocation attempt being rejected.
+  active frozen `permitted_projection` is the only released value set;
+  expiration or revocation removes it from subsequent responses while the
+  historical grant remains. Creation and revocation both require
+  `AUTHORIZE_DISCLOSURE`, derived from the target grant's package.
+- **Evidence mutation is target-derived.** Package authority for bundle
+  creation, item addition, verification, and rejection is derived from the
+  persisted EvidenceBundle target. A posted package UUID is treated only as a
+  consistency assertion and cannot lend authority from another package.
+- **Classified document bytes are mediated.** Package participation and
+  classification are applied to document metadata and DocumentVersion queries
+  before the storage adapter is opened. Temporary-storage tests prove that an
+  unauthorized same- or different-organization request returns 404 without a
+  storage read.
+- **Privileged foundation mutations are capability-gated and denial-audited.**
+  Change Request approval and rejection use the same field-specific authority;
+  risk create/resolve uses explicit package-scoped `MANAGE_RISK_FLAGS`;
+  VerificationAssertion revocation uses package-scoped commercial-document
+  authority. Pending Change Requests and unresolved non-standard risk flags
+  are recomputed transactionally before a package hold clears.
 - **Authorization happens before any transformation, structurally** —
   `governance.services.create_derived_artifact`'s injected `transform_fn`
   (standing in for a real translation/AI provider) receives only the
@@ -328,3 +348,7 @@
   (no CI pipeline was requested/built in this pass).
 - Backup encryption is documented as an operator responsibility
   (`backup.sh` prints a reminder) rather than automated in the script.
+- Database-level append-only enforcement, deployed database privilege
+  inspection, backup-restore testing, deployed proxy/cache behavior, and
+  production log-sentinel analysis remain owner validation; application tests
+  do not constitute evidence for those operational controls.

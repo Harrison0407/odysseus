@@ -4,16 +4,18 @@ Honest, current list. This is a staged delivery of an intentionally very
 large specification (`ASSUMPTIONS.md` A1) — this file exists so nothing
 is silently claimed to be done when it isn't.
 
-## Gate 0 current limitation summary and roadmap disposition
+## Current remediation and roadmap disposition
 
-Fresh Gate 0 validation on 2026-07-19 passed **455/455 tests** with clean
+Foundation remediation on 2026-07-19 passes **472/472 tests** with clean
 migrations. The latest completed product milestone remains **Controlled
-Transparency, Commercial Confidentiality & Authorization Foundation**.
+Transparency, Commercial Confidentiality & Authorization Foundation**, now
+awaiting independent revalidation of the accepted corrections.
 
-The exact next action is **Milestone 1 — Configurable Procurement Gates
-A1–A6**. Those gates are approved and planned but are not implemented. The
-existing `ProcurementPackage.Status` is a separate state machine and must not
-be represented as A1–A6 gate execution.
+The exact next action is **independent revalidation of the remediated
+foundation**. Milestone 1 — Configurable Procurement Gates A1–A6 — remains
+approved and planned but is not authorized by this remediation. The existing
+`ProcurementPackage.Status` is a separate state machine and must not be
+represented as A1–A6 gate execution.
 
 Current unresolved limitations, grouped by official roadmap disposition:
 
@@ -22,10 +24,11 @@ Current unresolved limitations, grouped by official roadmap disposition:
 - **Milestone 2:** complete `es`/`en`/`zh-Hans` internationalization
   foundation; OCR and automated translation engines remain deferred until the
   authorized-projection and localization boundaries are complete.
-- **Milestone 3:** package-aware generic API plus centralized authorized
-  commercial search, autocomplete, exports, reports, QR projections, and
-  notifications. Their current non-disclosure is partly because no integration
-  exists, not proof that every future path is hardened.
+- **Milestone 3:** generalized package-aware API convergence plus centralized
+  authorized commercial search, autocomplete, exports, reports, QR projections,
+  and notifications. This remediation narrowly secured the currently exposed
+  package-associated PurchaseOrder and ManifestLine endpoints; it did not
+  redesign unrelated APIs or prove future integration paths.
 - **Milestone 4:** dependency/secret scanning in CI, backup encryption,
   shared/global rate limiting when topology requires it, production
   observability, audit immutability/retention/tamper evidence, repository-wide
@@ -558,13 +561,22 @@ completed later; it is not a current open limitation.
   non-disclosure is "no leak path exists yet," not "tested and
   hardened" (A72) — any future integration must reuse
   `governance.services.filter_authorized_queryset`/`authorize_export`.
-  (2) A China-ops user's own base Django login organization (from
-  earlier milestones) does not automatically grant them visibility into
-  a package hosted under a different organization via the pre-existing,
-  org-scoped `/api/v1/purchase-orders/` endpoint — this is overly
-  conservative rather than a security gap (nothing leaks to an
-  unauthorized party), and extending that generic API to be
-  package-aware is deferred.
+  (2) The remediation made the currently exposed package-associated
+  PurchaseOrder and linked ManifestLine endpoints package/classification
+  aware, including cross-organization participants. Other APIs retain their
+  established scopes; repository-wide convergence remains Milestone 3 and
+  must not be inferred from these two corrected endpoints.
+
+## Owner validation still required after foundation remediation
+
+- Database-level append-only enforcement and deployed database privilege
+  inspection for `AuditEvent`.
+- Backup restoration testing in a disposable deployed-equivalent environment.
+- Deployed proxy/cache behavior and production log-sentinel analysis.
+- Deployed-runtime execution of checks, migrations, regression tests, and the
+  adversarial identity matrix when an appropriate environment is available.
+- Generalized GateOverride transition behavior assigned to Milestone 1; it was
+  not changed by this remediation.
 
 ## Data-quality ambiguities (not bugs — see `DATA_QUALITY_AND_UNCERTAINTY.md`)
 

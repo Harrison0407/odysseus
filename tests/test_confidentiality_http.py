@@ -107,6 +107,7 @@ class TestPackageDetailProjection:
             package, china_ops_user, visible_seller_party=None, product_description="Ceramic tile HTTP test",
             quantity=100, sell_price=55,
         )
+        ClientQuote.objects.filter(pk=quote.pk).update(status=ClientQuote.Status.APPROVED)
         services.create_verification_assertion(
             package, "production_verified", "Production verified at an authorized site.", china_ops_user,
         )

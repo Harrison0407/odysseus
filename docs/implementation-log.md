@@ -1302,3 +1302,69 @@ documented order.
     Commercial Confidentiality & Authorization Foundation**. Exact next action:
     **Milestone 1 — Configurable Procurement Gates A1–A6**. Milestone 1 was not
     started during Gate 0.
+
+## Controlled Transparency / Confidentiality foundation remediation
+
+52. **Remediated the accepted integration-level foundation findings without
+    beginning Milestone 1.** Work began from clean, synchronized HEAD
+    `9f0b52d9c74ef1c1f5f8f7710794f28e355bd44e` on
+    `integration/dt-beach-supply-control-1.0.0`. No A1–A6 models, policy
+    versions, definitions, evaluations, or fields were introduced, and no
+    migration was required.
+
+    Package discovery now requires an active package role, an active
+    package-scoped capability, or the existing same-tenant executive
+    `can_override_gates` authority; bare hosting-organization equality no
+    longer grants access. Package list/detail and direct mutation routes return
+    non-disclosing 404 responses for unrelated same-organization and
+    different-organization users.
+
+    Evidence create/add/verify/reject authorization is derived from the
+    persisted EvidenceBundle target. A posted package identifier is only a
+    consistency assertion and cannot lend authority from another package.
+    Privileged denials are durable. Classified document list/detail/download
+    querysets apply package participation and classification before metadata
+    retrieval or storage open. Temporary-storage tests prove authorized byte
+    delivery and zero storage reads for unauthorized requests.
+
+    Restricted participants now receive only approved/sent ClientQuotes and
+    current, non-revoked VerificationAssertions; separately authorized
+    internal users retain draft access. Quote preparers cannot approve their
+    own quote even when explicitly granted the approval capability.
+    DisclosureGrant creation freezes an allowlisted projection, package-facing
+    rendering consumes only live field-scoped values, and expiry/revocation
+    removes them from later responses. Revocation requires target-package
+    `AUTHORIZE_DISCLOSURE` and denial is audited.
+
+    Change Request approval and rejection use the same field-specific
+    capability and reject unsupported route decisions. Package hold state is
+    recomputed transactionally across all pending Change Requests and
+    unresolved non-standard RiskFlags. Risk create/resolve uses the narrowly
+    extended package-scoped `MANAGE_RISK_FLAGS` capability, validates state,
+    rejects duplicate active flags/repeated resolution, and preserves denial
+    auditing. VerificationAssertion revocation is capability-gated and audited.
+
+    The currently exposed package-associated PurchaseOrder API and linked
+    ManifestLine API now authorize and classify before queryset evaluation,
+    list counts, serialization, filters, or detail retrieval. This is the
+    accepted narrow repair, not generalized Milestone 3 API convergence.
+    VisibilityMode remains versioned policy metadata: neither value bypasses
+    authorization; controlled-transparency field release is executable only
+    through active Disclosure Grants.
+
+    Added `tests/test_foundation_remediation.py` with 17 adversarial tests for
+    same-organization, different-organization, and cross-package actors;
+    direct identifiers; server-side sentinel absence; API counts and detail;
+    disclosure expiry/revocation; Change Request holds; risk state; quote
+    separation of duties; assertion validity/revocation; and temporary-storage
+    document bytes. Updated the pre-existing evidence tests so every uploader
+    has actual `CREATE_EVIDENCE` authority and corrected the client projection
+    test to use an approved quote.
+
+    Final local evidence: `manage.py check` passed; migration drift and
+    application checks passed with no new migration; the focused
+    foundation/remediation suite passed **78/78**; the complete suite passed
+    **472/472**. This is local executable evidence, not deployed-runtime or
+    production-operations evidence. Exact next action: independent
+    revalidation of this remediation. Milestone 1 remains prohibited until
+    that control point accepts the foundation.

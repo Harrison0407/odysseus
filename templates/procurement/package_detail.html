@@ -56,6 +56,17 @@
 <div class="alert alert-secondary">No tiene permiso para ver las cotizaciones de cliente de este paquete.</div>
 {% endif %}
 
+{% if disclosed_projection %}
+<div class="card mb-3">
+    <div class="card-header">Información divulgada para su organización</div>
+    <dl class="card-body mb-0">
+        {% for field, value in disclosed_projection.items %}
+        <dt>{{ field }}</dt><dd>{{ value }}</dd>
+        {% endfor %}
+    </dl>
+</div>
+{% endif %}
+
 {% if can_view_factory %}
 <div class="card mb-3 border-danger">
     <div class="card-header bg-danger text-white">Cotizaciones de fábrica (confidencial — SOURCE_PRIVATE)</div>

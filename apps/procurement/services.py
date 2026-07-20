@@ -274,20 +274,29 @@ def create_client_quote(package, user, *, visible_seller_party, product_descript
 def approve_client_quote(quote: "ClientQuote", user) -> "ClientQuote":
     """Separation of duties: APPROVE_CLIENT_QUOTE is never implied by
     CREATE_COMMERCIAL_DOCUMENT — the two capabilities are granted
-    independently, so a quote's preparer cannot approve their own work
-    unless explicitly, separately granted that capability too."""
+    independently, and structural separation prevents the preparer from
+    approving their own work even if both grants are assigned."""
     from apps.governance import services as governance_services
 
     if not governance_services.has_capability(user, "APPROVE_CLIENT_QUOTE", package=quote.package):
         governance_services.log_denied_attempt(user, "APPROVE_CLIENT_QUOTE", package=quote.package, resource=quote, required_capability="APPROVE_CLIENT_QUOTE")
         raise PackageError("No tiene permiso para aprobar cotizaciones de cliente.")
+    if quote.prepared_by_id == user.id:
+        governance_services.log_denied_attempt(
+            user, "APPROVE_OWN_CLIENT_QUOTE", package=quote.package, resource=quote,
+            required_capability="APPROVE_CLIENT_QUOTE",
+        )
+        raise PackageError("La persona que preparó la cotización no puede aprobarla.")
     with transaction.atomic():
-        quote.status = ClientQuote.Status.APPROVED
-        quote.approved_by = user
-        quote.approved_at = timezone.now()
-        quote.save()
-        audit.log(AuditEvent.Action.OTHER, instance=quote, actor=user, summary=f"Cotización de cliente aprobada: {quote}")
-    return quote
+        locked_quote = ClientQuote.objects.select_for_update().get(pk=quote.pk)
+        if locked_quote.status != ClientQuote.Status.DRAFT:
+            raise PackageError("Esta cotización ya fue resuelta.")
+        locked_quote.status = ClientQuote.Status.APPROVED
+        locked_quote.approved_by = user
+        locked_quote.approved_at = timezone.now()
+        locked_quote.save()
+        audit.log(AuditEvent.Action.OTHER, instance=locked_quote, actor=user, summary=f"Cotización de cliente aprobada: {locked_quote}")
+    return locked_quote
 
 
 def freeze_package(package, user, *, incoterm="", currency="USD", payment_terms="", specification_drawing=None,
@@ -362,8 +371,13 @@ def create_verification_assertion(package, assertion_code, client_visible_wordin
     if not governance_services.has_capability(user, "CREATE_COMMERCIAL_DOCUMENT", package=package):
         governance_services.log_denied_attempt(user, "CREATE_COMMERCIAL_DOCUMENT", package=package, required_capability="CREATE_COMMERCIAL_DOCUMENT")
         raise PackageError("No tiene permiso para crear aserciones de verificación en este paquete.")
-    if source_evidence_bundle is not None and source_evidence_bundle.status != EvidenceBundle.Status.VERIFIED:
-        raise PackageError("La aserción requiere un paquete de evidencia ya verificado, no solo cargado.")
+    if source_evidence_bundle is not None:
+        from apps.audit.services import evidence_bundle_package
+
+        if evidence_bundle_package(source_evidence_bundle) != package:
+            raise PackageError("El paquete de evidencia no pertenece a este paquete de compras.")
+        if source_evidence_bundle.status != EvidenceBundle.Status.VERIFIED:
+            raise PackageError("La aserción requiere un paquete de evidencia ya verificado, no solo cargado.")
     with transaction.atomic():
         assertion = VerificationAssertion.objects.create(
             package=package, assertion_code=assertion_code, client_visible_wording=client_visible_wording,
@@ -374,11 +388,21 @@ def create_verification_assertion(package, assertion_code, client_visible_wordin
     return assertion
 
 
-@transaction.atomic
 def revoke_verification_assertion(assertion: "VerificationAssertion", user) -> "VerificationAssertion":
-    assertion.is_revoked = True
-    assertion.revoked_at = timezone.now()
-    assertion.revoked_by = user
-    assertion.save()
-    audit.log(AuditEvent.Action.VERIFICATION_ASSERTION, instance=assertion, actor=user, summary=f"Aserción de verificación revocada: {assertion}")
+    from apps.governance import services as governance_services
+
+    if not governance_services.has_capability(user, "CREATE_COMMERCIAL_DOCUMENT", package=assertion.package):
+        governance_services.log_denied_attempt(
+            user, "REVOKE_VERIFICATION_ASSERTION", package=assertion.package, resource=assertion,
+            required_capability="CREATE_COMMERCIAL_DOCUMENT",
+        )
+        raise PackageError("No tiene permiso para revocar esta aserción.")
+    if assertion.is_revoked:
+        raise PackageError("Esta aserción ya fue revocada.")
+    with transaction.atomic():
+        assertion.is_revoked = True
+        assertion.revoked_at = timezone.now()
+        assertion.revoked_by = user
+        assertion.save()
+        audit.log(AuditEvent.Action.VERIFICATION_ASSERTION, instance=assertion, actor=user, summary=f"Aserción de verificación revocada: {assertion}")
     return assertion

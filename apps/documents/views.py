@@ -4,14 +4,30 @@ from django import forms
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db.models import Q
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 
 from apps.audit import services as audit
 from apps.audit.models import AuditEvent
 from apps.core.storage import document_storage
+from apps.governance import services as governance_services
+from apps.procurement.models import ProcurementPackage
 
 from .models import Document, DocumentType, DocumentVersion
+
+
+def authorized_documents_queryset(user):
+    """Apply tenant/package/classification policy before document retrieval."""
+    profile_org_id = getattr(getattr(user, "profile", None), "organization_id", None)
+    authorization = Q(package__isnull=True, organization_id=profile_org_id)
+    package_ids = governance_services.authorized_package_ids(user)
+    for package in ProcurementPackage.objects.filter(pk__in=package_ids):
+        authorization |= Q(
+            package=package,
+            classification__in=governance_services.visible_classifications_for(user, package=package),
+        )
+    return Document.objects.filter(authorization)
 
 
 class DocumentUploadForm(forms.Form):
@@ -41,7 +57,7 @@ class DocumentUploadForm(forms.Form):
 @login_required
 def document_list(request):
     documents = (
-        Document.objects.filter(organization=request.user.profile.organization)
+        authorized_documents_queryset(request.user)
         .select_related("document_type")
         .prefetch_related("versions")
         .order_by("-created_at")[:200]
@@ -103,20 +119,18 @@ def document_upload(request):
 @login_required
 def document_detail(request, pk):
     document = get_object_or_404(
-        Document.objects.select_related("document_type").prefetch_related("versions"),
+        authorized_documents_queryset(request.user).select_related("document_type").prefetch_related("versions"),
         pk=pk,
-        organization=request.user.profile.organization,
     )
     return render(request, "documents/detail.html", {"document": document})
 
 
 @login_required
 def document_download(request, pk, version_pk):
-    """Authorized download only — spec section 32, acceptance scenario 32:
-    an unauthorized user must be denied. Object-level check: the document
-    must belong to the requesting user's organization."""
+    """Authorize package and classification before opening stored bytes."""
     version = get_object_or_404(
-        DocumentVersion, pk=version_pk, document_id=pk, document__organization=request.user.profile.organization
+        DocumentVersion, pk=version_pk, document_id=pk,
+        document_id__in=authorized_documents_queryset(request.user).values("pk"),
     )
     try:
         fh = document_storage.open(version.stored_name)

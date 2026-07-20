@@ -2,6 +2,47 @@
 
 Last updated: 2026-07-19
 
+## Foundation remediation status
+
+**The accepted Controlled Transparency, Commercial Confidentiality &
+Authorization Foundation findings have been remediated and are ready for
+independent revalidation. Milestone 1 has not begun.**
+
+Fresh remediation evidence began from clean, synchronized HEAD
+`9f0b52d9c74ef1c1f5f8f7710794f28e355bd44e` on
+`integration/dt-beach-supply-control-1.0.0`. The correction removes same-host
+package discovery, derives evidence authority from the persisted target,
+enforces quote separation of duties, makes disclosure projection live and
+revocable, fixes Change Request decisions/holds, protects classified document
+bytes, scopes the affected PurchaseOrder and ManifestLine API surfaces, gates
+risk flags and assertion revocation, and excludes draft quotes plus expired or
+revoked assertions from restricted projections.
+
+Validation after stabilization:
+
+| Check | Result |
+|---|---|
+| `manage.py check` | Passed; no issues |
+| `makemigrations --check --dry-run` | Passed; no model changes detected |
+| `migrate --check` | Passed; no unapplied migrations |
+| Focused foundation/remediation suite | **78 passed, 0 failed** |
+| Full regression suite | **472 passed, 0 failed** |
+
+The new integration tests use same-organization, different-organization, and
+cross-package adversaries; unique sentinels; temporary document storage; and
+server-side HTML/API/context/count/direct-object assertions. No raw
+EvidenceBundle/EvidenceItem projection was added. `VisibilityMode` remains
+versioned policy metadata: neither mode bypasses capability/classification
+rules; a controlled-transparency agreement becomes executable through an
+active, field-scoped Disclosure Grant.
+
+Exact next action:
+
+**Independently revalidate the remediated foundation.**
+
+Only a successful independent revalidation may establish readiness to begin
+**Milestone 1 — Configurable Procurement Gates A1–A6**.
+
 ## Gate 0 status
 
 **Gate 0 — Baseline & Documentation Reconciliation is complete.**
@@ -62,12 +103,10 @@ Current non-product milestone:
 
 **Gate 0 — Baseline & Documentation Reconciliation — complete**
 
-Exact next action:
-
-**Milestone 1 — Configurable Procurement Gates A1–A6**
-
-Milestone 1 is approved and planned. It was not started during Gate 0, and no
-A1–A6 product functionality is represented as implemented by this document.
+Gate 0's historical handoff named Milestone 1 as the next implementation
+milestone. Fresh post-Gate-0 validation introduced a required foundation
+remediation and independent-revalidation checkpoint before that milestone.
+No A1–A6 functionality has been implemented.
 
 ## Documentation discrepancies reconciled
 
@@ -109,8 +148,10 @@ operations work governed by the roadmap:
   authorized adapter milestone after the i18n foundation.
 - QuickBooks live integration is not built; QuickBooks remains the financial
   source of truth.
-- Package-aware API, authorized commercial search/autocomplete, exports,
-  reports, QR projections, and notifications remain future integration work.
+- The exposed package-associated PurchaseOrder and ManifestLine endpoints are
+  now package/classification scoped. Repository-wide API convergence and
+  authorized commercial search/autocomplete, exports, reports, QR projections,
+  and notifications remain future integration work.
 - Audit immutability at the database/operations layer and repository-wide
   authorization coverage still need direct evidence before universal claims.
 - Shared/global rate limiting, dependency/secret scanning, backup encryption,

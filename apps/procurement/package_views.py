@@ -10,8 +10,11 @@ package is a 404, never a 403 that would confirm its existence.
 from django import forms
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.contrib.contenttypes.models import ContentType
+from django.db.models import Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 
 from apps.audit import services as audit_services
 from apps.audit.models import EvidenceBundle
@@ -24,27 +27,20 @@ from .models import ClientQuote, FactoryRFQ, InternalCommercialSheet, Procuremen
 
 
 def user_can_view_package(request, package) -> bool:
-    profile_org = getattr(getattr(request.user, "profile", None), "organization", None)
-    if profile_org is not None and profile_org == package.organization:
-        return True
-    return governance_services.active_role_assignments(request.user, package=package).exists()
+    return governance_services.user_can_access_package(request.user, package)
 
 
 def _get_package_or_404(request, pk):
-    package = get_object_or_404(ProcurementPackage, pk=pk)
-    if not user_can_view_package(request, package):
-        raise Http404
-    return package
+    return get_object_or_404(
+        ProcurementPackage, pk=pk, id__in=governance_services.authorized_package_ids(request.user)
+    )
 
 
 @login_required
 def package_list(request):
-    profile_org = request.user.profile.organization
-    hosted_ids = set(ProcurementPackage.objects.filter(organization=profile_org).values_list("id", flat=True))
-    via_role_ids = set(
-        governance_services.active_role_assignments(request.user).values_list("package_id", flat=True)
-    )
-    packages = ProcurementPackage.objects.filter(id__in=hosted_ids | via_role_ids).order_by("-created_at")
+    packages = ProcurementPackage.objects.filter(
+        id__in=governance_services.authorized_package_ids(request.user)
+    ).order_by("-created_at")
     return render(request, "procurement/package_list.html", {"packages": packages})
 
 
@@ -56,6 +52,10 @@ def package_detail(request, pk):
     can_view_factory_identity = governance_services.has_capability(request.user, "VIEW_FACTORY_IDENTITY", package=package)
     can_view_cost = governance_services.has_capability(request.user, "VIEW_INTERNAL_COST_COMPONENTS", package=package)
     can_view_client_quote = governance_services.can_view_classification(request.user, Classification.CLIENT_SHARED, package=package)
+    can_manage_client_quote = (
+        governance_services.has_capability(request.user, "CREATE_COMMERCIAL_DOCUMENT", package=package)
+        or governance_services.has_capability(request.user, "APPROVE_CLIENT_QUOTE", package=package)
+    )
     can_authorize_disclosure = governance_services.has_capability(request.user, "AUTHORIZE_DISCLOSURE", package=package)
     can_approve_client_quote = governance_services.has_capability(request.user, "APPROVE_CLIENT_QUOTE", package=package)
     can_freeze = governance_services.has_capability(request.user, "APPROVE_GATE", package=package)
@@ -71,11 +71,19 @@ def package_detail(request, pk):
         "can_freeze": can_freeze,
         "factory_quotes": Quotation.objects.filter(package=package).select_related("supplier", "factory_party") if can_view_factory else Quotation.objects.none(),
         "internal_sheets": InternalCommercialSheet.objects.filter(package=package) if can_view_cost else InternalCommercialSheet.objects.none(),
-        "client_quotes": ClientQuote.objects.filter(package=package).select_related("visible_seller_party") if can_view_client_quote else ClientQuote.objects.none(),
-        "verification_assertions": VerificationAssertion.objects.filter(package=package, is_revoked=False) if can_view_client_quote or can_view_factory else VerificationAssertion.objects.none(),
+        "client_quotes": (
+            ClientQuote.objects.filter(package=package).select_related("visible_seller_party")
+            if can_view_client_quote and can_manage_client_quote else
+            ClientQuote.objects.filter(package=package, status__in=[ClientQuote.Status.APPROVED, ClientQuote.Status.SENT]).select_related("visible_seller_party")
+            if can_view_client_quote else ClientQuote.objects.none()
+        ),
+        "verification_assertions": VerificationAssertion.objects.filter(
+            package=package, is_revoked=False,
+        ).filter(Q(valid_until__isnull=True) | Q(valid_until__gte=timezone.now())) if can_view_client_quote or can_view_factory else VerificationAssertion.objects.none(),
         "role_assignments": governance_services.active_role_assignments(request.user, package=package).select_related("party"),
         "change_requests": package.change_requests.all()[:20],
         "disclosure_grants": package.disclosure_grants.all()[:20] if can_authorize_disclosure else DisclosureGrant.objects.none(),
+        "disclosed_projection": governance_services.disclosure_projection_for_user(package, request.user),
     }
     return render(request, "procurement/package_detail.html", context)
 
@@ -194,9 +202,9 @@ def client_quote_create(request, pk):
 
 @login_required
 def client_quote_approve(request, pk):
-    quote = get_object_or_404(ClientQuote, pk=pk)
-    if not user_can_view_package(request, quote.package):
-        raise Http404
+    quote = get_object_or_404(
+        ClientQuote, pk=pk, package_id__in=governance_services.authorized_package_ids(request.user)
+    )
     if request.method == "POST":
         try:
             services.approve_client_quote(quote, request.user)
@@ -242,9 +250,11 @@ def change_request_create(request, pk):
 def change_request_decide(request, pk, decision):
     from apps.governance.models import ChangeRequest
 
-    change_request = get_object_or_404(ChangeRequest, pk=pk)
-    if not user_can_view_package(request, change_request.package):
+    if decision not in {"approve", "reject"}:
         raise Http404
+    change_request = get_object_or_404(
+        ChangeRequest, pk=pk, package_id__in=governance_services.authorized_package_ids(request.user)
+    )
     if request.method == "POST":
         try:
             if decision == "approve":
@@ -278,8 +288,14 @@ def disclosure_grant_create(request, pk):
 
 @login_required
 def disclosure_grant_revoke(request, pk):
-    grant = get_object_or_404(DisclosureGrant, pk=pk)
-    if not user_can_view_package(request, grant.package):
+    grant = get_object_or_404(
+        DisclosureGrant, pk=pk, package_id__in=governance_services.authorized_package_ids(request.user)
+    )
+    if not governance_services.has_capability(request.user, "AUTHORIZE_DISCLOSURE", package=grant.package):
+        governance_services.log_denied_attempt(
+            request.user, "REVOKE_DISCLOSURE", package=grant.package, resource=grant,
+            required_capability="AUTHORIZE_DISCLOSURE",
+        )
         raise Http404
     if request.method == "POST":
         try:
@@ -294,10 +310,13 @@ def disclosure_grant_revoke(request, pk):
 def evidence_bundle_create(request, pk):
     package = _get_package_or_404(request, pk)
     if request.method == "POST":
-        bundle = audit_services.create_evidence_bundle(
-            package, request.POST.get("bundle_type", EvidenceBundle.BundleType.PRODUCTION_VERIFICATION), request.user,
-            minimum_count=int(request.POST.get("minimum_count", 1) or 1),
-        )
+        try:
+            audit_services.create_evidence_bundle(
+                package, request.POST.get("bundle_type", EvidenceBundle.BundleType.PRODUCTION_VERIFICATION), request.user,
+                minimum_count=int(request.POST.get("minimum_count", 1) or 1),
+            )
+        except audit_services.EvidenceBundleError:
+            raise Http404
         messages.success(request, "Paquete de evidencia creado.")
         return redirect("procurement:package-detail", pk=package.pk)
     return redirect("procurement:package-detail", pk=pk)
@@ -319,8 +338,16 @@ def _bundle_redirect(bundle):
 
 @login_required
 def evidence_item_add(request, pk):
-    bundle = get_object_or_404(EvidenceBundle, pk=pk)
+    package_content_type = ContentType.objects.get_for_model(ProcurementPackage)
+    bundle = get_object_or_404(
+        EvidenceBundle, pk=pk, content_type=package_content_type,
+        object_id__in=governance_services.authorized_package_ids(request.user),
+    )
     target = _bundle_target(bundle)
+    try:
+        audit_services.authorize_evidence_action(bundle, request.user, "CREATE_EVIDENCE")
+    except audit_services.EvidenceBundleError:
+        raise Http404
     # A package-scoped bundle's evidence is uploaded under the package's
     # own hosting organization, not necessarily the requester's home
     # organization — e.g. Edison's own login is under DT Beach, but he
@@ -356,12 +383,18 @@ def evidence_item_add(request, pk):
 def evidence_item_verify(request, pk):
     from apps.audit.models import EvidenceItem
 
-    item = get_object_or_404(EvidenceItem, pk=pk)
+    package_content_type = ContentType.objects.get_for_model(ProcurementPackage)
+    item = get_object_or_404(
+        EvidenceItem, pk=pk, bundle__content_type=package_content_type,
+        bundle__object_id__in=governance_services.authorized_package_ids(request.user),
+    )
     if request.method == "POST":
         package_pk = request.POST.get("package")
-        package = get_object_or_404(ProcurementPackage, pk=package_pk) if package_pk else None
         try:
-            audit_services.verify_evidence_item(item, request.user, verification_basis=request.POST.get("verification_basis", ""), package=package)
+            audit_services.verify_evidence_item(
+                item, request.user, verification_basis=request.POST.get("verification_basis", ""),
+                expected_package_id=package_pk,
+            )
             messages.success(request, "Evidencia verificada.")
         except audit_services.EvidenceBundleError as exc:
             messages.error(request, str(exc))
@@ -375,7 +408,12 @@ def verification_assertion_create(request, pk):
         from apps.audit.models import EvidenceBundle
 
         bundle_pk = request.POST.get("source_evidence_bundle")
-        bundle = EvidenceBundle.objects.filter(pk=bundle_pk).first() if bundle_pk else None
+        bundle = get_object_or_404(
+            EvidenceBundle,
+            pk=bundle_pk,
+            content_type=ContentType.objects.get_for_model(ProcurementPackage),
+            object_id=package.pk,
+        ) if bundle_pk else None
         source_party_pk = request.POST.get("source_party")
         source_party = Party.objects.filter(pk=source_party_pk).first() if source_party_pk else None
         try:

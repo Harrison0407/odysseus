@@ -16,7 +16,8 @@ permissions, and auditability (`apps.governance.models.VisibilityMode`):
 - **CONTROLLED_TRANSPARENCY** — the buyer and commercial parties have
   agreed to reveal more of the supply chain. Still governed by the same
   classification/capability system; "transparent" does not mean
-  "unauthenticated" or "unaudited."
+  "unauthenticated" or "unaudited." The mode records the agreed policy;
+  executable field release occurs through an active Disclosure Grant.
 - **CONTROLLED_CONFIDENTIALITY** — the configured default for
   China-managed DT Beach procurement (`ProcurementPackage.visibility_mode`
   defaults to this). Protects upstream factories, production-site
@@ -29,6 +30,9 @@ permissions, and auditability (`apps.governance.models.VisibilityMode`):
 Visibility mode is versioned (`visibility_mode_version`) and, once a
 package is frozen, can only change through an approved
 `governance.ChangeRequest` — never a direct field edit.
+Neither visibility-mode value automatically bypasses package participation,
+classification, capability, or disclosure checks. This distinction is covered
+end-to-end in `tests/test_foundation_remediation.py`.
 
 ## 2. Party vs. Role vs. Capability glossary
 
@@ -58,6 +62,8 @@ Capability codes (`governance.models.ALL_CAPABILITY_CODES`):
 `AUTHORIZE_EXCEPTION`, `APPROVE_ROLE_CHANGE`, `APPROVE_VISIBILITY_CHANGE`,
 `AUTHORIZE_DISCLOSURE`, `EXPORT_COMMERCIAL_DATA`, `VIEW_PRIVILEGED_AUDIT`,
 `RESPOND_TO_CLAIM`, `VERIFY_CORRECTIVE_WORK`.
+`MANAGE_RISK_FLAGS` is the explicit package-scoped risk/compliance mutation
+capability added by the accepted foundation remediation.
 
 ### Capability matrix (role-implied defaults only — see `ROLE_DEFAULT_CAPABILITIES`)
 
@@ -70,7 +76,8 @@ Capability codes (`governance.models.ALL_CAPABILITY_CODES`):
 
 Everything else (APPROVE_CLIENT_QUOTE, APPROVE_GATE, AUTHORIZE_DISCLOSURE,
 APPROVE_ROLE_CHANGE, APPROVE_VISIBILITY_CHANGE, EXPORT_COMMERCIAL_DATA,
-VIEW_PRIVILEGED_AUDIT, ...) is granted only via an explicit `CapabilityGrant`.
+VIEW_PRIVILEGED_AUDIT, MANAGE_RISK_FLAGS, ...) is granted only via an explicit
+`CapabilityGrant`.
 
 ## 3. Separation-of-duties policy
 
@@ -81,8 +88,8 @@ Enforced structurally, not by convention:
   capability.
 - **Commercial document preparer vs. client-quote approver** —
   `CREATE_COMMERCIAL_DOCUMENT` and `APPROVE_CLIENT_QUOTE` are granted
-  independently; a quote's preparer has no path to approving their own
-  work unless a second, explicit `CapabilityGrant` is made.
+  independently, and `approve_client_quote` rejects the preparer even if the
+  same actor also holds the explicit approval capability.
 - **Change requester vs. change approver** — `request_change` only
   records the request and places the package on hold; `approve_change_request`
   requires a field-specific capability (`APPROVE_VISIBILITY_CHANGE` for
@@ -122,6 +129,8 @@ Six genuinely distinct objects, never one record with hidden columns:
    client-facing fields (visible seller, product, quantity, sell price,
    terms). Structurally cannot expose factory identity/cost/markup/margin
    because those fields simply do not exist on this model.
+   Draft/unapproved rows are server-side absent for external participants;
+   separately authorized preparers/approvers retain internal draft access.
 5. **Client Purchase Order** — reuses `procurement.PurchaseOrder`
    (`po_kind=CLIENT`).
 6. **Upstream Factory Purchase Order** — reuses `procurement.PurchaseOrder`
@@ -153,9 +162,11 @@ automatically reveals address, cost, markup, margin, negotiation, or the
 upstream PO — those require their own separate grants.
 `governance.services.disclosed_fields(package, recipient_organization)`
 computes the live union of currently-active (not expired, not revoked)
-grants. Revocation (`revoke_disclosure_grant`) prevents future access but
-never deletes the historical row — `DisclosureGrant.objects.filter(pk=...)`
-still resolves after revocation.
+grants. `disclosure_projection_for_user` applies only frozen values whose keys
+appear in `field_scope` to the package-facing server-side projection.
+Expiration or revocation removes those values from the next response.
+Revocation requires package-scoped `AUTHORIZE_DISCLOSURE` and never deletes
+the historical row — `DisclosureGrant.objects.filter(pk=...)` still resolves.
 
 ## 8. Evidence Object / Evidence Bundle policy
 
@@ -165,7 +176,9 @@ Uploading an `EvidenceItem` never sets it beyond `review_status=pending`;
 a bundle only reaches `Status.VERIFIED` once every requirement (minimum
 count, required types, minimum review state) is met via
 `verify_evidence_item`, which enforces uploader/verifier separation and
-capability. No confidence score is ever assigned — this system has no
+capability. Create/add/verify/reject authority is derived from the bundle's
+persisted target package, never from a caller-supplied package UUID. No
+confidence score is ever assigned — this system has no
 real, documented basis for computing one (per the release's own
 instruction).
 
@@ -252,15 +265,19 @@ supply chain (REQUIRED → ... → ACCEPTED) and the field-issue lifecycle
 package (`ProcurementPackage.is_frozen`); creation immediately places the
 package `is_on_hold=True`. Approval requires a field-specific capability
 (`APPROVE_VISIBILITY_CHANGE` for `visibility_mode`, `APPROVE_ROLE_CHANGE`
-for seller/exporter/China-operator/factory/site) and releases the hold;
-rejection also releases the hold without applying the change. Every
+for seller/exporter/China-operator/factory/site); rejection requires the same
+field-specific authority. After either decision the hold is recomputed
+transactionally and remains set while another Change Request or non-standard
+risk hold remains unresolved. Every
 decision is immutable history (`decided_by`, `decided_at`,
 `decision_comment`).
 
 ## 14. Risk flags (foundation only)
 
 `governance.RiskFlag` — `STANDARD`/`CONTROLLED_OPAQUE`/`HIGH_RISK`,
-free-text `indicator_codes`. Records risk and may trigger review/hold;
+free-text `indicator_codes`. Create/resolve requires explicit package-scoped
+`MANAGE_RISK_FLAGS`; duplicate active flags and repeated resolution are
+rejected, and unresolved non-standard flags hold the package. It
 never declares legality, approves an opaque transaction, or replaces
 legal/compliance review. Maidan, Shuangqing, double-clearance, and full
 customs workflows are explicitly out of scope (section 15 below).

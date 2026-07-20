@@ -1,4 +1,5 @@
 from django.contrib.contenttypes.models import ContentType
+from django.core.exceptions import ObjectDoesNotExist
 from django.utils import timezone
 
 from .middleware import get_current_user
@@ -74,23 +75,62 @@ class EvidenceBundleError(ValueError):
     """Raised for any evidence-bundle precondition that isn't met."""
 
 
+def evidence_bundle_target(bundle):
+    try:
+        return bundle.content_type.get_object_for_this_type(pk=bundle.object_id)
+    except (AttributeError, ObjectDoesNotExist):
+        return None
+
+
+def evidence_bundle_package(bundle):
+    from apps.procurement.models import ProcurementPackage
+
+    target = evidence_bundle_target(bundle)
+    if isinstance(target, ProcurementPackage):
+        return target
+    return getattr(target, "package", None)
+
+
+def authorize_evidence_action(bundle, user, capability_code):
+    """Authorize from the bundle's persisted target, never caller input."""
+    from apps.governance import services as governance_services
+    from apps.workflow.services import can_override_gates
+
+    package = evidence_bundle_package(bundle)
+    authorized = (
+        governance_services.has_capability(user, capability_code, package=package)
+        if package is not None else can_override_gates(user)
+    )
+    if not authorized:
+        governance_services.log_denied_attempt(
+            user, capability_code, package=package, resource=bundle,
+            required_capability=capability_code,
+        )
+        raise EvidenceBundleError("No tiene permiso para modificar esta evidencia.")
+    return package
+
+
 def create_evidence_bundle(target, bundle_type, user, *, required_evidence_types=None, minimum_count=1,
                             required_verifier_capability="VERIFY_EVIDENCE", requires_geolocation=False,
                             classification="operational_shared"):
     from .models import EvidenceBundle
 
-    return EvidenceBundle.objects.create(
+    bundle = EvidenceBundle(
         content_type=ContentType.objects.get_for_model(target), object_id=target.pk, bundle_type=bundle_type,
         required_evidence_types=required_evidence_types or [], minimum_count=minimum_count,
         required_verifier_capability=required_verifier_capability, requires_geolocation=requires_geolocation,
         classification=classification, created_by=user,
     )
+    authorize_evidence_action(bundle, user, "CREATE_EVIDENCE")
+    bundle.save()
+    return bundle
 
 
 def add_evidence_item(bundle, user, *, document, evidence_type="", capture_method="", captured_at=None,
                        device_metadata=None, location="", classification=None):
     from .models import EvidenceItem
 
+    authorize_evidence_action(bundle, user, "CREATE_EVIDENCE")
     if bundle.requires_geolocation and not location:
         raise EvidenceBundleError("Este paquete de evidencia requiere geolocalización y no fue provista.")
     item = EvidenceItem.objects.create(
@@ -132,24 +172,26 @@ def update_bundle_status(bundle):
     return bundle
 
 
-def verify_evidence_item(item, verifying_user, *, verification_basis="", package=None):
+def verify_evidence_item(item, verifying_user, *, verification_basis="", package=None, expected_package_id=None):
     """Enforces the uploader/verifier separation-of-duty rule — the
     person who verifies a piece of evidence may never be the same
     person who uploaded it."""
     from .models import EvidenceItem
-    from apps.governance import services as governance_services
-    from apps.workflow.services import can_override_gates
+    actual_package = evidence_bundle_package(item.bundle)
+    supplied_package_id = expected_package_id or getattr(package, "pk", None)
+    if supplied_package_id and (actual_package is None or str(supplied_package_id) != str(actual_package.pk)):
+        from apps.governance import services as governance_services
 
+        governance_services.log_denied_attempt(
+            verifying_user, "VERIFY_EVIDENCE_TARGET_MISMATCH", package=actual_package,
+            resource=item, required_capability=item.bundle.required_verifier_capability,
+        )
+        raise EvidenceBundleError("No tiene permiso para verificar esta evidencia.")
+    authorize_evidence_action(item.bundle, verifying_user, item.bundle.required_verifier_capability)
     if item.uploaded_by_id is not None and item.uploaded_by_id == verifying_user.id:
         raise EvidenceBundleError("Quien carga una evidencia no puede verificarla — se requiere un verificador distinto.")
-
-    required_capability = item.bundle.required_verifier_capability
-    if package is not None:
-        authorized = governance_services.has_capability(verifying_user, required_capability, package=package)
-    else:
-        authorized = can_override_gates(verifying_user)
-    if not authorized:
-        raise EvidenceBundleError("No tiene permiso para verificar esta evidencia.")
+    if item.review_status == EvidenceItem.ReviewStatus.VERIFIED:
+        raise EvidenceBundleError("Esta evidencia ya fue verificada.")
 
     item.review_status = EvidenceItem.ReviewStatus.VERIFIED
     item.reviewed_by = verifying_user
@@ -164,6 +206,9 @@ def verify_evidence_item(item, verifying_user, *, verification_basis="", package
 def reject_evidence_item(item, user, reason):
     from .models import EvidenceItem
 
+    authorize_evidence_action(item.bundle, user, item.bundle.required_verifier_capability)
+    if item.review_status in {EvidenceItem.ReviewStatus.VERIFIED, EvidenceItem.ReviewStatus.REJECTED}:
+        raise EvidenceBundleError("Esta evidencia ya fue resuelta.")
     item.review_status = EvidenceItem.ReviewStatus.REJECTED
     item.reviewed_by = user
     item.reviewed_at = timezone.now()

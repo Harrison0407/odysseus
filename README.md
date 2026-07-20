@@ -11,8 +11,10 @@ merged, never silently edited into agreement.**
 This is a staged delivery of a large governing specification. The implemented
 baseline now includes the original Priority 0 vertical slice and subsequent
 milestones through **Controlled Transparency, Commercial Confidentiality &
-Authorization Foundation**. Fresh Gate 0 verification passed all 455 tests with
-clean migrations. What is not yet built is listed honestly in
+Authorization Foundation**. The accepted foundation-remediation findings have
+been corrected locally with adversarial package, evidence, document, API, and
+confidentiality coverage; 472 tests pass with clean migrations. Independent
+revalidation is the next required control point. What is not yet built is listed honestly in
 `docs/KNOWN_LIMITATIONS.md`; the official milestone order is governed by
 `docs/MARKETMATCH_ARCHITECTURE_RECONCILIATION_AND_ROADMAP.md`.
 
@@ -30,7 +32,9 @@ clean migrations. What is not yet built is listed honestly in
 - Landed-cost allocation/calculation engine and CONFOTUR reconciliation UI, both fully wired end-to-end.
 - Persona-branched Spanish-language dashboards (Compras / China / Finanzas / Almacén / Obra / Dirección).
 - Self-contained HTML shipment/receiving/claim/comparison snapshots and revocable, logged secure share links.
-- Versioned REST API under `/api/v1/` (read-only, organization-scoped).
+- Versioned REST API under `/api/v1/` (read-only; package-associated commercial
+  and manifest records are package/classification scoped, while legacy records
+  retain organization scope).
 - A validated production deployment: Docker Compose (Postgres + Gunicorn + Caddy), with backup/restore/persistence genuinely exercised (see `docs/FINAL_VALIDATION_REPORT.md`).
 
 ## Documentation
@@ -74,7 +78,7 @@ Visit `http://localhost:8000/`. Pilot user passwords are printed once by
 ```bash
 pytest
 ```
-455 tests, covering the live-container fixture import, document
+472 tests, covering the live-container fixture import, document
 upload/duplicate-detection/authorization, the receiving/inventory ledger,
 object-level permission scoping, gate controls and formal handoffs,
 delivery/installation/inspection/final acceptance, landed-cost
@@ -83,18 +87,17 @@ capacity/suitability, external storage comparison, supplier claims, and
 QR labels/controlled scanning. See `docs/REQUIREMENTS_TRACEABILITY.md`
 for exactly what each area's tests prove.
 
-Gate 0 fresh result: **455 passed, 0 failed**. Migrations were clean.
+Foundation-remediation result: **472 passed, 0 failed**. Migrations are clean.
 
 ## Current milestone handoff
 
 Latest completed product milestone:
 **Controlled Transparency, Commercial Confidentiality & Authorization Foundation**.
 
-Exact next action:
-**Milestone 1 — Configurable Procurement Gates A1–A6**.
+Exact next action: **independent revalidation of the remediated foundation**.
 
-Milestone 1 is planned and approved; it has not been started by the Gate 0
-documentation reconciliation.
+Milestone 1 remains planned and approved but must not begin until that
+independent revalidation accepts the foundation.
 
 ## Production deployment
 

@@ -59,21 +59,32 @@ def china_ops_user(china_org, package, harrison):
     return harrison
 
 
+@pytest.fixture
+def evidence_uploader(china_org, package, manuel):
+    party = Party.objects.create(
+        party_type=Party.PartyType.INDIVIDUAL, display_name="Scoped Evidence Uploader",
+        hosting_organization=china_org,
+    )
+    PartyMembership.objects.create(party=party, user=manuel)
+    procurement_services.assign_package_role(package, party, "installer", manuel)
+    return manuel
+
+
 class TestEvidenceBundleUploadNotVerification:
-    def test_upload_does_not_verify(self, package, china_org, china_ops_user, doc_type, manuel):
+    def test_upload_does_not_verify(self, package, china_org, china_ops_user, doc_type, evidence_uploader):
         bundle = audit_services.create_evidence_bundle(package, EvidenceBundle.BundleType.PRODUCTION_VERIFICATION, china_ops_user, minimum_count=1)
-        document = _make_document(china_org, manuel, doc_type)
-        item = audit_services.add_evidence_item(bundle, manuel, document=document, evidence_type="photo")
+        document = _make_document(china_org, evidence_uploader, doc_type)
+        item = audit_services.add_evidence_item(bundle, evidence_uploader, document=document, evidence_type="photo")
         assert item.review_status == "pending"
         bundle.refresh_from_db()
         assert bundle.status != EvidenceBundle.Status.VERIFIED
 
-    def test_bundle_missing_requirements(self, package, china_org, china_ops_user, doc_type, manuel):
+    def test_bundle_missing_requirements(self, package, china_org, china_ops_user, doc_type, evidence_uploader):
         bundle = audit_services.create_evidence_bundle(
             package, EvidenceBundle.BundleType.QUALITY_CONTROL, china_ops_user, minimum_count=2,
         )
-        document = _make_document(china_org, manuel, doc_type)
-        audit_services.add_evidence_item(bundle, manuel, document=document, evidence_type="photo")
+        document = _make_document(china_org, evidence_uploader, doc_type)
+        audit_services.add_evidence_item(bundle, evidence_uploader, document=document, evidence_type="photo")
         missing = audit_services.bundle_missing_requirements(bundle)
         assert any("al menos 2" in m for m in missing)
 
@@ -84,18 +95,18 @@ class TestEvidenceBundleUploadNotVerification:
         with pytest.raises(audit_services.EvidenceBundleError):
             audit_services.verify_evidence_item(item, china_ops_user, package=package)
 
-    def test_verifier_requires_capability(self, package, china_org, china_ops_user, doc_type, manuel):
+    def test_verifier_requires_capability(self, package, china_org, china_ops_user, doc_type, evidence_uploader):
         bundle = audit_services.create_evidence_bundle(package, EvidenceBundle.BundleType.PRODUCTION_VERIFICATION, china_ops_user, minimum_count=1)
-        document = _make_document(china_org, manuel, doc_type)
-        item = audit_services.add_evidence_item(bundle, manuel, document=document, evidence_type="photo")
-        # manuel has no capability at all in this package
+        document = _make_document(china_org, evidence_uploader, doc_type)
+        item = audit_services.add_evidence_item(bundle, evidence_uploader, document=document, evidence_type="photo")
+        # The uploader has CREATE_EVIDENCE but not VERIFY_EVIDENCE.
         with pytest.raises(audit_services.EvidenceBundleError):
-            audit_services.verify_evidence_item(item, manuel, package=package)
+            audit_services.verify_evidence_item(item, evidence_uploader, package=package)
 
-    def test_authorized_independent_verifier_succeeds_and_bundle_becomes_verified(self, package, china_org, china_ops_user, doc_type, manuel):
+    def test_authorized_independent_verifier_succeeds_and_bundle_becomes_verified(self, package, china_org, china_ops_user, doc_type, evidence_uploader):
         bundle = audit_services.create_evidence_bundle(package, EvidenceBundle.BundleType.PRODUCTION_VERIFICATION, china_ops_user, minimum_count=1)
-        document = _make_document(china_org, manuel, doc_type)
-        item = audit_services.add_evidence_item(bundle, manuel, document=document, evidence_type="photo")
+        document = _make_document(china_org, evidence_uploader, doc_type)
+        item = audit_services.add_evidence_item(bundle, evidence_uploader, document=document, evidence_type="photo")
         # china_ops_user holds VIEW/CREATE capabilities by role default,
         # including implicit VERIFY via explicit grant for this test.
         assignment = package.role_assignments.filter(role_code="china_procurement_operator").first()
@@ -107,20 +118,20 @@ class TestEvidenceBundleUploadNotVerification:
 
 
 class TestVerificationAssertion:
-    def test_assertion_requires_verified_bundle(self, package, china_org, china_ops_user, doc_type, manuel):
+    def test_assertion_requires_verified_bundle(self, package, china_org, china_ops_user, doc_type, evidence_uploader):
         bundle = audit_services.create_evidence_bundle(package, EvidenceBundle.BundleType.PRODUCTION_VERIFICATION, china_ops_user, minimum_count=1)
-        document = _make_document(china_org, manuel, doc_type)
-        audit_services.add_evidence_item(bundle, manuel, document=document, evidence_type="photo")
+        document = _make_document(china_org, evidence_uploader, doc_type)
+        audit_services.add_evidence_item(bundle, evidence_uploader, document=document, evidence_type="photo")
         with pytest.raises(procurement_services.PackageError):
             procurement_services.create_verification_assertion(
                 package, "production_verified", "Production verified at an authorized site.", china_ops_user,
                 source_evidence_bundle=bundle,
             )
 
-    def test_assertion_created_after_verification(self, package, china_org, china_ops_user, doc_type, manuel):
+    def test_assertion_created_after_verification(self, package, china_org, china_ops_user, doc_type, evidence_uploader):
         bundle = audit_services.create_evidence_bundle(package, EvidenceBundle.BundleType.PRODUCTION_VERIFICATION, china_ops_user, minimum_count=1)
-        document = _make_document(china_org, manuel, doc_type)
-        item = audit_services.add_evidence_item(bundle, manuel, document=document, evidence_type="photo")
+        document = _make_document(china_org, evidence_uploader, doc_type)
+        item = audit_services.add_evidence_item(bundle, evidence_uploader, document=document, evidence_type="photo")
         assignment = package.role_assignments.filter(role_code="china_procurement_operator").first()
         governance_services.grant_capability("VERIFY_EVIDENCE", user=china_ops_user, role_assignment=assignment, package=package)
         audit_services.verify_evidence_item(item, china_ops_user, package=package)

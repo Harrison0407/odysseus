@@ -15,6 +15,7 @@ import json
 
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.audit import services as audit
@@ -115,6 +116,58 @@ def has_capability(user, capability_code, *, package=None) -> bool:
             if grant.is_currently_active(on_date=today):
                 return True
     return False
+
+
+def user_can_access_package(user, package) -> bool:
+    """Package discovery requires package participation or explicit authority.
+
+    Tenant membership alone is intentionally insufficient. Existing executive
+    oversight remains available only through the already-established
+    ``can_override_gates`` authority and only inside that executive's tenant.
+    """
+    if user is None or not getattr(user, "is_authenticated", False):
+        return False
+    if active_role_assignments(user, package=package).exists():
+        return True
+
+    today = timezone.now().date()
+    direct_grants = CapabilityGrant.objects.filter(
+        user=user, package=package, is_active=True,
+    ).filter(Q(effective_from__isnull=True) | Q(effective_from__lte=today)).filter(
+        Q(effective_until__isnull=True) | Q(effective_until__gte=today)
+    )
+    if direct_grants.exists():
+        return True
+
+    profile_org_id = getattr(getattr(user, "profile", None), "organization_id", None)
+    if profile_org_id == package.organization_id:
+        from apps.workflow.services import can_override_gates
+
+        return can_override_gates(user)
+    return False
+
+
+def authorized_package_ids(user):
+    """Return package ids discoverable by ``user`` under the same policy."""
+    from apps.procurement.models import ProcurementPackage
+
+    if user is None or not getattr(user, "is_authenticated", False):
+        return set()
+    ids = set(active_role_assignments(user).values_list("package_id", flat=True))
+    today = timezone.now().date()
+    ids.update(
+        CapabilityGrant.objects.filter(user=user, package__isnull=False, is_active=True)
+        .filter(Q(effective_from__isnull=True) | Q(effective_from__lte=today))
+        .filter(Q(effective_until__isnull=True) | Q(effective_until__gte=today))
+        .values_list("package_id", flat=True)
+    )
+    from apps.workflow.services import can_override_gates
+
+    if can_override_gates(user):
+        profile_org_id = getattr(getattr(user, "profile", None), "organization_id", None)
+        ids.update(ProcurementPackage.objects.filter(organization_id=profile_org_id).values_list("id", flat=True))
+    ids.discard(None)
+    return ids
 
 
 @transaction.atomic
@@ -290,25 +343,41 @@ def create_disclosure_grant(source_party, package, recipient_organization, field
         raise AuthorizationDenied("No tiene permiso para autorizar una divulgación.")
     if not field_scope:
         raise AuthorizationDenied("Debe especificarse al menos un campo a divulgar.")
+    safe_source_fields = {
+        "manufacturer_name": source_party.display_name,
+        "factory_address": getattr(getattr(source_party, "supplier", None), "address", ""),
+    }
+    projection_source = safe_source_fields if permitted_projection is None else permitted_projection
+    frozen_projection = {
+        field: projection_source.get(field)
+        for field in field_scope
+        if field in projection_source
+    }
     with transaction.atomic():
         grant = DisclosureGrant.objects.create(
             source_party=source_party, package=package, recipient_organization=recipient_organization,
             recipient_party=recipient_party, field_scope=field_scope, classification_before=classification_before,
-            permitted_projection=permitted_projection or {}, reason=reason, requested_by=user, approved_by=user,
+            permitted_projection=frozen_projection, reason=reason, requested_by=user, approved_by=user,
             effective_from=timezone.now(), expires_at=expires_at, created_by=user,
         )
         audit.log(AuditEvent.Action.DISCLOSURE_GRANT, instance=grant, actor=user, summary=f"Divulgación autorizada: {grant}", reason=reason)
     return grant
 
 
-@transaction.atomic
 def revoke_disclosure_grant(grant: DisclosureGrant, user) -> DisclosureGrant:
+    if not has_capability(user, "AUTHORIZE_DISCLOSURE", package=grant.package):
+        log_denied_attempt(
+            user, "REVOKE_DISCLOSURE", package=grant.package, resource=grant,
+            required_capability="AUTHORIZE_DISCLOSURE",
+        )
+        raise AuthorizationDenied("No tiene permiso para revocar esta divulgación.")
     if grant.revoked_at is not None:
         raise AuthorizationDenied("Esta divulgación ya fue revocada.")
-    grant.revoked_at = timezone.now()
-    grant.revoked_by = user
-    grant.save()
-    audit.log(AuditEvent.Action.DISCLOSURE_REVOKED, instance=grant, actor=user, summary=f"Divulgación revocada: {grant}")
+    with transaction.atomic():
+        grant.revoked_at = timezone.now()
+        grant.revoked_by = user
+        grant.save()
+        audit.log(AuditEvent.Action.DISCLOSURE_REVOKED, instance=grant, actor=user, summary=f"Divulgación revocada: {grant}")
     return grant
 
 
@@ -320,6 +389,30 @@ def disclosed_fields(package, recipient_organization) -> set:
         if grant.is_currently_active():
             fields.update(grant.field_scope)
     return fields
+
+
+def disclosure_projection_for_user(package, user) -> dict:
+    """Return the live, field-scoped projection released to this user.
+
+    The persisted projection is a frozen, client-safe value set. Revoked,
+    expired, future, wrong-organization, and wrong-recipient-party grants
+    contribute nothing.
+    """
+    organization_id = getattr(getattr(user, "profile", None), "organization_id", None)
+    if organization_id is None:
+        return {}
+    recipient_party_ids = set(resolve_parties_for_user(user).values_list("id", flat=True))
+    projection = {}
+    grants = DisclosureGrant.objects.filter(package=package, recipient_organization_id=organization_id)
+    for grant in grants:
+        if not grant.is_currently_active():
+            continue
+        if grant.recipient_party_id and grant.recipient_party_id not in recipient_party_ids:
+            continue
+        for field in grant.field_scope:
+            if field in grant.permitted_projection:
+                projection[field] = grant.permitted_projection[field]
+    return projection
 
 
 # ---------------------------------------------------------------------------
@@ -356,40 +449,65 @@ def approve_change_request(change_request: ChangeRequest, user, *, comment="") -
         raise AuthorizationDenied("No tiene permiso para aprobar esta solicitud de cambio.")
 
     with transaction.atomic():
-        change_request.status = ChangeRequest.Status.APPROVED
-        change_request.decided_by = user
-        change_request.decided_at = timezone.now()
-        change_request.decision_comment = comment
-        change_request.save()
+        locked_change = ChangeRequest.objects.select_for_update().get(pk=change_request.pk)
+        if locked_change.status != ChangeRequest.Status.PENDING:
+            raise AuthorizationDenied("Esta solicitud de cambio ya fue resuelta.")
+        locked_change.status = ChangeRequest.Status.APPROVED
+        locked_change.decided_by = user
+        locked_change.decided_at = timezone.now()
+        locked_change.decision_comment = comment
+        locked_change.save()
 
-        package = change_request.package
-        if change_request.field_name == "visibility_mode":
-            package.visibility_mode = change_request.proposed_new_value
+        from apps.procurement.models import ProcurementPackage
+
+        package = ProcurementPackage.objects.select_for_update().get(pk=locked_change.package_id)
+        if locked_change.field_name == "visibility_mode":
+            package.visibility_mode = locked_change.proposed_new_value
             package.visibility_mode_version += 1
             audit.log(AuditEvent.Action.VISIBILITY_MODE_CHANGE, instance=package, actor=user, summary=f"Modo de visibilidad cambiado: {package}")
         else:
-            package.frozen_snapshot.setdefault("roles", {})[change_request.field_name] = change_request.proposed_new_value
-        package.is_on_hold = False
+            package.frozen_snapshot.setdefault("roles", {})[locked_change.field_name] = locked_change.proposed_new_value
+        package.is_on_hold = _package_has_unresolved_holds(package)
         package.save()
 
-        audit.log(AuditEvent.Action.CHANGE_REQUEST, instance=change_request, actor=user, summary=f"Solicitud de cambio aprobada: {change_request}")
-    return change_request
+        audit.log(AuditEvent.Action.CHANGE_REQUEST, instance=locked_change, actor=user, summary=f"Solicitud de cambio aprobada: {locked_change}")
+    return locked_change
 
 
-@transaction.atomic
 def reject_change_request(change_request: ChangeRequest, user, *, comment="") -> ChangeRequest:
     if change_request.status != ChangeRequest.Status.PENDING:
         raise AuthorizationDenied("Esta solicitud de cambio ya fue resuelta.")
-    change_request.status = ChangeRequest.Status.REJECTED
-    change_request.decided_by = user
-    change_request.decided_at = timezone.now()
-    change_request.decision_comment = comment
-    change_request.save()
-    package = change_request.package
-    package.is_on_hold = False
-    package.save(update_fields=["is_on_hold"])
-    audit.log(AuditEvent.Action.CHANGE_REQUEST, instance=change_request, actor=user, summary=f"Solicitud de cambio rechazada: {change_request}")
-    return change_request
+    required_capability = CHANGE_REQUEST_APPROVAL_CAPABILITY.get(change_request.field_name, "APPROVE_ROLE_CHANGE")
+    if not has_capability(user, required_capability, package=change_request.package):
+        log_denied_attempt(
+            user, f"REJECT_CHANGE_REQUEST:{change_request.field_name}", package=change_request.package,
+            resource=change_request, required_capability=required_capability,
+        )
+        raise AuthorizationDenied("No tiene permiso para rechazar esta solicitud de cambio.")
+    with transaction.atomic():
+        locked_change = ChangeRequest.objects.select_for_update().get(pk=change_request.pk)
+        if locked_change.status != ChangeRequest.Status.PENDING:
+            raise AuthorizationDenied("Esta solicitud de cambio ya fue resuelta.")
+        locked_change.status = ChangeRequest.Status.REJECTED
+        locked_change.decided_by = user
+        locked_change.decided_at = timezone.now()
+        locked_change.decision_comment = comment
+        locked_change.save()
+        from apps.procurement.models import ProcurementPackage
+
+        package = ProcurementPackage.objects.select_for_update().get(pk=locked_change.package_id)
+        package.is_on_hold = _package_has_unresolved_holds(package)
+        package.save(update_fields=["is_on_hold"])
+        audit.log(AuditEvent.Action.CHANGE_REQUEST, instance=locked_change, actor=user, summary=f"Solicitud de cambio rechazada: {locked_change}")
+    return locked_change
+
+
+def _package_has_unresolved_holds(package) -> bool:
+    pending_changes = ChangeRequest.objects.filter(package=package, status=ChangeRequest.Status.PENDING)
+    if pending_changes.exists():
+        return True
+    active_risks = RiskFlag.objects.filter(package=package, resolved_at__isnull=True).exclude(level=RiskFlag.Level.STANDARD)
+    return active_risks.exists()
 
 
 # ---------------------------------------------------------------------------
@@ -399,20 +517,54 @@ def reject_change_request(change_request: ChangeRequest, user, *, comment="") ->
 # ---------------------------------------------------------------------------
 
 
-@transaction.atomic
 def raise_risk_flag(package, level, indicator_codes, notes="", user=None) -> RiskFlag:
-    flag = RiskFlag.objects.create(package=package, level=level, indicator_codes=indicator_codes, notes=notes, raised_by=user, created_by=user)
-    audit.log(AuditEvent.Action.RISK_FLAG, instance=flag, actor=user, summary=f"Señal de riesgo: {flag}")
+    if not has_capability(user, "MANAGE_RISK_FLAGS", package=package):
+        log_denied_attempt(user, "RAISE_RISK_FLAG", package=package, required_capability="MANAGE_RISK_FLAGS")
+        raise AuthorizationDenied("No tiene permiso para crear señales de riesgo.")
+    if level not in RiskFlag.Level.values or not isinstance(indicator_codes, (list, tuple)) or not indicator_codes:
+        raise AuthorizationDenied("La señal de riesgo requiere un nivel y al menos un indicador válidos.")
+    with transaction.atomic():
+        from apps.procurement.models import ProcurementPackage
+
+        package = ProcurementPackage.objects.select_for_update().get(pk=package.pk)
+        if RiskFlag.objects.filter(
+            package=package, level=level, indicator_codes=list(indicator_codes), resolved_at__isnull=True,
+        ).exists():
+            raise AuthorizationDenied("Ya existe una señal de riesgo activa equivalente.")
+        flag = RiskFlag.objects.create(
+            package=package, level=level, indicator_codes=list(indicator_codes), notes=notes,
+            raised_by=user, created_by=user,
+        )
+        if level != RiskFlag.Level.STANDARD and not package.is_on_hold:
+            package.is_on_hold = True
+            package.save(update_fields=["is_on_hold"])
+        audit.log(AuditEvent.Action.RISK_FLAG, instance=flag, actor=user, summary=f"Señal de riesgo: {flag}")
     return flag
 
 
-@transaction.atomic
 def resolve_risk_flag(flag: RiskFlag, user) -> RiskFlag:
-    flag.resolved_at = timezone.now()
-    flag.resolved_by = user
-    flag.save()
-    audit.log(AuditEvent.Action.RISK_FLAG, instance=flag, actor=user, summary=f"Señal de riesgo resuelta: {flag}")
-    return flag
+    if not has_capability(user, "MANAGE_RISK_FLAGS", package=flag.package):
+        log_denied_attempt(
+            user, "RESOLVE_RISK_FLAG", package=flag.package, resource=flag,
+            required_capability="MANAGE_RISK_FLAGS",
+        )
+        raise AuthorizationDenied("No tiene permiso para resolver señales de riesgo.")
+    if flag.resolved_at is not None:
+        raise AuthorizationDenied("Esta señal de riesgo ya fue resuelta.")
+    with transaction.atomic():
+        locked_flag = RiskFlag.objects.select_for_update().get(pk=flag.pk)
+        if locked_flag.resolved_at is not None:
+            raise AuthorizationDenied("Esta señal de riesgo ya fue resuelta.")
+        locked_flag.resolved_at = timezone.now()
+        locked_flag.resolved_by = user
+        locked_flag.save()
+        from apps.procurement.models import ProcurementPackage
+
+        package = ProcurementPackage.objects.select_for_update().get(pk=locked_flag.package_id)
+        package.is_on_hold = _package_has_unresolved_holds(package)
+        package.save(update_fields=["is_on_hold"])
+        audit.log(AuditEvent.Action.RISK_FLAG, instance=locked_flag, actor=user, summary=f"Señal de riesgo resuelta: {locked_flag}")
+    return locked_flag
 
 
 # ---------------------------------------------------------------------------

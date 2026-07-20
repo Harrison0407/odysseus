@@ -2,6 +2,34 @@
 
 Newest first.
 
+## ADR-044 — Milestone 1 procurement gate overrides get a new, domain-native model; `apps.workflow.GateOverride` is not reused or relaxed
+**Decision:** `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md` §11 defines a
+new `ProcurementGateOverride` model, scoped to
+`(package, policy_version, gate_code, attempt, organization)`, for
+Procurement Gates A1–A6 exception handling. It does **not** reuse the
+existing `apps.workflow.GateOverride` row, and does not relax, make
+nullable, or otherwise modify that model's `gate_definition`
+(`on_delete=PROTECT`, required) or `handoff` foreign keys.
+**Why:** the independent Milestone 1 Charter Review (finding CHTR-002)
+found that the roadmap's own acceptance criterion — "Gate Override
+mechanisms are reused" — directly conflicted with ADR-020, which had
+already rejected reusing `GateOverride` for a narrower case (an
+over-installation waiver) on the grounds that doing so would require
+either fabricating a `GateDefinition`/`Handoff` row that doesn't
+correspond to anything real, or weakening `GateOverride`'s foreign-key
+constraints to make them optional — both judged worse than a dedicated
+alternative. Procurement gate overrides are a materially better fit for a
+dedicated model than ADR-020's waiver case was for `AuditEvent.Action.WAIVER`
+alone, because they need their own expiry, revocation, and
+separation-of-duties fields enforced and queried directly — a bare
+`AuditEvent` cannot do that. `ProcurementGateOverride` therefore reuses
+`GateOverride`'s *lifecycle pattern* (written reason, before/after state,
+finite expiry, revocation) as a new, procurement-domain-native model, not
+its table. This ADR does not reopen, weaken, or contradict ADR-020;
+`apps.workflow.GateOverride`'s foreign-key constraints are unchanged by
+Milestone 1. See the Charter for the full model definition and the
+non-overridable-controls list it is bound by.
+
 ## ADR-043 — Foundation correction cycle 3: role_assignment-derived CapabilityGrant scope, retrieval-safe privileged-audit columns, unbounded-completeness scan
 **Decision:** Three narrow corrections to the privileged-audit mechanism
 introduced by ADR-042, found by an independent Fable revalidation of

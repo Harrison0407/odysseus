@@ -120,13 +120,25 @@ not validated in that process (SQLite only, no Docker daemon available)
 and remains an open limitation, not represented as complete; no
 production deployment of this foundation has occurred or is claimed.
 
-Exact next action: **run the independent Milestone 1 Charter review
-against the current documentation baseline. Do not begin A1–A6
-implementation.**
+The independent Milestone 1 Charter Review that followed foundation
+acceptance found that no standalone Milestone 1 charter existed (only a
+short roadmap acceptance-criteria summary) and identified twelve findings,
+CHTR-001 through CHTR-012 — including a direct conflict between the
+roadmap's "reuse `GateOverride`" clause and ADR-020's existing reasoning
+against exactly that kind of reuse. A **Milestone 1 Charter Definition and
+Reconciliation** cycle has now produced a complete, standalone charter —
+`docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md` — resolving all twelve
+findings. This was a documentation-only cycle: no application code,
+template, test, or migration changed, and A1–A6 remain unimplemented.
 
-Milestone 1 remains planned and approved; foundation acceptance does not
-itself authorize A1–A6 implementation, which begins only after the
-Charter review.
+Exact next action: **run an independent Fable 5 Charter revalidation
+session against the commit introducing the Charter document. Do not begin
+A1–A6 implementation.**
+
+Milestone 1 remains planned and approved; neither foundation acceptance nor
+this Charter's own authorship authorizes A1–A6 implementation, which begins
+only after independent Charter revalidation and explicit owner approval of
+the Charter itself.
 
 ## Production deployment
 

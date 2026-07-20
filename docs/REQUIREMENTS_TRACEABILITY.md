@@ -29,9 +29,15 @@ revalidating cycle 2's own privileged-audit mechanism — see
 security corrections are closed; technical foundation readiness is
 satisfied. PostgreSQL runtime validation and other production validations
 remain explicitly open (see `docs/KNOWN_LIMITATIONS.md`) — foundation
-acceptance does not represent them as complete. The exact next action is
-the independent Milestone 1 Charter review. A1–A6 implementation remains
-not started and is not authorized by this acceptance;
+acceptance does not represent them as complete. The independent Milestone 1
+Charter Review that followed raised twelve findings (CHTR-001–CHTR-012); a
+Milestone 1 Charter Definition and Reconciliation cycle then produced a
+complete, standalone charter at
+`docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md` resolving all twelve,
+documentation-only. The exact next action is an independent Fable 5
+Charter revalidation session against the commit introducing that document.
+A1–A6 implementation remains not started and is not authorized by this
+acceptance or by the Charter's own authorship;
 `ProcurementPackage.Status` is not evidence of gate execution.
 
 ## Priority 0 capabilities (spec section 5)

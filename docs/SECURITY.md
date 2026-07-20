@@ -16,6 +16,38 @@ restoration, deployed proxy/cache validation, or production log-sentinel
 analysis — see `docs/KNOWN_LIMITATIONS.md` for the full, current list of
 open operational and security validations.
 
+## Milestone 1 procurement-gate security design (documentation-only, not yet implemented)
+
+`docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md` defines, but does not
+implement, the authorization, confidentiality, audit, and non-overridable
+control rules for Procurement Gates A1–A6:
+
+- Authorization before retrieval, package/organization scoping, and
+  same-organization/superuser insufficiency rules apply identically to the
+  new gate domain (Charter §13) — no new authorization philosophy is
+  introduced.
+- Gate evidence classification is derived deterministically from package
+  visibility mode and evidence-requirement type, never defaulting to a
+  client-shared classification (Charter §6); raw evidence is never exposed
+  merely because a `GateDecision`/`VerificationAssertion` references it.
+- A new `ProcurementGateOverride` model (Charter §11, ADR-044) is bound by
+  an explicit, absolute list of non-overridable controls (Charter §12):
+  authorization, package/organization scope, classification, separation of
+  duties, predecessor-gate validity by default, confidentiality, minimum
+  audit requirements, written reason, and finite expiry can never be
+  bypassed by any override, regardless of capability.
+- New `AuditEvent.Action` codes are defined for every gate/policy/override/
+  freeze lifecycle transition (Charter §10), with an explicit rule against
+  ever placing raw evidence content or confidential field values in audit
+  `metadata`.
+- PostgreSQL-specific lock/race validation is required before Milestone 1
+  may be declared closed for six named concurrency scenarios (Charter §15)
+  — SQLite evidence alone is explicitly disallowed from being represented
+  as PostgreSQL validation.
+
+None of this has been implemented. A1–A6 do not exist in the codebase as of
+this entry; this section documents the approved design only.
+
 ## Implemented and verified in this delivery
 
 - **Authentication:** Django session auth; no custom auth backend risk surface.

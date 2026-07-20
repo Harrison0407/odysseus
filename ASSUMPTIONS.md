@@ -798,3 +798,28 @@ instead, exactly as required, and is **not** listed here as a resolved assumptio
   already know what they proposed. This mirrors the existing pattern
   elsewhere in this system of never hiding an actor's own prior action
   from them.
+- **A78. `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md` places every new
+  Milestone 1 model (`GatePolicy`, `GatePolicyVersion`,
+  `PackagePolicyAssignment`, `GateAttempt`, `GateEvaluation`,
+  `GateDecision`, `GateInvalidation`, `PackageFreezeRevision`,
+  `ProcurementGateOverride`, `PackageHoldCause`) in a new app,
+  `apps.procurement_gates`, rather than inside `apps.procurement` or
+  `apps.workflow`.** Not dictated by the roadmap text, which is silent on
+  app placement. Chosen so the eight-gate Handoff workflow
+  (`apps.workflow`) and the owner-accepted foundation's commercial layers
+  (`apps.procurement`) remain byte-for-byte unchanged and separately
+  migratable from the new gate domain, consistent with the Charter's §1
+  "separate procurement gate domain" decision. Labeled as an assumption,
+  not a binding decision, because the Charter's substantive rules (§1–§20)
+  do not depend on this exact app name — an implementer may place these
+  models under a differently-named app without contradicting the Charter,
+  provided the separation-from-`apps.workflow`/`apps.procurement` rule
+  itself is preserved.
+- **A79. The Milestone 1 Charter's `PackageGateState` current-state cache
+  (Charter §9.6) is assumed to be implemented as a real, queryable model
+  row rather than a pure computed property, for admin/list-view query
+  performance.** Not required by the Charter, which only requires that
+  *if* a cache exists, it must be provably rebuildable from history. An
+  implementer choosing to compute gate state on every read with no
+  persisted cache row at all would not contradict the Charter; this
+  assumption merely records the anticipated common case.

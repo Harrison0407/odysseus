@@ -71,11 +71,42 @@ Assertion revocation HTTP route exists or is approved.
 
 ### Active activity
 
-**Independent Milestone 1 Charter Review.**
+**Milestone 1 Charter Definition and Reconciliation — complete, locally,
+documentation-only.**
 
-Exact next action: review and reconcile the Milestone 1 Charter before any
-implementation authorization. Milestone 1 implementation itself has **not**
-started and is **not** authorized by this acceptance.
+The independent Milestone 1 Charter Review (`CHTR-001` through `CHTR-012`)
+found that no standalone Milestone 1 charter existed — only a 26-line
+acceptance-criteria summary in
+`docs/MARKETMATCH_ARCHITECTURE_RECONCILIATION_AND_ROADMAP.md` — and that
+several of its mandatory clauses (notably reusing `apps.workflow.GateOverride`
+directly) conflicted with existing, documented decisions (ADR-020). A
+complete standalone charter has now been authored at
+`docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md`, resolving every finding:
+
+| Finding | Disposition |
+|---|---|
+| CHTR-001 | Accept — standalone Charter created |
+| CHTR-002 | Accept — new procurement-scoped override reuses the pattern, not the Handoff-specific `GateOverride` row/FKs; ADR-020 not reopened |
+| CHTR-003 | Accept — policy versioning, publication immutability, canonical default, org configuration, and package pinning specified |
+| CHTR-004 | Accept — deterministic, non-fabricating existing-package initialization specified |
+| CHTR-005 | Accept — immutable freeze-revision history and downstream invalidation specified |
+| CHTR-006 | Accept — override minimum-evidence/separation-of-duties/scope/non-overridable rules specified |
+| CHTR-007 | Accept — attempt/evaluation/decision/invalidation model and audit taxonomy specified |
+| CHTR-008 | Accept — explicit live HTTP/browser validation method specified |
+| CHTR-009 | Accept as clarified boundary — narrow Milestone 1 surfaces only; convergence work stays Milestone 3 |
+| CHTR-010 | Accept with explicit rule — SQLite for development, PostgreSQL required for lock-sensitive closure or a separate owner disposition |
+| CHTR-011 | Accept — positive finding confirmed; `EvidenceBundle`/`EvidenceItem` reuse specified |
+| CHTR-012 | Accept — deterministic evidence-classification and safe-projection rule specified |
+
+**No application code, template, test, or migration was written or modified
+during this cycle.** A1–A6 remain entirely unimplemented. This Charter has
+**not** been independently revalidated and has **not** been owner-approved.
+Milestone 1 implementation remains **not authorized**.
+
+Exact next action: **run an independent Fable 5 Charter revalidation
+session against the commit introducing
+`docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md`. Do not begin A1–A6
+implementation.**
 
 ---
 

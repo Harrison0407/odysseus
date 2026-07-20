@@ -68,19 +68,30 @@ claimed-complete evidence — they remain open, exactly as before:
   including the final acceptance evidence, was validated against SQLite
   only (no Docker daemon available in the validation environment); this
   is not represented as PostgreSQL-validated.
-- Generalized `GateOverride` transition behavior assigned to Milestone 1.
+- Generalized `GateOverride` transition behavior assigned to Milestone 1 —
+  resolved at the design level, not the implementation level, by
+  `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md` §11/ADR-044: Milestone 1
+  gets its own `ProcurementGateOverride` model, not a reuse of
+  `apps.workflow.GateOverride`'s row or foreign keys.
 - **CTCF-ASSERT-HTTP-019** — `procurement.services.revoke_verification_assertion`
   remains service-only; no HTTP route exists or is approved.
 - The newly-measured privileged-audit N+1 performance characteristic (see
   the dedicated entry below) — accepted as non-blocking at current pilot
   scale, not as resolved or as validated at production scale.
 
-The exact next action is **the independent Milestone 1 Charter review**,
-against the current documentation baseline. A1–A6 — Configurable
-Procurement Gates — remains approved and planned but is **not authorized**
-by this acceptance; implementation has not started. The existing
-`ProcurementPackage.Status` is a separate state machine and must not be
-represented as A1–A6 gate execution.
+The independent Milestone 1 Charter Review that followed found no standalone
+charter existed and raised twelve findings (CHTR-001–CHTR-012). A
+**Milestone 1 Charter Definition and Reconciliation** cycle then produced a
+complete, standalone charter — `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md`
+— resolving all twelve findings at the design level. This was
+documentation-only: no application code, template, test, or migration
+changed. The exact next action is **an independent Fable 5 Charter
+revalidation session** against the commit introducing that Charter. A1–A6
+— Configurable Procurement Gates — remains approved and planned but is
+**not authorized** by this acceptance or by the Charter's own authorship;
+implementation has not started. The existing `ProcurementPackage.Status`
+is a separate state machine and must not be represented as A1–A6 gate
+execution.
 
 ### Privileged-audit N+1 query characteristic (accepted, non-blocking)
 
@@ -119,6 +130,10 @@ Current unresolved limitations, grouped by official roadmap disposition:
 
 - **Milestone 1:** configurable, versioned A1–A6 gate definitions, evidence
   schemas, progression, exceptions, expiry/revocation, and live validation.
+  The design for all of this is now specified in
+  `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md`; none of it is
+  implemented yet — this remains a full open limitation until Milestone 1
+  is actually built, tested, and completed per that Charter's §20.
 - **Milestone 2:** complete `es`/`en`/`zh-Hans` internationalization
   foundation; OCR and automated translation engines remain deferred until the
   authorized-projection and localization boundaries are complete.
@@ -674,7 +689,10 @@ completed later; it is not a current open limitation.
 - Deployed-runtime execution of checks, migrations, regression tests, and the
   adversarial identity matrix when an appropriate environment is available.
 - Generalized GateOverride transition behavior assigned to Milestone 1; it was
-  not changed by this remediation.
+  not changed by this remediation. Its Milestone 1 design (a new,
+  non-reused `ProcurementGateOverride` model) is now specified in
+  `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md` §11/ADR-044 but remains
+  unimplemented.
 
 ## Data-quality ambiguities (not bugs — see `DATA_QUALITY_AND_UNCERTAINTY.md`)
 

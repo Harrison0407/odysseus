@@ -66,7 +66,14 @@ identify which untracked evidence documents belong in the repository and which m
 record the verified commit, test count, migrations, and clean-tree state.
 Milestone 1 — Configurable Procurement Gates A1–A6
 
-This is the official next implementation milestone.
+This is the official next implementation milestone. This section states
+intent and priority; the binding operational design — models, policy
+versioning, migration rules, override architecture, audit taxonomy,
+authorization, concurrency, tests, and live validation — is
+`docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md` (added 2026-07-20,
+documentation-only, not yet independently revalidated). Where that Charter
+and this section differ on mechanism, the Charter governs; this section's
+statement of intent is unchanged by it.
 
 Canonical gates:
 

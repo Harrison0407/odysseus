@@ -1606,3 +1606,67 @@ documented order.
     Exact next action: run the independent Milestone 1 Charter review
     against the current documentation baseline. A1–A6 implementation is
     not authorized by this entry.
+
+56. **Milestone 1 Charter Definition and Reconciliation — documentation-only.**
+    Dated 2026-07-20. No application code, template, test, or migration was
+    touched.
+
+    The independent Milestone 1 Charter Review that followed entry 55 found
+    that no standalone Milestone 1 charter existed — only a 26-line
+    acceptance-criteria summary in
+    `docs/MARKETMATCH_ARCHITECTURE_RECONCILIATION_AND_ROADMAP.md` §3 — and
+    raised twelve findings (CHTR-001 through CHTR-012), including a direct
+    conflict between that roadmap summary's "reuse `GateOverride`" clause
+    and ADR-020's existing, documented reasoning against exactly that kind
+    of reuse.
+
+    This cycle authored a complete, standalone charter at
+    `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md` (charter version 1),
+    resolving all twelve findings: a new `apps.procurement_gates` domain
+    kept fully separate from the existing eight-gate Handoff workflow and
+    from `ProcurementPackage.Status`; a versioned, publish-immutable gate
+    policy architecture with a canonical default, organization
+    configuration, and transactionally-protected package pinning; a
+    deterministic, non-fabricating existing-package migration; an
+    immutable `PackageFreezeRevision` history distinct from the current
+    `frozen_snapshot` cache; a dedicated `GateAttempt`/`GateEvaluation`/
+    `GateDecision`/`GateInvalidation` record architecture with a new,
+    enumerated `AuditEvent.Action` taxonomy; a new, domain-native
+    `ProcurementGateOverride` model (ADR-044) that reuses
+    `apps.workflow.GateOverride`'s lifecycle pattern without reusing its
+    row or foreign keys; an absolute non-overridable-controls list; a
+    deterministic evidence-classification rule; an explicit PostgreSQL
+    closure gate for six named concurrency scenarios; a narrow API/UI
+    boundary against Milestone 3; and a real HTTP/browser live-validation
+    method distinct from automated tests.
+
+    Documentation reconciled in the same commit: `DT_BEACH_CURRENT_STATE.md`,
+    `DT_BEACH_SOURCE_OF_TRUTH_INDEX.md`, `README.md`, `ASSUMPTIONS.md`
+    (A78, A79), `docs/architecture-decisions.md` (ADR-044),
+    `docs/SECURITY.md`, `docs/KNOWN_LIMITATIONS.md`, and
+    `docs/REQUIREMENTS_TRACEABILITY.md`.
+
+    Fresh evidence for this cycle: HEAD confirmed at
+    `4bc90224dae0e8adb87cdae72742a76a028de8bd` before editing; branch
+    `integration/dt-beach-supply-control-1.0.0`; upstream
+    `origin/integration/dt-beach-supply-control-1.0.0`; ahead/behind `0/0`;
+    working tree clean before editing. `manage.py check` passed;
+    `makemigrations --check --dry-run` reported no changes detected;
+    `migrate --check` passed with 72/72 migrations applied, 0 pending —
+    unchanged from entry 55, as expected for a documentation-only cycle.
+    The full regression suite was **not** rerun for this cycle, by design —
+    it was already independently reproduced at **511/511** during the
+    revalidation that led to entry 55's acceptance, and documentation
+    changes cannot alter Python test outcomes; that figure is carried
+    forward here, not re-claimed as freshly rerun.
+
+    **Status distinctions, precise:** this Charter is *authored* (this
+    entry); it is **not** *independently revalidated* and **not** *owner
+    approved*. A1–A6 remain entirely *unimplemented* — nothing in this
+    entry changes that. Milestone 1 implementation is **not authorized**
+    by this entry.
+
+    Exact next action: run an independent Fable 5 Charter revalidation
+    session against the commit introducing
+    `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md`. Do not begin A1–A6
+    implementation.

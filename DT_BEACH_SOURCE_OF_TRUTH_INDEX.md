@@ -98,7 +98,14 @@ test, or migration changed):
 The commit containing this revision; obtain its immutable hash with
 `git rev-parse HEAD`. Its parent is `2c52b0b83340fda2eaa84700eaeddfbe0839d6d8`.
 
-**Next governing activity: the independent Milestone 1 Charter review.**
+**Milestone 1 Charter Definition and Reconciliation is complete, locally,
+documentation-only** — see `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md`
+(charter version 1) and `DT_BEACH_CURRENT_STATE.md` for the full
+CHTR-001–CHTR-012 disposition table. That Charter has not yet been
+independently revalidated and is not owner-approved.
+
+**Next governing activity: an independent Milestone 1 Charter
+revalidation session against the commit introducing the Charter document.**
 A1–A6 implementation is not authorized and has not started.
 
 Tests (as independently reproduced during the cycle-3 revalidation that

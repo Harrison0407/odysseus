@@ -81,7 +81,12 @@ def package_detail(request, pk):
             package=package, is_revoked=False,
         ).filter(Q(valid_until__isnull=True) | Q(valid_until__gte=timezone.now())) if can_view_client_quote or can_view_factory else VerificationAssertion.objects.none(),
         "role_assignments": governance_services.active_role_assignments(request.user, package=package).select_related("party"),
-        "change_requests": package.change_requests.all()[:20],
+        "change_requests": [
+            governance_services.change_request_projection(request.user, cr)
+            for cr in package.change_requests.all().only(
+                "id", "package", "field_name", "status", "created_at", "requested_by", "decided_by",
+            )[:20]
+        ],
         "disclosure_grants": package.disclosure_grants.all()[:20] if can_authorize_disclosure else DisclosureGrant.objects.none(),
         "disclosed_projection": governance_services.disclosure_projection_for_user(package, request.user),
     }

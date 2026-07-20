@@ -335,12 +335,45 @@
   double that records exactly what it was given. A derived artifact can
   never become less restrictive than its source classification without
   the caller separately holding `AUTHORIZE_DISCLOSURE`.
-- **The governance admin screens (Party list/detail, privileged-audit
-  explanation log) are gated by `can_override_gates`** — the same
-  senior-authorization permission used everywhere else in this system,
-  never Django superuser status and never a bespoke new flag; verified
-  live that a package-scoped China-ops user without that permission is
-  denied (404) on both screens.
+- **The Party admin screens (list/detail/create) are gated by
+  `can_override_gates`** — the same senior-authorization permission used
+  everywhere else in this system, never Django superuser status and never
+  a bespoke new flag; verified live that a package-scoped China-ops user
+  without that permission is denied (404).
+- **Privileged audit is scoped before retrieval, never system-wide
+  (foundation correction cycle 2, CTCF-AUDIT-017; ADR-042).**
+  `can_override_gates` alone no longer grants access to
+  `/gobernanza/auditoria-privilegiada/`, and Django superuser status alone
+  never does either — access requires an explicit, currently-active
+  `VIEW_PRIVILEGED_AUDIT` `CapabilityGrant`, scoped to an organization or a
+  package exactly like every other sensitive capability. The underlying
+  `AuditEvent` queryset is built from the caller's authorized
+  organization/package ids *before* any event is treated as visible
+  (`governance.services.authorized_privileged_audit_scopes` +
+  `privileged_audit_queryset`); an event whose target cannot be resolved
+  through an existing relationship is excluded, never included. A
+  package-scoped grant never widens to the whole organization; an
+  organization-scoped grant never widens to every organization. The
+  rendered projection never copies a target's raw `__str__` or
+  `AuditEvent.metadata` into the browser — verified by
+  `tests/test_privileged_audit_scope.py` (24 tests: authority matrix,
+  cross-organization and cross-package isolation, unresolvable-target
+  fail-closed behavior, information-absence, and denial-audit durability).
+  A denied privileged-audit access attempt is itself now durably audited.
+- **Change Request raw values require field-specific detailed-read
+  authority, never mere package participation (foundation correction
+  cycle 2, CTCF-CR-PROJ-018; ADR-042).**
+  `governance.services.change_request_projection` distinguishes knowing a
+  request exists, reading its raw `field_name`/`frozen_current_value`/
+  `proposed_new_value`/`reason`, and deciding it (approve/reject,
+  unchanged). Only the requester, the decider, or an actor holding the
+  same field-specific capability already required to decide that field
+  receives the raw values; every other package-authorized viewer receives
+  a safe, generic projection. Decision-button visibility is never treated
+  as read authorization. Verified by
+  `tests/test_change_request_projection.py` (9 tests, including
+  authority-for-one-field-does-not-reveal-another and
+  package-B-authority-does-not-reveal-package-A cases).
 
 ## Known gaps (see `KNOWN_LIMITATIONS.md` for the full list)
 

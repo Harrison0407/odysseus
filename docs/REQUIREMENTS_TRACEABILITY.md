@@ -7,14 +7,21 @@ manual. **Planned** = intentionally deferred past this delivery (see
 delivery per `ASSUMPTIONS.md` A1, not a claim that all 38 spec sections
 are production-complete).
 
-Foundation-remediation verification (2026-07-19): **472 tests collected, 472
-passed, 0 failed; migrations clean.** Historical milestone counts below are retained
+Foundation correction cycle 2 verification (2026-07-19, commit
+`a89a9f714684515be1b2de704bf816611e094540` plus this cycle's changes):
+**496 tests collected, 496 passed, 0 failed; migrations clean.** This
+supersedes the prior 472-test figure below, which is retained for
+historical accuracy. Historical milestone counts below are retained
 where they describe the evidence available at that point in the delivery.
 
 The latest completed product milestone is **Controlled Transparency,
-Commercial Confidentiality & Authorization Foundation**. The exact next action
-is independent revalidation of its accepted remediation. A1–A6 are planned,
-not implemented; `ProcurementPackage.Status` is not evidence of gate execution.
+Commercial Confidentiality & Authorization Foundation**. Foundation
+correction cycle 2 closed two independently-discovered gaps
+(CTCF-AUDIT-017, CTCF-CR-PROJ-018) found during independent revalidation
+of the initial remediation — see `docs/KNOWN_LIMITATIONS.md` and ADR-042.
+The exact next action is a new, independent Fable 5 revalidation session
+against the resulting commit. A1–A6 are planned, not implemented;
+`ProcurementPackage.Status` is not evidence of gate execution.
 
 ## Priority 0 capabilities (spec section 5)
 
@@ -180,7 +187,7 @@ Full transcript in `docs/implementation-log.md`.
 | Apartment walkthroughs and corrective actions | `apps.walkthroughs` (new app) | `Walkthrough`, `WalkthroughItem`, `WalkthroughCategory`, `WalkthroughChecklistTemplateItem`, `WalkthroughItemEvidence` (ADR-038); `FieldIssue.walkthrough_item` (extended) | `/recorridos/` create/list/detail | `tests/test_walkthroughs.py` (18 tests) | Done — building-agnostic (tested across 2 independently created buildings), 6 configurable purposes, delivery-readiness override gated by `can_override_gates`, live-validated in ARENA T1 Building 9 |
 | Unclassified Evidence Inbox | `apps.evidenceinbox` (new app) | `UnclassifiedEvidence`, `EvidenceClassification` (ADR-039) | `/evidencias-sin-clasificar/` list/upload/detail, batch classification | `tests/test_evidence_inbox.py` (14 tests) | Done — upload provenance permanent and untouched; classification generic/reassignable across 14 target types; cross-organization classification-target isolation verified; live-validated with a real historical-style photo classified to a genuine unit in ARENA T1 Building 11 |
 | Interactive Apartment Plan / Room-Zone layer | `apps.unitplans` (new app) | `UnitPlanTemplate`, `PlanZone`, `UnitPlanAssignment` (ADR-040); `plan_template`/`plan_zone` added to `FieldIssue`, `WalkthroughItem`, `InstallationRecord`, `InspectionRecord` | `/propiedades/unidades/<id>/plano/` interactive viewer, `/propiedades/admin-planos/` mapping/review tool | `tests/test_unit_plans.py` (24 tests) | Done — only PALMERA has a real per-unit-type source drawing (confirmed by direct inspection); every other family is an honest Missing Source slot; live-validated across MARE B Building 25/Floor 4/C4, SOLE Building 17, SOLE PH Building 18 (incl. duplex penthouse), SOLE 26 Building 26, PALMERA, and ARENA T1 Building 9, including a full click-room→create-issue→upload-photo→open-from-plan cycle and supersede-preserves-history |
-| Controlled Transparency, Commercial Confidentiality & Authorization Foundation | `apps.governance`; `apps.procurement` package/commercial layers; `apps.audit` EvidenceBundle/EvidenceItem (ADR-041) | `Party`, `PartyMembership`, `RoleAssignment`, `CapabilityGrant`, `DisclosureGrant`, `ChangeRequest`, `RiskFlag`, `DerivedArtifact`; `ProcurementPackage`, commercial-layer records, `VerificationAssertion`; `EvidenceBundle`, `EvidenceItem` | Package list/detail and field-scoped disclosure projection; governance admin; package-scoped affected APIs | Original 61-test foundation suite plus `tests/test_foundation_remediation.py` (17 adversarial tests) | Done; remediation implemented and locally integration-verified — same/different-organization and cross-package denial, document-byte isolation, target-derived evidence authorization, live disclosure expiry/revocation, draft/expired/revoked information absence, Change Request holds, quote separation of duties, risk authorization, and affected API scoping pass. Production-runtime and independent revalidation remain outstanding; no raw evidence projection or A1–A6 gates were added. |
+| Controlled Transparency, Commercial Confidentiality & Authorization Foundation | `apps.governance`; `apps.procurement` package/commercial layers; `apps.audit` EvidenceBundle/EvidenceItem (ADR-041, ADR-042) | `Party`, `PartyMembership`, `RoleAssignment`, `CapabilityGrant`, `DisclosureGrant`, `ChangeRequest`, `RiskFlag`, `DerivedArtifact`; `ProcurementPackage`, commercial-layer records, `VerificationAssertion`; `EvidenceBundle`, `EvidenceItem` | Package list/detail and field-scoped disclosure projection; scoped privileged audit (CTCF-AUDIT-017); authorized Change Request projection (CTCF-CR-PROJ-018); package-scoped affected APIs | Original 61-test foundation suite plus `tests/test_foundation_remediation.py` (17 adversarial tests) plus foundation correction cycle 2's `tests/test_privileged_audit_scope.py` (15 tests) and `tests/test_change_request_projection.py` (9 tests) | Done; remediation implemented and locally integration-verified — same/different-organization and cross-package denial, document-byte isolation, target-derived evidence authorization, live disclosure expiry/revocation, draft/expired/revoked information absence, Change Request holds, quote separation of duties, risk authorization, affected API scoping, scoped privileged-audit access (organization/package-scoped `VIEW_PRIVILEGED_AUDIT`, cross-tenant and cross-package isolation, fail-closed unresolvable targets), and field-specific Change Request read authorization all pass. Production-runtime and independent revalidation of foundation correction cycle 2 remain outstanding; no raw evidence projection or A1–A6 gates were added. `VerificationAssertion` revocation remains service-only (CTCF-ASSERT-HTTP-019, deferred by explicit decision). |
 
 ## Explicitly out of scope for this delivery (see `KNOWN_LIMITATIONS.md`)
 

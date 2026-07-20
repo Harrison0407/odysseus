@@ -6,16 +6,43 @@ is silently claimed to be done when it isn't.
 
 ## Current remediation and roadmap disposition
 
-Foundation remediation on 2026-07-19 passes **472/472 tests** with clean
-migrations. The latest completed product milestone remains **Controlled
-Transparency, Commercial Confidentiality & Authorization Foundation**, now
-awaiting independent revalidation of the accepted corrections.
+Foundation remediation on 2026-07-19 (commit a89a9f7) passed **472/472
+tests** with clean migrations. An independent Fable revalidation of that
+commit found two newly-discovered, previously-undisclosed gaps outside the
+original 15 accepted findings — CTCF-AUDIT-017 (privileged-audit access
+was gated only by `can_override_gates`, with no organization/package scope
+applied to the underlying `AuditEvent` queryset) and CTCF-CR-PROJ-018
+(basic package participation exposed a Change Request's raw values,
+regardless of decision authority) — plus a documentation-count
+discrepancy, CTCF-DOC-020 (see below), and confirmed CTCF-ASSERT-HTTP-019
+(Verification Assertion revocation has no HTTP route; service-only,
+by omission) as a recorded, not-yet-decided boundary.
 
-The exact next action is **independent revalidation of the remediated
-foundation**. Milestone 1 — Configurable Procurement Gates A1–A6 — remains
-approved and planned but is not authorized by this remediation. The existing
-`ProcurementPackage.Status` is a separate state machine and must not be
-represented as A1–A6 gate execution.
+**Foundation correction cycle 2** (this entry) closes CTCF-AUDIT-017 and
+CTCF-CR-PROJ-018 — see ADR-042 and `docs/SECURITY.md` for the mechanism.
+Both are narrow, same-pattern corrections reusing the existing
+Party/Role/CapabilityGrant architecture; neither required a migration
+(`VIEW_PRIVILEGED_AUDIT` and `CapabilityGrant.organization` already
+existed). The full suite now passes **496/496** (472 + 24 new adversarial
+tests: `tests/test_privileged_audit_scope.py`,
+`tests/test_change_request_projection.py`), locally verified only — this
+correction has **not yet been independently revalidated**; that is the
+exact next action. The latest completed product milestone remains
+**Controlled Transparency, Commercial Confidentiality & Authorization
+Foundation**.
+
+The exact next action is **a new, independent Fable 5 revalidation session
+against the resulting commit**. Milestone 1 — Configurable Procurement
+Gates A1–A6 — remains approved and planned but is not authorized by this
+correction cycle. The existing `ProcurementPackage.Status` is a separate
+state machine and must not be represented as A1–A6 gate execution.
+
+CTCF-ASSERT-HTTP-019 remains deferred by explicit decision of this cycle:
+no HTTP route was added for `procurement.services.revoke_verification_assertion`;
+it remains service-only. Whether `CREATE_COMMERCIAL_DOCUMENT` is the
+correct authority for that revocation is an open question requiring a
+future owner decision or direct documentary evidence before any interface
+is connected to that service.
 
 Current unresolved limitations, grouped by official roadmap disposition:
 

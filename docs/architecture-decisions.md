@@ -2,6 +2,54 @@
 
 Newest first.
 
+## ADR-042 — Foundation correction cycle 2: privileged-audit scope-before-retrieval and Change Request read-authorization as a distinct axis
+**Decision:** Two narrow corrections to the Controlled Transparency /
+Confidentiality foundation (ADR-041), reusing its existing
+Party/Role/CapabilityGrant architecture — no second authorization system,
+no second audit store, no second workflow engine.
+
+(1) **Privileged audit (CTCF-AUDIT-017).** `governance.views.privileged_audit`
+previously required only `can_override_gates` and applied no scope to the
+underlying `AuditEvent` queryset, so any senior role-holder in any tenant
+organization could read every organization's privileged events. Access now
+requires an explicit, currently-active `VIEW_PRIVILEGED_AUDIT`
+`CapabilityGrant`, scoped to an organization or a package exactly like
+every other sensitive capability in this system —
+`governance.services.authorized_privileged_audit_scopes` resolves the
+caller's authorized organization/package ids, and
+`governance.services.privileged_audit_queryset` resolves each candidate
+`AuditEvent`'s target scope through its own existing persisted
+relationships (package, hosting organization, evidence-bundle target,
+etc. — reusing `apps.audit.services.evidence_bundle_package` rather than
+adding a parallel resolver) before treating any event as visible. An event
+whose target cannot be resolved is excluded, never included. The rendered
+projection (`governance.services.privileged_audit_projection`) never
+copies a target's raw `__str__` or `AuditEvent.metadata` into the browser
+— only the action type, actor, and timestamp, plus a fixed, generic,
+per-action-type description.
+
+(2) **Change Request projection (CTCF-CR-PROJ-018).** `package_detail`
+previously placed every `ChangeRequest` for a package into the template
+context unconditionally — basic package participation, not any
+field-specific decision authority, gated what a viewer saw.
+`governance.services.change_request_projection` now distinguishes three
+permissions: knowing a request exists, reading its raw
+`field_name`/`frozen_current_value`/`proposed_new_value`/`reason`, and
+deciding it. Detailed values are visible only to the requester, the
+decider (once decided), or an actor holding the same field-specific
+capability already used to decide that field
+(`CHANGE_REQUEST_APPROVAL_CAPABILITY`, unchanged) — everyone else receives
+a safe, generic projection. The queryset uses `.only()` on the
+non-sensitive columns so the sensitive text fields are not fetched at all
+for rows the viewer never ends up authorized to see in full.
+
+**Why:** Both gaps were found during an independent revalidation pass of
+the foundation (a89a9f7) that treated Codex's report, prior Fable reports,
+and passing tests as claims to verify, not proof. Both are read-path
+authorization gaps, not authority-to-decide gaps — the existing
+approve/reject/revoke decision checks were already correct and are
+unchanged by this cycle.
+
 ## ADR-041 — Controlled Transparency / Confidentiality foundation: Party/Role/Capability as a cross-cutting layer, commercial layers as genuinely distinct objects
 **Decision:** New `apps.governance` app adds Party (wraps an existing
 `Organization`/`Supplier` rather than duplicating identity), package/

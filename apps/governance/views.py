@@ -63,19 +63,17 @@ def party_create(request):
 
 @login_required
 def privileged_audit(request):
-    """Read-only access explanation screen (spec section 20) — never
-    exposed to unauthorized users."""
-    _require_governance_admin(request)
-    from apps.audit.models import AuditEvent
-
-    events = AuditEvent.objects.filter(
-        action__in=[
-            AuditEvent.Action.PRIVILEGED_ACCESS_GRANTED, AuditEvent.Action.PRIVILEGED_ACCESS_DENIED,
-            AuditEvent.Action.ROLE_ASSIGNMENT, AuditEvent.Action.CAPABILITY_GRANT,
-            AuditEvent.Action.DISCLOSURE_GRANT, AuditEvent.Action.DISCLOSURE_REVOKED,
-            AuditEvent.Action.VISIBILITY_MODE_CHANGE, AuditEvent.Action.CHANGE_REQUEST,
-            AuditEvent.Action.PACKAGE_FREEZE, AuditEvent.Action.VERIFICATION_ASSERTION,
-            AuditEvent.Action.EVIDENCE_VERIFICATION, AuditEvent.Action.RISK_FLAG, AuditEvent.Action.DERIVED_ARTIFACT,
-        ],
-    ).select_related("actor").order_by("-occurred_at")[:200]
-    return render(request, "governance/privileged_audit.html", {"events": events})
+    """Read-only privileged-audit log (spec section 20), scoped to the
+    requesting user's own authorized VIEW_PRIVILEGED_AUDIT organization/
+    package grants (CTCF-AUDIT-017). `can_override_gates` and Django
+    superuser status alone never grant access here — this screen requires
+    the same explicit CapabilityGrant model used everywhere else in this
+    system, never a bespoke or system-wide admin concept. A denied attempt
+    is itself durably audited."""
+    org_ids, package_ids = services.authorized_privileged_audit_scopes(request.user)
+    if not org_ids and not package_ids:
+        services.log_denied_attempt(request.user, "VIEW_PRIVILEGED_AUDIT", required_capability="VIEW_PRIVILEGED_AUDIT")
+        raise Http404
+    events = services.privileged_audit_queryset(request.user, org_ids=org_ids, package_ids=package_ids)
+    rows = [services.privileged_audit_projection(event) for event in events]
+    return render(request, "governance/privileged_audit.html", {"rows": rows})

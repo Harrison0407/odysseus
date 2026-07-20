@@ -151,7 +151,15 @@ class TestCrossOrganizationDenial:
         response = client.get(reverse("governance:privileged-audit"))
         assert response.status_code == 404
 
-    def test_authorized_admin_can_view_governance_screens(self, client, harrison):
+    def test_authorized_admin_can_view_governance_screens(self, client, harrison, organization):
+        # CTCF-AUDIT-017: can_override_gates alone (harrison's Dirección
+        # role) no longer grants privileged-audit access — an explicit,
+        # organization-scoped VIEW_PRIVILEGED_AUDIT CapabilityGrant is
+        # required, the same explicit-grant model used for every other
+        # sensitive capability in this system.
+        governance_services.grant_capability(
+            "VIEW_PRIVILEGED_AUDIT", user=harrison, granted_to_user=harrison, organization=organization,
+        )
         client.force_login(harrison)
         response = client.get(reverse("governance:privileged-audit"))
         assert response.status_code == 200

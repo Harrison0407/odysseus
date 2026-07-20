@@ -14,12 +14,13 @@ import hashlib
 import json
 
 from django.contrib.contenttypes.models import ContentType
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
 from apps.audit import services as audit
-from apps.audit.models import AuditEvent
+from apps.audit.models import AuditEvent, EvidenceBundle, EvidenceItem
 
 from .models import (
     ALL_CAPABILITY_CODES,
@@ -331,6 +332,185 @@ def explain_privileged_decision(admin_user, *, target_user, action_code, resourc
 
 
 # ---------------------------------------------------------------------------
+# Privileged audit — scope-before-retrieval (CTCF-AUDIT-017).
+#
+# Access requires an explicit, currently-active VIEW_PRIVILEGED_AUDIT
+# CapabilityGrant (organization-scoped or package-scoped) — never
+# `can_override_gates` alone and never Django superuser status alone. The
+# queryset is built from the caller's authorized scopes BEFORE any
+# AuditEvent is treated as visible; an event whose target cannot be
+# resolved through an existing persisted relationship is excluded, never
+# included (fail closed). This reuses the existing CapabilityGrant/
+# RoleAssignment/package/organization relationships already in this
+# codebase — no second audit store, no second authorization system.
+# ---------------------------------------------------------------------------
+
+PRIVILEGED_AUDIT_ACTIONS = [
+    AuditEvent.Action.PRIVILEGED_ACCESS_GRANTED, AuditEvent.Action.PRIVILEGED_ACCESS_DENIED,
+    AuditEvent.Action.ROLE_ASSIGNMENT, AuditEvent.Action.CAPABILITY_GRANT,
+    AuditEvent.Action.DISCLOSURE_GRANT, AuditEvent.Action.DISCLOSURE_REVOKED,
+    AuditEvent.Action.VISIBILITY_MODE_CHANGE, AuditEvent.Action.CHANGE_REQUEST,
+    AuditEvent.Action.PACKAGE_FREEZE, AuditEvent.Action.VERIFICATION_ASSERTION,
+    AuditEvent.Action.EVIDENCE_VERIFICATION, AuditEvent.Action.RISK_FLAG, AuditEvent.Action.DERIVED_ARTIFACT,
+]
+
+# Generic, non-identifying per-action descriptions used for the privileged
+# audit projection. Deliberately never derived from a target's own
+# `__str__` (which can embed factory/Party names, package identity, or
+# Disclosure Grant field scopes) and never copies `AuditEvent.metadata`
+# (which can carry free-text reasons) into the browser.
+PRIVILEGED_AUDIT_ACTION_DESCRIPTIONS = {
+    AuditEvent.Action.PRIVILEGED_ACCESS_GRANTED: "Acceso privilegiado concedido.",
+    AuditEvent.Action.PRIVILEGED_ACCESS_DENIED: "Acceso privilegiado denegado.",
+    AuditEvent.Action.ROLE_ASSIGNMENT: "Asignación de rol registrada.",
+    AuditEvent.Action.CAPABILITY_GRANT: "Capacidad otorgada.",
+    AuditEvent.Action.DISCLOSURE_GRANT: "Divulgación autorizada.",
+    AuditEvent.Action.DISCLOSURE_REVOKED: "Divulgación revocada.",
+    AuditEvent.Action.VISIBILITY_MODE_CHANGE: "Modo de visibilidad cambiado.",
+    AuditEvent.Action.CHANGE_REQUEST: "Solicitud de cambio registrada.",
+    AuditEvent.Action.PACKAGE_FREEZE: "Paquete congelado.",
+    AuditEvent.Action.VERIFICATION_ASSERTION: "Aserción de verificación registrada.",
+    AuditEvent.Action.EVIDENCE_VERIFICATION: "Verificación de evidencia registrada.",
+    AuditEvent.Action.RISK_FLAG: "Señal de riesgo registrada.",
+    AuditEvent.Action.DERIVED_ARTIFACT: "Artefacto derivado registrado.",
+}
+
+
+def _resolve_scope_for_target(target):
+    """Best-effort, deny-by-default resolution of (organization_id,
+    package_id) for an arbitrary governance/audit target, reusing only
+    existing persisted relationships. Returns (None, None) when the
+    target's scope cannot be safely resolved — callers must treat that as
+    unresolved and exclude the event, never include it."""
+    if target is None:
+        return None, None
+
+    if isinstance(target, Party):
+        return target.hosting_organization_id, None
+
+    if isinstance(target, RoleAssignment):
+        if target.package_id:
+            return target.package.organization_id, target.package_id
+        return target.organization_context_id, None
+
+    if isinstance(target, EvidenceBundle):
+        # Reuses the same target resolution evidence authorization itself
+        # uses (apps.audit.services.evidence_bundle_package) — never a
+        # second, parallel evidence-scope resolver.
+        package = audit.evidence_bundle_package(target)
+        if package is not None:
+            return package.organization_id, package.id
+        return None, None
+
+    if isinstance(target, EvidenceItem):
+        return _resolve_scope_for_target(target.bundle)
+
+    package = getattr(target, "package", None)
+    if package is not None:
+        return package.organization_id, package.id
+
+    organization_id = getattr(target, "organization_id", None)
+    if organization_id is not None:
+        return organization_id, None
+
+    return None, None
+
+
+def _resolve_audit_event_scope(event):
+    if event.content_type_id is None or event.object_id is None:
+        return None, None
+    try:
+        target = event.content_type.get_object_for_this_type(pk=event.object_id)
+    except ObjectDoesNotExist:
+        return None, None
+    return _resolve_scope_for_target(target)
+
+
+def authorized_privileged_audit_scopes(user):
+    """Organizations/packages the user holds an active, currently-effective
+    VIEW_PRIVILEGED_AUDIT CapabilityGrant for — direct or via an active
+    role assignment. `can_override_gates` and Django superuser status alone
+    never satisfy this; only an explicit grant does. A package-scoped
+    grant only ever adds to `package_ids` (it can never widen to the whole
+    organization); an organization-scoped grant only ever adds to
+    `org_ids` (it can never widen to every organization)."""
+    org_ids, package_ids = set(), set()
+    if user is None or not getattr(user, "is_authenticated", False):
+        return org_ids, package_ids
+    today = timezone.now().date()
+
+    direct_grants = CapabilityGrant.objects.filter(
+        user=user, capability_code="VIEW_PRIVILEGED_AUDIT", is_active=True,
+    )
+    for grant in direct_grants:
+        if not grant.is_currently_active(on_date=today):
+            continue
+        if grant.package_id:
+            package_ids.add(grant.package_id)
+        elif grant.organization_id:
+            org_ids.add(grant.organization_id)
+
+    for assignment in active_role_assignments(user):
+        role_grants = CapabilityGrant.objects.filter(
+            role_assignment=assignment, capability_code="VIEW_PRIVILEGED_AUDIT", is_active=True,
+        )
+        for grant in role_grants:
+            if not grant.is_currently_active(on_date=today):
+                continue
+            if assignment.package_id:
+                package_ids.add(assignment.package_id)
+            elif assignment.organization_context_id:
+                org_ids.add(assignment.organization_context_id)
+    return org_ids, package_ids
+
+
+def privileged_audit_queryset(user, *, org_ids=None, package_ids=None, limit=200, scan_limit=1000):
+    """Deny-by-default: only AuditEvents whose persisted target resolves,
+    through existing relationships, into an organization or package the
+    caller holds an active VIEW_PRIVILEGED_AUDIT grant for. An event whose
+    target cannot be resolved is excluded, never included. `scan_limit`
+    bounds how many recent candidate events are inspected before the
+    result is sliced to `limit` authorized rows — still the single
+    existing AuditEvent store, never a second one."""
+    if org_ids is None or package_ids is None:
+        org_ids, package_ids = authorized_privileged_audit_scopes(user)
+    if not org_ids and not package_ids:
+        return AuditEvent.objects.none()
+
+    candidates = (
+        AuditEvent.objects.filter(action__in=PRIVILEGED_AUDIT_ACTIONS)
+        .select_related("actor", "content_type")
+        .order_by("-occurred_at")[:scan_limit]
+    )
+    allowed_ids = []
+    for event in candidates:
+        event_org_id, event_package_id = _resolve_audit_event_scope(event)
+        if event_package_id is not None:
+            if event_package_id in package_ids or event_org_id in org_ids:
+                allowed_ids.append(event.id)
+        elif event_org_id is not None and event_org_id in org_ids:
+            allowed_ids.append(event.id)
+        if len(allowed_ids) >= limit:
+            break
+    return AuditEvent.objects.filter(id__in=allowed_ids).select_related("actor").order_by("-occurred_at")
+
+
+def privileged_audit_projection(event) -> dict:
+    """Server-side-safe representation of a privileged AuditEvent for
+    display: action type, actor, and timestamp only. Raw `summary`/
+    `metadata` — which may embed confidential target identifiers via a
+    model's own `__str__` (factory/Party names, package identity,
+    Disclosure Grant field scopes, free-text reasons) — are never copied
+    into this projection or the browser."""
+    return {
+        "occurred_at": event.occurred_at,
+        "action_display": event.get_action_display(),
+        "actor": str(event.actor) if event.actor_id else "—",
+        "description": PRIVILEGED_AUDIT_ACTION_DESCRIPTIONS.get(event.action, "Evento de gobernanza registrado."),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Disclosure grants
 # ---------------------------------------------------------------------------
 
@@ -508,6 +688,69 @@ def _package_has_unresolved_holds(package) -> bool:
         return True
     active_risks = RiskFlag.objects.filter(package=package, resolved_at__isnull=True).exclude(level=RiskFlag.Level.STANDARD)
     return active_risks.exists()
+
+
+# ---------------------------------------------------------------------------
+# Change Request projection — read authorization is a separate axis from
+# decision authority and from mere package participation (CTCF-CR-PROJ-018).
+#
+# Three distinct permissions:
+#   1. knowing a Change Request exists (package participation);
+#   2. reading its raw field_name/old/new/reason values (this section);
+#   3. approving or rejecting it (CHANGE_REQUEST_APPROVAL_CAPABILITY,
+#      unchanged, enforced in approve_change_request/reject_change_request).
+# Decision-button visibility is never treated as read authorization.
+# ---------------------------------------------------------------------------
+
+
+def can_view_change_request_detail(user, change_request) -> bool:
+    """Detailed Change Request values are visible only to the requester,
+    the decider (once decided), or an actor holding the same field-specific
+    capability required to decide that field — package participation alone
+    is never sufficient."""
+    if user is not None and getattr(user, "is_authenticated", False):
+        if change_request.requested_by_id and change_request.requested_by_id == user.id:
+            return True
+        if change_request.decided_by_id and change_request.decided_by_id == user.id:
+            return True
+    required_capability = CHANGE_REQUEST_APPROVAL_CAPABILITY.get(change_request.field_name, "APPROVE_ROLE_CHANGE")
+    return has_capability(user, required_capability, package=change_request.package)
+
+
+def change_request_projection(user, change_request) -> dict:
+    """Server-side safe projection for a package-facing Change Request
+    listing. A viewer with detailed read authority receives the raw
+    field_name/frozen_current_value/proposed_new_value/reason; every other
+    package-authorized viewer receives only a safe, generic projection with
+    none of those values — never a fetched-then-hidden template value."""
+    required_capability = CHANGE_REQUEST_APPROVAL_CAPABILITY.get(change_request.field_name, "APPROVE_ROLE_CHANGE")
+    projection = {
+        "id": change_request.id,
+        "status": change_request.status,
+        "status_display": change_request.get_status_display(),
+        "created_at": change_request.created_at,
+        "can_decide": (
+            change_request.status == ChangeRequest.Status.PENDING
+            and has_capability(user, required_capability, package=change_request.package)
+        ),
+    }
+    if can_view_change_request_detail(user, change_request):
+        projection.update({
+            "detailed": True,
+            "field_name": change_request.field_name,
+            "frozen_current_value": change_request.frozen_current_value,
+            "proposed_new_value": change_request.proposed_new_value,
+            "reason": change_request.reason,
+        })
+    else:
+        projection.update({
+            "detailed": False,
+            "safe_summary": (
+                "Cambio pendiente de revisión autorizada." if change_request.status == ChangeRequest.Status.PENDING
+                else "Cambio ya resuelto — revisión autorizada requerida para ver detalles."
+            ),
+        })
+    return projection
 
 
 # ---------------------------------------------------------------------------

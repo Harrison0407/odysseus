@@ -13,7 +13,8 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 
 from apps.accounts.models import Organization
-from apps.governance.models import Party, PartyMembership
+from apps.governance import services as governance_services
+from apps.governance.models import CapabilityGrant, Party, PartyMembership
 from apps.procurement import services
 from apps.procurement.models import ProcurementPackage, Supplier
 
@@ -74,6 +75,17 @@ class Command(BaseCommand):
             services.assign_package_role(package, trading_co_party, "seller_of_record", edison, client_visible=True)
             services.assign_package_role(package, trading_co_party, "china_procurement_operator", edison)
             services.assign_package_role(package, factory_party, "production_factory", edison)
+
+        # CTCF-AUDIT-017: privileged-audit access now requires an explicit
+        # VIEW_PRIVILEGED_AUDIT CapabilityGrant, scoped to this demo's own
+        # China Trading Co organization — never a bare can_override_gates
+        # check, and never platform-wide.
+        if harrison is not None and not CapabilityGrant.objects.filter(
+            user=harrison, capability_code="VIEW_PRIVILEGED_AUDIT", organization=china_org, is_active=True,
+        ).exists():
+            governance_services.grant_capability(
+                "VIEW_PRIVILEGED_AUDIT", user=harrison, granted_to_user=harrison, organization=china_org,
+            )
 
         self.stdout.write(self.style.SUCCESS(
             f"Escenario listo. Paquete: {package.code} ({package.pk}). "

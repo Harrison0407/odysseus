@@ -68,13 +68,22 @@ Gate 0 verified pre-reconciliation HEAD:
 
 `5cd0df64edc5baf89a0e3e4e3efe8e1fc78d0b2c`
 
-Latest application-behavior commit:
+Foundation remediation commit (independently revalidated for its 14
+non-deferred original findings; see `docs/KNOWN_LIMITATIONS.md`):
 
-`58889c8`
+`a89a9f714684515be1b2de704bf816611e094540`
+
+Latest application-behavior commit — foundation correction cycle 2
+(closes CTCF-AUDIT-017 and CTCF-CR-PROJ-018 found during that
+revalidation; not yet independently revalidated):
+
+The commit containing this revision; obtain its immutable hash with
+`git rev-parse HEAD`. Its parent is `a89a9f714684515be1b2de704bf816611e094540`.
 
 Tests:
 
-`455/455 passing`
+`496/496 passing` (472 from the foundation remediation plus 24 from
+foundation correction cycle 2)
 
 Migrations:
 
@@ -82,11 +91,12 @@ Migrations:
 
 Ahead / behind after fetch:
 
-`0 / 0`
+`0 / 0` (once pushed)
 
-The commits after `58889c8` through Gate 0 are documentation-only and do not
-change application behavior. The Gate 0 completion commit is the commit
-containing this revision.
+The commits after `58889c8` through Gate 0 were documentation-only. The
+foundation remediation (`a89a9f7`) and this correction cycle are genuine
+application-behavior changes, each with their own passing test evidence
+recorded above and in `docs/implementation-log.md`.
 
 Application behavior is authoritative only when:
 

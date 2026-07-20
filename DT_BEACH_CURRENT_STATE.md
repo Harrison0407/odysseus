@@ -4,41 +4,58 @@ Last updated: 2026-07-19
 
 ## Foundation remediation status
 
-**The accepted Controlled Transparency, Commercial Confidentiality &
-Authorization Foundation findings have been remediated and are ready for
-independent revalidation. Milestone 1 has not begun.**
+**Foundation correction cycle 2 is complete. Two independently-discovered
+gaps (CTCF-AUDIT-017, CTCF-CR-PROJ-018) have been corrected and a
+documentation count discrepancy (CTCF-DOC-020) has been fixed. This
+correction has not yet been independently revalidated. Milestone 1 has not
+begun.**
 
 Fresh remediation evidence began from clean, synchronized HEAD
-`9f0b52d9c74ef1c1f5f8f7710794f28e355bd44e` on
-`integration/dt-beach-supply-control-1.0.0`. The correction removes same-host
-package discovery, derives evidence authority from the persisted target,
-enforces quote separation of duties, makes disclosure projection live and
-revocable, fixes Change Request decisions/holds, protects classified document
-bytes, scopes the affected PurchaseOrder and ManifestLine API surfaces, gates
-risk flags and assertion revocation, and excludes draft quotes plus expired or
-revoked assertions from restricted projections.
+`a89a9f714684515be1b2de704bf816611e094540` on
+`integration/dt-beach-supply-control-1.0.0` — the commit an independent
+Fable revalidation found closed all 14 non-deferred originally-accepted
+findings, but also found two new gaps outside that original set:
+privileged audit access was gated only by `can_override_gates` with no
+organization/package scope applied to the underlying `AuditEvent`
+queryset (CTCF-AUDIT-017), and basic package participation exposed a
+Change Request's raw values regardless of decision authority
+(CTCF-CR-PROJ-018). Both are now corrected — see ADR-042 and
+`docs/SECURITY.md` for the mechanism. Neither required a migration.
+`procurement.services.revoke_verification_assertion` remains intentionally
+service-only, with no HTTP route added (CTCF-ASSERT-HTTP-019, deferred by
+explicit decision, not by oversight).
 
-Validation after stabilization:
+Validation after this correction cycle (local, not yet independently
+revalidated):
 
-| Check | Result |
-|---|---|
-| `manage.py check` | Passed; no issues |
-| `makemigrations --check --dry-run` | Passed; no model changes detected |
-| `migrate --check` | Passed; no unapplied migrations |
-| Focused foundation/remediation suite | **78 passed, 0 failed** |
-| Full regression suite | **472 passed, 0 failed** |
+| Check | Command | Result |
+|---|---|---|
+| `manage.py check` | `python manage.py check` | Passed; no issues |
+| `makemigrations --check --dry-run` | `python manage.py makemigrations --check --dry-run` | Passed; no model changes detected |
+| `migrate --check` | `python manage.py migrate --check` | Passed; no unapplied migrations |
+| Focused foundation/remediation suite | `pytest tests/test_foundation_remediation.py tests/test_procurement_confidentiality.py tests/test_confidentiality_http.py tests/test_evidence_and_disclosure.py -v` | **53 passed, 0 failed** (48.93s, SQLite) |
+| Full regression suite | `pytest tests/` | **496 passed, 0 failed** (111.11s, SQLite — 472 prior + 24 new: `tests/test_privileged_audit_scope.py`, `tests/test_change_request_projection.py`) |
 
-The new integration tests use same-organization, different-organization, and
-cross-package adversaries; unique sentinels; temporary document storage; and
-server-side HTML/API/context/count/direct-object assertions. No raw
-EvidenceBundle/EvidenceItem projection was added. `VisibilityMode` remains
-versioned policy metadata: neither mode bypasses capability/classification
-rules; a controlled-transparency agreement becomes executable through an
-active, field-scoped Disclosure Grant.
+The **53** focused-suite figure is the exact, reproducible result of the
+command listed above against the four files that constitute that suite —
+a prior, unreproducible "78" figure has been corrected (CTCF-DOC-020).
+PostgreSQL was not available in the environment this cycle ran in (no
+Docker daemon); this is recorded as a limitation, not claimed as
+PostgreSQL-validated.
+
+The new integration tests use same-organization, different-organization,
+cross-package, and cross-organization-audit-scope adversaries; unique
+sentinels; temporary document storage; and server-side HTML/API/context/
+count/direct-object assertions. No raw EvidenceBundle/EvidenceItem
+projection was added. `VisibilityMode` remains versioned policy metadata:
+neither mode bypasses capability/classification rules; a
+controlled-transparency agreement becomes executable through an active,
+field-scoped Disclosure Grant.
 
 Exact next action:
 
-**Independently revalidate the remediated foundation.**
+**Run a new, independent Fable 5 revalidation session against the
+resulting commit. Do not begin Milestone 1 during that revalidation.**
 
 Only a successful independent revalidation may establish readiness to begin
 **Milestone 1 — Configurable Procurement Gates A1–A6**.

@@ -272,6 +272,18 @@ risk hold remains unresolved. Every
 decision is immutable history (`decided_by`, `decided_at`,
 `decision_comment`).
 
+**Reading a Change Request's raw values is a separate authorization axis
+from package participation (foundation correction cycle 2,
+CTCF-CR-PROJ-018; ADR-042).** `package_detail` no longer places every
+`ChangeRequest` for a package into the template context unconditionally.
+`governance.services.change_request_projection` exposes the raw
+`field_name`/`frozen_current_value`/`proposed_new_value`/`reason` only to
+the requester, the decider, or an actor holding the same field-specific
+capability required to decide that field; every other package-authorized
+viewer sees only a safe, generic projection ("Cambio pendiente de revisión
+autorizada." / a resolved-status equivalent). Decision-button visibility
+was never, and is not now, treated as read authorization.
+
 ## 14. Risk flags (foundation only)
 
 `governance.RiskFlag` — `STANDARD`/`CONTROLLED_OPAQUE`/`HIGH_RISK`,
@@ -306,11 +318,21 @@ section 10, is established here).
   change requests, and disclosure grants, each conditionally rendered by
   the viewer's own capabilities (never hidden only by CSS).
 - **Privileged audit / access explanation**: `/gobernanza/auditoria-privilegiada/`
-  — read-only log of every role assignment, capability grant, disclosure
-  grant/revocation, visibility-mode change, package freeze, change
-  request, verification assertion, evidence verification, and privileged
-  access grant/denial. Gated by `can_override_gates`; never exposed to
-  ordinary users. No user impersonation exists or was added.
+  — read-only log of role assignments, capability grants, disclosure
+  grant/revocations, visibility-mode changes, package freezes, change
+  requests, verification assertions, evidence verifications, and
+  privileged access grants/denials, **scoped to the requester's own
+  authorized organizations/packages** (foundation correction cycle 2,
+  CTCF-AUDIT-017; ADR-042) — never a system-wide log, and never satisfied
+  by `can_override_gates` or Django superuser status alone. Access
+  requires an explicit, currently-active `VIEW_PRIVILEGED_AUDIT`
+  `CapabilityGrant` (organization-scoped or package-scoped), the same
+  explicit-grant model used for every other sensitive capability in this
+  system. Rendered rows show only action type, actor, and timestamp, plus
+  a fixed generic description — never a target's raw `__str__` or
+  `AuditEvent.metadata`, which could otherwise embed a hidden factory's
+  real name, a package's identity, or a Disclosure Grant's `field_scope`.
+  No user impersonation exists or was added.
 - **Seeding a live scenario**: `python manage.py seed_confidentiality_demo`
   (idempotent) creates the DT Beach / China Trading Co / Edison / hidden
   factory / client scenario used for this release's live validation.

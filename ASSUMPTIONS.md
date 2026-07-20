@@ -732,3 +732,27 @@ instead, exactly as required, and is **not** listed here as a resolved assumptio
   authorized China-ops user, not a factory user account) and reflects
   the realistic assumption that factories rarely have direct access to
   a buyer-side or intermediary-side system.
+- **A74. Privileged-audit scope resolution (CTCF-AUDIT-017,
+  `governance.services.privileged_audit_queryset`) resolves each
+  candidate `AuditEvent`'s target scope in Python, over the most recent
+  1,000 candidate events, rather than as a single SQL-level filter.**
+  `AuditEvent` deliberately has no persisted organization/package column
+  (spec-consistent generic content-type pointer, ADR-004) — adding one
+  would be a schema change and a second, denormalized scope store. At
+  this pilot's documented scale (`docs/SECURITY.md`, `docs/KNOWN_LIMITATIONS.md`
+  — a single small server, ~8 named users), resolving scope per candidate
+  event by following existing relationships is correctness-first and
+  adequate; it should be revisited (e.g. a computed/indexed scope column
+  maintained at write time) only if privileged-event volume or query
+  latency at a larger deployment ever makes it a real constraint —
+  not before.
+- **A75. Change Request detailed-read authorization
+  (CTCF-CR-PROJ-018, `governance.services.can_view_change_request_detail`)
+  grants the requester and the decider an exception to see their own
+  request's raw values even without holding the field-specific decision
+  capability.** This was not explicitly required by the accepted finding,
+  but withholding a user's own submitted request content from them would
+  be a usability regression with no confidentiality benefit — they
+  already know what they proposed. This mirrors the existing pattern
+  elsewhere in this system of never hiding an actor's own prior action
+  from them.

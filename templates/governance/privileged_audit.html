@@ -1,17 +1,17 @@
 {% extends "base.html" %}
 {% block content %}
 <h3>Auditoría privilegiada (solo lectura)</h3>
-<p class="text-muted">Decisiones de acceso privilegiado, roles, capacidades, divulgaciones, cambios y verificaciones.</p>
+<p class="text-muted">Decisiones de acceso privilegiado, roles, capacidades, divulgaciones, cambios y verificaciones — limitado a las organizaciones y paquetes para los que usted tiene una capacidad VIEW_PRIVILEGED_AUDIT vigente.</p>
 <div class="table-responsive">
 <table class="table table-sm table-striped bg-white">
-    <thead><tr><th>Fecha</th><th>Acción</th><th>Actor</th><th>Resumen</th></tr></thead>
+    <thead><tr><th>Fecha</th><th>Acción</th><th>Actor</th><th>Descripción</th></tr></thead>
     <tbody>
-    {% for e in events %}
+    {% for row in rows %}
     <tr>
-        <td>{{ e.occurred_at|date:"d/m/Y H:i" }}</td>
-        <td>{{ e.get_action_display }}</td>
-        <td>{{ e.actor|default:"—" }}</td>
-        <td>{{ e.summary }}</td>
+        <td>{{ row.occurred_at|date:"d/m/Y H:i" }}</td>
+        <td>{{ row.action_display }}</td>
+        <td>{{ row.actor }}</td>
+        <td>{{ row.description }}</td>
     </tr>
     {% empty %}
     <tr><td colspan="4" class="text-muted">Sin eventos.</td></tr>

@@ -1363,8 +1363,105 @@ documented order.
 
     Final local evidence: `manage.py check` passed; migration drift and
     application checks passed with no new migration; the focused
-    foundation/remediation suite passed **78/78**; the complete suite passed
-    **472/472**. This is local executable evidence, not deployed-runtime or
-    production-operations evidence. Exact next action: independent
-    revalidation of this remediation. Milestone 1 remains prohibited until
-    that control point accepts the foundation.
+    foundation/remediation suite (`pytest tests/test_foundation_remediation.py
+    tests/test_procurement_confidentiality.py tests/test_confidentiality_http.py
+    tests/test_evidence_and_disclosure.py`) passed **53/53**; the complete
+    suite passed **472/472**. This is local executable evidence, not
+    deployed-runtime or production-operations evidence. Exact next action:
+    independent revalidation of this remediation. Milestone 1 remains
+    prohibited until that control point accepts the foundation.
+
+    *Correction, foundation correction cycle 2 (see entry 53 below):* this
+    entry originally reported the focused-suite figure as "78/78". That
+    figure was not reproducible against the exact command above and has
+    been corrected to the true, reproducible result, **53/53**
+    (CTCF-DOC-020).
+
+53. **Foundation correction cycle 2 — closed CTCF-AUDIT-017 and
+    CTCF-CR-PROJ-018, corrected the CTCF-DOC-020 test-count discrepancy,
+    recorded the CTCF-ASSERT-HTTP-019 boundary.** Work began from clean,
+    synchronized HEAD `a89a9f714684515be1b2de704bf816611e094540` on
+    `integration/dt-beach-supply-control-1.0.0` — the exact commit an
+    independent Fable revalidation of entry 52 confirmed closed all 14
+    non-deferred originally-accepted findings, while separately
+    discovering two new gaps outside that original set. No A1–A6 or
+    Milestone 2+ work was introduced; no migration was required.
+
+    **CTCF-AUDIT-017.** `governance.views.privileged_audit` previously
+    required only `can_override_gates` (no explicit `VIEW_PRIVILEGED_AUDIT`
+    capability check anywhere in the codebase, despite that capability
+    already existing in `ALL_CAPABILITY_CODES` for exactly this purpose)
+    and applied no organization/package scope to the underlying
+    `AuditEvent` queryset — any senior role-holder in any tenant
+    organization could read every organization's privileged audit
+    summaries, which embedded hidden-factory names, package identities,
+    and Disclosure Grant field scopes via unrestricted model `__str__`
+    rendering. Access now requires an explicit, currently-active
+    `VIEW_PRIVILEGED_AUDIT` `CapabilityGrant`
+    (`governance.services.authorized_privileged_audit_scopes`); the
+    `AuditEvent` queryset is scoped before any event is treated as visible
+    (`privileged_audit_queryset`), resolving each event's target through
+    existing relationships (reusing `apps.audit.services
+    .evidence_bundle_package` for evidence targets — no second resolver);
+    an unresolvable target is excluded, never included. The rendered
+    projection (`privileged_audit_projection`) shows only action type,
+    actor, and timestamp with a fixed generic description — never a raw
+    `__str__` or `AuditEvent.metadata`. A denied access attempt is now
+    itself durably audited. See ADR-042.
+
+    **CTCF-CR-PROJ-018.** `package_detail` previously placed every
+    `ChangeRequest` for a package into the template context
+    unconditionally — package participation alone, not any field-specific
+    decision authority, controlled what a viewer saw, including
+    `field_name`/`frozen_current_value`/`proposed_new_value`/`reason`.
+    `governance.services.change_request_projection` now distinguishes
+    knowing a request exists, reading its raw values, and deciding it —
+    reusing the existing `CHANGE_REQUEST_APPROVAL_CAPABILITY` mapping as
+    the same authority required for detailed read access, plus an
+    exception for the requester and the decider. Every other
+    package-authorized viewer receives a safe, generic projection. The
+    queryset uses `.only()` on non-sensitive columns so the sensitive text
+    fields are not fetched for rows that end up projected as safe-only.
+    Decision-button visibility (`can_decide`) is computed independently
+    and never substitutes for read authorization. See ADR-042.
+
+    **CTCF-DOC-020.** Corrected the unreproducible "78/78" focused-suite
+    figure (entry 52 above, and `DT_BEACH_CURRENT_STATE.md`) to the true,
+    reproducible **53/53**.
+
+    **CTCF-ASSERT-HTTP-019.** No HTTP route was added for
+    `procurement.services.revoke_verification_assertion` this cycle — it
+    remains service-only, by explicit recorded decision. Whether
+    `CREATE_COMMERCIAL_DOCUMENT` is the correct authority for that
+    revocation remains an open question requiring a future owner decision
+    or direct documentary evidence before any interface is connected to
+    that service; no interface was connected this cycle.
+
+    Added `tests/test_privileged_audit_scope.py` (15 adversarial tests:
+    authority matrix including `can_override_gates`-alone denial, expired/
+    revoked/future grants, cross-organization and cross-package isolation,
+    unresolvable-target fail-closed behavior, information-absence, and
+    denial-audit durability) and `tests/test_change_request_projection.py`
+    (9 tests: restricted-viewer safe projection, requester/decider
+    exceptions, one-field-capability-does-not-reveal-another-field,
+    package-B-authority-does-not-reveal-package-A, and
+    approve/reject/hold-recomputation regression). Updated
+    `tests/test_confidentiality_http.py::test_authorized_admin_can_view_governance_screens`
+    to grant the explicit `VIEW_PRIVILEGED_AUDIT` capability the new
+    authorization model requires (the prior version relied on
+    `can_override_gates` alone, which is exactly the defect closed here).
+    Updated `apps.procurement.management.commands.seed_confidentiality_demo`
+    to seed an organization-scoped `VIEW_PRIVILEGED_AUDIT` grant for the
+    live-validation scenario's senior user.
+
+    Final local evidence: `manage.py check` passed; migration drift and
+    unapplied-migration checks passed with no new migration (72/72 applied);
+    the focused foundation/remediation suite passed **53/53** (48.93s); the
+    complete suite passed **496/496** (111.11s) — 472 prior plus 24 new.
+    All figures were produced by the exact commands recorded in
+    `DT_BEACH_CURRENT_STATE.md`. This is local SQLite executable evidence
+    only — PostgreSQL was not available in this session (no Docker
+    daemon), and this correction has **not yet been independently
+    revalidated**. Exact next action: run a new, independent Fable 5
+    revalidation session against the resulting commit. Milestone 1 remains
+    prohibited until that revalidation accepts the foundation.

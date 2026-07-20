@@ -122,11 +122,15 @@
     <div class="card-body">
         {% for cr in change_requests %}
         <div class="border rounded p-2 mb-2">
+            {% if cr.detailed %}
             <strong>{{ cr.field_name }}</strong>: {{ cr.frozen_current_value }} &rarr; {{ cr.proposed_new_value }}
-            <span class="badge bg-secondary">{{ cr.get_status_display }}</span>
-            {% if cr.status == "pending" %}
-            <form method="post" action="{% url 'procurement:change-request-decide' cr.pk 'approve' %}" class="d-inline">{% csrf_token %}<button class="btn btn-sm btn-success">Aprobar</button></form>
-            <form method="post" action="{% url 'procurement:change-request-decide' cr.pk 'reject' %}" class="d-inline">{% csrf_token %}<button class="btn btn-sm btn-outline-danger">Rechazar</button></form>
+            {% else %}
+            <span class="text-muted">{{ cr.safe_summary }}</span>
+            {% endif %}
+            <span class="badge bg-secondary">{{ cr.status_display }}</span>
+            {% if cr.can_decide %}
+            <form method="post" action="{% url 'procurement:change-request-decide' cr.id 'approve' %}" class="d-inline">{% csrf_token %}<button class="btn btn-sm btn-success">Aprobar</button></form>
+            <form method="post" action="{% url 'procurement:change-request-decide' cr.id 'reject' %}" class="d-inline">{% csrf_token %}<button class="btn btn-sm btn-outline-danger">Rechazar</button></form>
             {% endif %}
         </div>
         {% empty %}

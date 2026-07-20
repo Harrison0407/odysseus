@@ -882,11 +882,45 @@ def test_module_is_pure_and_reuses_committed_kernels_without_new_frameworks():
 
 def test_no_current_route_imports_truth_kernel_and_no_migration_was_added():
     root = Path(__file__).parents[1]
-    production = [
-        path for path in (root / "src").rglob("*.py")
-        if path.name != "marketmatch_truth_accountability.py"
-    ]
-    assert all("marketmatch_truth_accountability" not in path.read_text(encoding="utf-8") for path in production)
+
+    protected_kernels = {
+        "src.marketmatch_truth_accountability",
+        "src.marketmatch_work_orchestration",
+    }
+
+    def imported_protected_kernels(source: str) -> set[str]:
+        tree = ast.parse(source)
+        imported: set[str] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module in protected_kernels:
+                imported.add(node.module)
+            elif isinstance(node, ast.Import):
+                imported.update(
+                    alias.name for alias in node.names if alias.name in protected_kernels
+                )
+        return imported
+
+    def route_source_is_isolated(source: str) -> bool:
+        return not imported_protected_kernels(source)
+
+    work_kernel = root / "src" / "marketmatch_work_orchestration.py"
+    assert imported_protected_kernels(work_kernel.read_text(encoding="utf-8")) == {
+        "src.marketmatch_truth_accountability"
+    }
+
+    route_modules = [root / "app.py", *(root / "routes").rglob("*.py")]
+    assert all(
+        route_source_is_isolated(path.read_text(encoding="utf-8"))
+        for path in route_modules
+    )
+
+    synthetic_route_import = (
+        "from src.marketmatch_truth_accountability import OperationalEvent\n"
+    )
+    assert imported_protected_kernels(synthetic_route_import) == {
+        "src.marketmatch_truth_accountability"
+    }
+    assert not route_source_is_isolated(synthetic_route_import)
     assert not any("truth" in path.name.lower() for path in (root / "alembic" / "versions").glob("*.py"))
 
 

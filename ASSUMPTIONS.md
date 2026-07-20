@@ -734,18 +734,47 @@ instead, exactly as required, and is **not** listed here as a resolved assumptio
   a buyer-side or intermediary-side system.
 - **A74. Privileged-audit scope resolution (CTCF-AUDIT-017,
   `governance.services.privileged_audit_queryset`) resolves each
-  candidate `AuditEvent`'s target scope in Python, over the most recent
-  1,000 candidate events, rather than as a single SQL-level filter.**
-  `AuditEvent` deliberately has no persisted organization/package column
-  (spec-consistent generic content-type pointer, ADR-004) — adding one
-  would be a schema change and a second, denormalized scope store. At
-  this pilot's documented scale (`docs/SECURITY.md`, `docs/KNOWN_LIMITATIONS.md`
-  — a single small server, ~8 named users), resolving scope per candidate
-  event by following existing relationships is correctness-first and
-  adequate; it should be revisited (e.g. a computed/indexed scope column
-  maintained at write time) only if privileged-event volume or query
-  latency at a larger deployment ever makes it a real constraint —
-  not before.
+  candidate `AuditEvent`'s target scope in Python, rather than as a single
+  SQL-level filter.** `AuditEvent` deliberately has no persisted
+  organization/package column (spec-consistent generic content-type
+  pointer, ADR-004) — adding one would be a schema change and a second,
+  denormalized scope store. At this pilot's documented scale
+  (`docs/SECURITY.md`, `docs/KNOWN_LIMITATIONS.md` — a single small
+  server, ~8 named users), resolving scope per candidate event by
+  following existing relationships is correctness-first and adequate; it
+  should be revisited (e.g. a computed/indexed scope column maintained at
+  write time) only if privileged-event volume or query latency at a
+  larger deployment ever makes it a real constraint — not before.
+  **Superseded in part by A76 below:** the original design additionally
+  bounded the scan at the 1,000 most-recent candidates for query-cost
+  control; an independent revalidation found this could silently omit an
+  older authorized event (CTCF-AUDIT-WINDOW-023), so that specific bound
+  was removed — A74's core rationale (Python-side resolution over a
+  denormalized column, given current scale) still stands.
+- **A76. Foundation correction cycle 3 (ADR-043) removed the 1,000-event
+  scan ceiling entirely rather than raising it to a larger fixed number.**
+  A larger fixed cap (e.g. 10,000) would still be theoretically
+  incomplete, just less likely to matter at current data volumes — the
+  same class of silent-omission defect the independent revalidation
+  found, merely with a higher threshold. The corrected design instead
+  scans in deterministic, cursor-paginated batches of 200 until the
+  requested result count is satisfied or candidates are truly exhausted,
+  guaranteeing completeness by construction rather than by a
+  probably-large-enough constant. The tradeoff is request latency in a
+  pathological case (very high proportion of unauthorized events ahead of
+  a much smaller authorized set) — acceptable at this pilot's documented
+  scale (`docs/SECURITY.md`), and, unlike a fixed cap, does not require
+  re-tuning if that scale grows moderately; a persisted/indexed scope
+  column (per A74) remains the correct fix if volume ever makes even this
+  unbounded-but-batched scan too slow.
+- **A77. `governance.services._resolve_scope_for_target`'s `CapabilityGrant`
+  branch does not consult `RoleAssignment.project` when resolving scope
+  through `role_assignment` (CTCF-AUDIT-SCOPE-021).** `RoleAssignment.
+  organization_context` is a required (non-nullable) field, so it always
+  resolves once `role_assignment` is reached — a `project`-based fallback
+  would be structurally unreachable in every case, not a narrower or
+  additional scope path. This was confirmed by direct code inspection of
+  the `RoleAssignment` model, not merely assumed.
 - **A75. Change Request detailed-read authorization
   (CTCF-CR-PROJ-018, `governance.services.can_view_change_request_detail`)
   grants the requester and the decider an exception to see their own

@@ -326,13 +326,21 @@ section 10, is established here).
   CTCF-AUDIT-017; ADR-042) — never a system-wide log, and never satisfied
   by `can_override_gates` or Django superuser status alone. Access
   requires an explicit, currently-active `VIEW_PRIVILEGED_AUDIT`
-  `CapabilityGrant` (organization-scoped or package-scoped), the same
+  `CapabilityGrant` (organization-scoped or package-scoped, including a
+  grant that inherits its scope entirely through `role_assignment` —
+  foundation correction cycle 3, CTCF-AUDIT-SCOPE-021; ADR-043), the same
   explicit-grant model used for every other sensitive capability in this
   system. Rendered rows show only action type, actor, and timestamp, plus
   a fixed generic description — never a target's raw `__str__` or
   `AuditEvent.metadata`, which could otherwise embed a hidden factory's
   real name, a package's identity, or a Disclosure Grant's `field_scope`.
-  No user impersonation exists or was added.
+  Neither field is ever selected by the retrieval path at all, at any
+  phase, authorized or not (CTCF-AUDIT-RETRIEVAL-022; ADR-043) — verified
+  by direct SQL-capture tests. Result completeness is not bounded by an
+  arbitrary candidate-scan ceiling: the requested number of authorized
+  events is returned whenever they exist, however many newer unrelated
+  events exist ahead of them (CTCF-AUDIT-WINDOW-023; ADR-043). No user
+  impersonation exists or was added.
 - **Seeding a live scenario**: `python manage.py seed_confidentiality_demo`
   (idempotent) creates the DT Beach / China Trading Co / Edison / hidden
   factory / client scenario used for this release's live validation.

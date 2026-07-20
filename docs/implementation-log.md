@@ -1465,3 +1465,85 @@ documented order.
     revalidated**. Exact next action: run a new, independent Fable 5
     revalidation session against the resulting commit. Milestone 1 remains
     prohibited until that revalidation accepts the foundation.
+
+54. **Foundation correction cycle 3 — closed CTCF-AUDIT-SCOPE-021,
+    CTCF-AUDIT-RETRIEVAL-022, and CTCF-AUDIT-WINDOW-023, all three found
+    and reproduced with direct evidence during an independent Fable
+    revalidation of foundation correction cycle 2's own commit
+    (`84b12a2187d93f2ccd9992780a5a4b73e54e7cc6`).** No A1–A6 or Milestone
+    2+ work was introduced; no migration was required.
+
+    **CTCF-AUDIT-SCOPE-021.** `governance.services._resolve_scope_for_target`
+    did not follow a `CapabilityGrant` target's `role_assignment` when the
+    grant's own `package`/`organization` columns were unset — a valid,
+    pre-existing pattern (`grant_capability(..., role_assignment=assignment)`
+    without also passing `package=`/`organization=`) that this same
+    codebase's fixtures and tests already used elsewhere. Such a
+    `CAPABILITY_GRANT` audit event resolved to no scope at all and was
+    excluded even for an otherwise fully-authorized viewer — a fail-closed,
+    under-inclusion defect, reproduced directly during the revalidation
+    (`_resolve_scope_for_target(grant)` returned `(None, None)` against an
+    expected `(organization_id, package_id)`). The resolver now explicitly
+    checks `CapabilityGrant.role_assignment` as a third resolution step,
+    after direct `package` and direct `organization`. `RoleAssignment.project`
+    is not consulted: `RoleAssignment.organization_context` is a required
+    field, so it always resolves first, making a project-based fallback
+    structurally unreachable (A77).
+
+    **CTCF-AUDIT-RETRIEVAL-022.** `privileged_audit_queryset`'s candidate
+    scan previously selected full `AuditEvent` rows — including `summary`
+    and `metadata`, columns the safe projection never uses — for every
+    candidate, authorized or not, before the per-row scope decision,
+    confirmed by direct `.query` SQL inspection during the revalidation.
+    The function now selects only `id`/`action`/`occurred_at`/`actor_id`/
+    `content_type_id`/`object_id` at every phase; neither `summary` nor
+    `metadata` is ever selected by this function, for any row, at any
+    point. Verified by SQL-capture tests
+    (`TestRetrievalBeforeAuthorization`) asserting no query issued by this
+    path contains either column name.
+
+    **CTCF-AUDIT-WINDOW-023.** The prior scan capped candidate inspection
+    at the 1,000 most-recent events; an authorized event older than that
+    many unrelated, unauthorized events could be silently omitted — a real
+    completeness gap the revalidation reproduced directly (1,005
+    unauthorized events plus one older authorized event; the old design
+    would have missed the older event). The scan is now a
+    deterministic-order (`-occurred_at, -id`), cursor-paginated loop over
+    batches of 200 safe-column-only candidates, continuing across as many
+    batches as needed until the requested result limit is satisfied or
+    candidates are genuinely exhausted (A76). No count or volume signal
+    about excluded events is exposed at any point.
+
+    Added 15 new tests to `tests/test_privileged_audit_scope.py`:
+    `TestCapabilityGrantScopeInheritance` (9 tests — direct package/
+    organization scope still resolves; role_assignment-only package and
+    organization scope now resolves; a role_assignment-derived grant's own
+    `CAPABILITY_GRANT` event becomes visible; package scope does not widen
+    to organization scope; no-scope-at-all fails closed; expiry is
+    respected; package A does not expose package B), `TestRetrievalBeforeAuthorization`
+    (3 tests — direct SQL-capture assertions that no query selects
+    `summary`/`metadata`, for both authorized and unauthorized candidate
+    rows, and that the HTTP response/context never carries either field),
+    and `TestScanWindowCompleteness` (3 tests — an authorized event older
+    than 1,005 newer unauthorized events remains visible; the newest 200
+    authorized events are selected, not merely the newest events globally,
+    verified against an independently-computed ground-truth query rather
+    than a manually reconstructed expectation; no unauthorized count or
+    volume signal is exposed). `tests/test_change_request_projection.py`
+    was not modified — this cycle's scope is strictly the privileged-audit
+    mechanism.
+
+    Final local evidence: `manage.py check` passed; migration drift and
+    unapplied-migration checks passed with no new migration (72/72
+    applied); the focused foundation/remediation suite passed **53/53**
+    (49.76s); `tests/test_privileged_audit_scope.py` plus
+    `tests/test_change_request_projection.py` together passed **39/39**
+    (46.15s — 31 privileged-audit, 8 Change Request); the complete suite
+    passed **511/511** (113.25s) — 496 prior plus 15 new. All figures were
+    produced by the exact commands recorded in `DT_BEACH_CURRENT_STATE.md`.
+    This is local SQLite executable evidence only — PostgreSQL was not
+    available in this session (no Docker daemon), and this correction has
+    **not yet been independently revalidated**. Exact next action: run a
+    new, independent Fable 5 revalidation session against the resulting
+    commit. Milestone 1 remains prohibited until that revalidation accepts
+    the foundation.

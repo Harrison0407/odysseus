@@ -405,6 +405,28 @@ def _resolve_scope_for_target(target):
     if isinstance(target, EvidenceItem):
         return _resolve_scope_for_target(target.bundle)
 
+    if isinstance(target, CapabilityGrant):
+        # A grant may hold direct package/organization scope, OR inherit
+        # scope entirely through its role_assignment (a valid, pre-existing
+        # pattern this API has always allowed: grant_capability(...,
+        # role_assignment=assignment) without also passing package=/
+        # organization=). Resolution order: direct package, direct
+        # organization, then the role_assignment's own scope (which itself
+        # never fails closed, since RoleAssignment.organization_context is
+        # a required field — see the RoleAssignment branch above).
+        # RoleAssignment.project is not consulted: it carries no
+        # ProcurementPackage relationship, and organization_context is
+        # always already resolvable, so a project-based fallback would be
+        # unreachable dead code, not an intentionally omitted scope
+        # (CTCF-AUDIT-SCOPE-021).
+        if target.package_id:
+            return target.package.organization_id, target.package_id
+        if target.organization_id:
+            return target.organization_id, None
+        if target.role_assignment_id:
+            return _resolve_scope_for_target(target.role_assignment)
+        return None, None
+
     package = getattr(target, "package", None)
     if package is not None:
         return package.organization_id, package.id
@@ -464,35 +486,87 @@ def authorized_privileged_audit_scopes(user):
     return org_ids, package_ids
 
 
-def privileged_audit_queryset(user, *, org_ids=None, package_ids=None, limit=200, scan_limit=1000):
-    """Deny-by-default: only AuditEvents whose persisted target resolves,
-    through existing relationships, into an organization or package the
-    caller holds an active VIEW_PRIVILEGED_AUDIT grant for. An event whose
-    target cannot be resolved is excluded, never included. `scan_limit`
-    bounds how many recent candidate events are inspected before the
-    result is sliced to `limit` authorized rows — still the single
-    existing AuditEvent store, never a second one."""
+# Fields safe to select before scope authorization is decided — deliberately
+# excludes `summary` and `metadata`, which can carry confidential target
+# text, for every row, authorized or not (CTCF-AUDIT-RETRIEVAL-022). The
+# safe projection (`privileged_audit_projection`) never needs either field,
+# so this function never selects them at all, for any row, at any phase.
+_AUDIT_EVENT_SAFE_FIELDS = ("id", "action", "occurred_at", "actor_id", "content_type_id", "object_id")
+
+# Rows inspected per authorization-safe scan batch (CTCF-AUDIT-WINDOW-023).
+# Not a correctness bound — scanning continues across as many batches as
+# needed until `limit` authorized events are found or candidates are
+# exhausted; this only bounds how many safe-column rows are pulled per
+# round trip.
+_AUDIT_EVENT_SCAN_BATCH_SIZE = 200
+
+
+def privileged_audit_queryset(user, *, org_ids=None, package_ids=None, limit=200):
+    """Deny-by-default, two-phase, authorization-before-retrieval result set
+    (CTCF-AUDIT-RETRIEVAL-022, CTCF-AUDIT-WINDOW-023).
+
+    Phase 1 scans AuditEvents in deterministic (-occurred_at, -id) batches,
+    selecting only `_AUDIT_EVENT_SAFE_FIELDS` — never `summary` or
+    `metadata` — and resolves each row's target scope through existing
+    relationships (`_resolve_audit_event_scope`). Scanning continues,
+    batch after batch, until `limit` authorized event ids have been found
+    or every candidate has been exhausted — completeness of the requested
+    `limit` no longer depends on an arbitrary global scan ceiling; an
+    authorized event older than any number of unrelated, unauthorized
+    events is never silently omitted.
+
+    Phase 2 re-selects only the same safe fields for the final, ordered,
+    authorized id set — `summary`/`metadata` are still never selected,
+    since `privileged_audit_projection` never uses them.
+
+    An event whose target cannot be resolved through an existing
+    relationship is excluded, never included (fail closed). No count or
+    volume signal about excluded/unauthorized events is ever computed or
+    returned."""
     if org_ids is None or package_ids is None:
         org_ids, package_ids = authorized_privileged_audit_scopes(user)
     if not org_ids and not package_ids:
         return AuditEvent.objects.none()
 
-    candidates = (
-        AuditEvent.objects.filter(action__in=PRIVILEGED_AUDIT_ACTIONS)
-        .select_related("actor", "content_type")
-        .order_by("-occurred_at")[:scan_limit]
-    )
     allowed_ids = []
-    for event in candidates:
-        event_org_id, event_package_id = _resolve_audit_event_scope(event)
-        if event_package_id is not None:
-            if event_package_id in package_ids or event_org_id in org_ids:
+    cursor = None  # (occurred_at, id) of the last row scanned in the prior batch
+    while len(allowed_ids) < limit:
+        batch_qs = (
+            AuditEvent.objects.filter(action__in=PRIVILEGED_AUDIT_ACTIONS)
+            .only(*_AUDIT_EVENT_SAFE_FIELDS)
+            .select_related("content_type")
+        )
+        if cursor is not None:
+            cursor_occurred_at, cursor_id = cursor
+            batch_qs = batch_qs.filter(
+                Q(occurred_at__lt=cursor_occurred_at)
+                | (Q(occurred_at=cursor_occurred_at) & Q(id__lt=cursor_id))
+            )
+        batch = list(batch_qs.order_by("-occurred_at", "-id")[:_AUDIT_EVENT_SCAN_BATCH_SIZE])
+        if not batch:
+            break  # candidates exhausted
+
+        for event in batch:
+            event_org_id, event_package_id = _resolve_audit_event_scope(event)
+            if event_package_id is not None:
+                if event_package_id in package_ids or event_org_id in org_ids:
+                    allowed_ids.append(event.id)
+            elif event_org_id is not None and event_org_id in org_ids:
                 allowed_ids.append(event.id)
-        elif event_org_id is not None and event_org_id in org_ids:
-            allowed_ids.append(event.id)
-        if len(allowed_ids) >= limit:
-            break
-    return AuditEvent.objects.filter(id__in=allowed_ids).select_related("actor").order_by("-occurred_at")
+            if len(allowed_ids) >= limit:
+                break
+
+        last = batch[-1]
+        cursor = (last.occurred_at, last.id)
+        if len(batch) < _AUDIT_EVENT_SCAN_BATCH_SIZE:
+            break  # last batch was partial -- no more candidates remain
+
+    return (
+        AuditEvent.objects.filter(id__in=allowed_ids)
+        .only(*_AUDIT_EVENT_SAFE_FIELDS)
+        .select_related("actor")
+        .order_by("-occurred_at", "-id")
+    )
 
 
 def privileged_audit_projection(event) -> dict:

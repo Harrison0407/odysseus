@@ -1,29 +1,37 @@
 # DT Beach Supply Control — Current State
 
-Last updated: 2026-07-19
+Last updated: 2026-07-20
 
 ## Foundation remediation status
 
-**Foundation correction cycle 2 is complete. Two independently-discovered
-gaps (CTCF-AUDIT-017, CTCF-CR-PROJ-018) have been corrected and a
-documentation count discrepancy (CTCF-DOC-020) has been fixed. This
-correction has not yet been independently revalidated. Milestone 1 has not
-begun.**
+**Foundation correction cycle 3 is complete. Three independently-discovered
+and reproduced gaps in the cycle-2 privileged-audit mechanism
+(CTCF-AUDIT-SCOPE-021, CTCF-AUDIT-RETRIEVAL-022, CTCF-AUDIT-WINDOW-023)
+have been corrected. This correction has not yet been independently
+revalidated. Milestone 1 has not begun.**
 
-Fresh remediation evidence began from clean, synchronized HEAD
-`a89a9f714684515be1b2de704bf816611e094540` on
-`integration/dt-beach-supply-control-1.0.0` — the commit an independent
-Fable revalidation found closed all 14 non-deferred originally-accepted
-findings, but also found two new gaps outside that original set:
-privileged audit access was gated only by `can_override_gates` with no
-organization/package scope applied to the underlying `AuditEvent`
-queryset (CTCF-AUDIT-017), and basic package participation exposed a
-Change Request's raw values regardless of decision authority
-(CTCF-CR-PROJ-018). Both are now corrected — see ADR-042 and
-`docs/SECURITY.md` for the mechanism. Neither required a migration.
-`procurement.services.revoke_verification_assertion` remains intentionally
-service-only, with no HTTP route added (CTCF-ASSERT-HTTP-019, deferred by
-explicit decision, not by oversight).
+Cycle 3 began from clean, synchronized HEAD
+`84b12a2187d93f2ccd9992780a5a4b73e54e7cc6` on
+`integration/dt-beach-supply-control-1.0.0` — the foundation correction
+cycle 2 commit. An independent Fable revalidation of that commit confirmed
+CTCF-AUDIT-017 and CTCF-CR-PROJ-018 (cycle 2's own findings) were closed,
+but reproduced, with direct evidence, three further gaps in the
+privileged-audit mechanism cycle 2 introduced: a `CapabilityGrant` whose
+scope is inherited only through `role_assignment` (no direct
+package/organization on the grant row) resolved to no scope at all,
+hiding its audit event from an otherwise-authorized viewer
+(CTCF-AUDIT-SCOPE-021); the candidate scan selected
+`AuditEvent.summary`/`.metadata` — columns the safe projection never uses
+— before the per-row authorization decision (CTCF-AUDIT-RETRIEVAL-022);
+and the scan's 1,000-event ceiling could silently omit an older
+authorized event behind enough newer, unrelated ones
+(CTCF-AUDIT-WINDOW-023). None was a confirmed browser-facing disclosure —
+all three are read-path completeness/retrieval-hygiene corrections, now
+closed. See ADR-043 and `docs/SECURITY.md` for the mechanism. No migration
+was required. `procurement.services.revoke_verification_assertion` remains
+intentionally service-only, with no HTTP route added
+(CTCF-ASSERT-HTTP-019, deferred by explicit decision, not by oversight,
+unchanged by this cycle).
 
 Validation after this correction cycle (local, not yet independently
 revalidated):
@@ -33,14 +41,14 @@ revalidated):
 | `manage.py check` | `python manage.py check` | Passed; no issues |
 | `makemigrations --check --dry-run` | `python manage.py makemigrations --check --dry-run` | Passed; no model changes detected |
 | `migrate --check` | `python manage.py migrate --check` | Passed; no unapplied migrations |
-| Focused foundation/remediation suite | `pytest tests/test_foundation_remediation.py tests/test_procurement_confidentiality.py tests/test_confidentiality_http.py tests/test_evidence_and_disclosure.py -v` | **53 passed, 0 failed** (48.93s, SQLite) |
-| Full regression suite | `pytest tests/` | **496 passed, 0 failed** (111.11s, SQLite — 472 prior + 24 new: `tests/test_privileged_audit_scope.py`, `tests/test_change_request_projection.py`) |
+| Focused foundation/remediation suite | `pytest tests/test_foundation_remediation.py tests/test_procurement_confidentiality.py tests/test_confidentiality_http.py tests/test_evidence_and_disclosure.py -v` | **53 passed, 0 failed** (49.76s, SQLite) |
+| Privileged-audit + Change Request correction suites | `pytest tests/test_privileged_audit_scope.py tests/test_change_request_projection.py -v` | **39 passed, 0 failed** (46.15s, SQLite — 31 privileged-audit + 8 Change Request) |
+| Full regression suite | `pytest tests/` | **511 passed, 0 failed** (113.25s, SQLite — 496 prior + 15 new in `tests/test_privileged_audit_scope.py`) |
 
-The **53** focused-suite figure is the exact, reproducible result of the
-command listed above against the four files that constitute that suite —
-a prior, unreproducible "78" figure has been corrected (CTCF-DOC-020).
-PostgreSQL was not available in the environment this cycle ran in (no
-Docker daemon); this is recorded as a limitation, not claimed as
+The **53** focused-suite figure remains the exact, reproducible result of
+the command listed above against the four files that constitute that
+suite. PostgreSQL was not available in the environment this cycle ran in
+(no Docker daemon); this is recorded as a limitation, not claimed as
 PostgreSQL-validated.
 
 The new integration tests use same-organization, different-organization,

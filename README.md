@@ -13,11 +13,14 @@ baseline now includes the original Priority 0 vertical slice and subsequent
 milestones through **Controlled Transparency, Commercial Confidentiality &
 Authorization Foundation**. The accepted foundation-remediation findings have
 been corrected locally with adversarial package, evidence, document, API, and
-confidentiality coverage; 496 tests pass with clean migrations (472 from the
-initial remediation plus 24 from foundation correction cycle 2, which closed
-two independently-discovered gaps — CTCF-AUDIT-017 and CTCF-CR-PROJ-018 — not
-in the original accepted finding set). Independent revalidation of this
-correction cycle is the next required control point. What is not yet built is listed honestly in
+confidentiality coverage; 511 tests pass with clean migrations (472 from the
+initial remediation, 24 from foundation correction cycle 2 — which closed two
+independently-discovered gaps, CTCF-AUDIT-017 and CTCF-CR-PROJ-018 — and 15
+from foundation correction cycle 3, which closed three further gaps found by
+independently revalidating cycle 2's own privileged-audit mechanism:
+CTCF-AUDIT-SCOPE-021, CTCF-AUDIT-RETRIEVAL-022, CTCF-AUDIT-WINDOW-023).
+Independent revalidation of this correction cycle is the next required
+control point. What is not yet built is listed honestly in
 `docs/KNOWN_LIMITATIONS.md`; the official milestone order is governed by
 `docs/MARKETMATCH_ARCHITECTURE_RECONCILIATION_AND_ROADMAP.md`.
 
@@ -81,7 +84,7 @@ Visit `http://localhost:8000/`. Pilot user passwords are printed once by
 ```bash
 pytest
 ```
-496 tests, covering the live-container fixture import, document
+511 tests, covering the live-container fixture import, document
 upload/duplicate-detection/authorization, the receiving/inventory ledger,
 object-level permission scoping, gate controls and formal handoffs,
 delivery/installation/inspection/final acceptance, landed-cost
@@ -90,21 +93,22 @@ capacity/suitability, external storage comparison, supplier claims, and
 QR labels/controlled scanning. See `docs/REQUIREMENTS_TRACEABILITY.md`
 for exactly what each area's tests prove.
 
-Foundation correction cycle 2 result: **496 passed, 0 failed** (111.11s,
+Foundation correction cycle 3 result: **511 passed, 0 failed** (113.25s,
 SQLite). Focused foundation/remediation suite (`pytest
 tests/test_foundation_remediation.py tests/test_procurement_confidentiality.py
 tests/test_confidentiality_http.py tests/test_evidence_and_disclosure.py`):
-**53 passed, 0 failed** (48.93s). Migrations are clean; no migration was
-required this cycle.
+**53 passed, 0 failed** (49.76s). Migrations are clean; no migration was
+required in cycles 2 or 3.
 
 ## Current milestone handoff
 
 Latest completed product milestone:
 **Controlled Transparency, Commercial Confidentiality & Authorization Foundation**.
 
-Foundation correction cycle 2 closed two independently-discovered gaps
-(CTCF-AUDIT-017, CTCF-CR-PROJ-018) found during independent revalidation of
-the initial remediation; see `docs/KNOWN_LIMITATIONS.md` and ADR-042.
+Foundation correction cycle 3 closed three independently-discovered and
+reproduced gaps in cycle 2's own privileged-audit mechanism
+(CTCF-AUDIT-SCOPE-021, CTCF-AUDIT-RETRIEVAL-022, CTCF-AUDIT-WINDOW-023);
+see `docs/KNOWN_LIMITATIONS.md` and ADR-043.
 
 Exact next action: **run a new, independent Fable 5 revalidation session
 against the resulting commit. Do not begin Milestone 1 during that

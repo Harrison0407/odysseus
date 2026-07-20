@@ -18,18 +18,34 @@ discrepancy, CTCF-DOC-020 (see below), and confirmed CTCF-ASSERT-HTTP-019
 (Verification Assertion revocation has no HTTP route; service-only,
 by omission) as a recorded, not-yet-decided boundary.
 
-**Foundation correction cycle 2** (this entry) closes CTCF-AUDIT-017 and
+**Foundation correction cycle 2** closed CTCF-AUDIT-017 and
 CTCF-CR-PROJ-018 — see ADR-042 and `docs/SECURITY.md` for the mechanism.
-Both are narrow, same-pattern corrections reusing the existing
-Party/Role/CapabilityGrant architecture; neither required a migration
-(`VIEW_PRIVILEGED_AUDIT` and `CapabilityGrant.organization` already
-existed). The full suite now passes **496/496** (472 + 24 new adversarial
-tests: `tests/test_privileged_audit_scope.py`,
-`tests/test_change_request_projection.py`), locally verified only — this
-correction has **not yet been independently revalidated**; that is the
-exact next action. The latest completed product milestone remains
-**Controlled Transparency, Commercial Confidentiality & Authorization
-Foundation**.
+An independent Fable revalidation of cycle 2's own commit found and
+reproduced (SQL capture, direct object-scope resolution, and a
+>1,000-unauthorized-event reproduction) three further gaps in the
+privileged-audit mechanism itself, none a confirmed browser-facing
+disclosure: CTCF-AUDIT-SCOPE-021 (a `CapabilityGrant` scoped only through
+`role_assignment` resolved to no scope, hiding its audit event from an
+otherwise-authorized viewer), CTCF-AUDIT-RETRIEVAL-022 (the candidate scan
+selected `AuditEvent.summary`/`.metadata` before the per-row authorization
+decision), and CTCF-AUDIT-WINDOW-023 (the 1,000-event scan ceiling could
+silently omit an older authorized event behind enough newer unrelated
+ones).
+
+**Foundation correction cycle 3** (this entry) closes all three — see
+ADR-043 and `docs/SECURITY.md` for the mechanism. All three are narrow
+corrections to the cycle-2 mechanism, reusing the same existing
+relationships (`role_assignment.package`/`.organization_context`) and
+Django queryset primitives (`.only()`, deterministic cursor pagination);
+no second scope model, audit store, or authorization system was
+introduced, and no migration was required. The full suite now passes
+**511/511** (496 + 15 new adversarial tests, all in
+`tests/test_privileged_audit_scope.py`: `TestCapabilityGrantScopeInheritance`,
+`TestRetrievalBeforeAuthorization`, `TestScanWindowCompleteness`), locally
+verified only — this correction has **not yet been independently
+revalidated**; that is the exact next action. The latest completed
+product milestone remains **Controlled Transparency, Commercial
+Confidentiality & Authorization Foundation**.
 
 The exact next action is **a new, independent Fable 5 revalidation session
 against the resulting commit**. Milestone 1 — Configurable Procurement

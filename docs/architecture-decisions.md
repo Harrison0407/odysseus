@@ -2,6 +2,60 @@
 
 Newest first.
 
+## ADR-043 — Foundation correction cycle 3: role_assignment-derived CapabilityGrant scope, retrieval-safe privileged-audit columns, unbounded-completeness scan
+**Decision:** Three narrow corrections to the privileged-audit mechanism
+introduced by ADR-042, found by an independent Fable revalidation of
+cycle 2's own commit. No second authorization system, audit store, or
+scope model was introduced.
+
+(1) **CTCF-AUDIT-SCOPE-021.** `governance.services._resolve_scope_for_target`
+did not resolve a `CapabilityGrant` target's scope when the grant's own
+`package`/`organization` columns were unset but its `role_assignment`
+carried a real, resolvable scope (`role_assignment.package` or
+`role_assignment.organization_context`) — a valid, pre-existing pattern
+`grant_capability(..., role_assignment=assignment)` has always allowed.
+Such a `CAPABILITY_GRANT` audit event was excluded even for an
+otherwise-authorized viewer (fail-closed, never an over-exposure, but an
+avoidable completeness gap). The resolver now explicitly checks
+`CapabilityGrant.role_assignment` as a third resolution step, after direct
+`package` and direct `organization`, before giving up. `RoleAssignment`
+itself never fails closed (`organization_context` is a required field), so
+this step always succeeds once reached. `RoleAssignment.project` is not
+consulted — it carries no `ProcurementPackage` relationship and
+`organization_context` is always already resolvable, so a project-based
+fallback would be structurally unreachable dead code, not an intentional
+omission.
+
+(2) **CTCF-AUDIT-RETRIEVAL-022.** `privileged_audit_queryset`'s candidate
+scan previously selected full `AuditEvent` rows — including `summary` and
+`metadata`, which can carry confidential target text — for every candidate,
+authorized or not, before the per-row scope decision. The function now
+selects only `_AUDIT_EVENT_SAFE_FIELDS` (id, action, occurred_at, actor_id,
+content_type_id, object_id) at every phase; `summary`/`metadata` are never
+selected by this function at all, for any row, since the safe projection
+(`privileged_audit_projection`) never uses either field. Independently
+verified by direct SQL capture (no query issued by this path contains the
+`summary` or `metadata` column names).
+
+(3) **CTCF-AUDIT-WINDOW-023.** The prior implementation capped scanning at
+the 1,000 most-recent candidate events; an authorized event older than
+that many unrelated, unauthorized events could be silently omitted. The
+scan is now a deterministic-order (`-occurred_at, -id`), safe-column,
+cursor-paginated loop over batches of 200 candidates, continuing until the
+requested result `limit` is satisfied or candidates are genuinely
+exhausted — completeness of the requested result count no longer depends
+on an arbitrary global ceiling. No count or volume signal about excluded
+events is exposed at any point.
+
+**Why:** All three were read-path completeness/retrieval-hygiene gaps in
+the privileged-audit mechanism itself, not authority-to-decide gaps and not
+confirmed browser-facing disclosures — found and reproduced with direct
+evidence (SQL capture, object-level scope resolution, and a
+>1,000-unauthorized-event/1-older-authorized-event reproduction) during
+independent revalidation of ADR-042's own commit, consistent with this
+project's practice of treating each Fable pass as adversarial verification,
+not confirmation.
+
 ## ADR-042 — Foundation correction cycle 2: privileged-audit scope-before-retrieval and Change Request read-authorization as a distinct axis
 **Decision:** Two narrow corrections to the Controlled Transparency /
 Confidentiality foundation (ADR-041), reusing its existing

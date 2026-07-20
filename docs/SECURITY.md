@@ -356,10 +356,33 @@
   organization-scoped grant never widens to every organization. The
   rendered projection never copies a target's raw `__str__` or
   `AuditEvent.metadata` into the browser — verified by
-  `tests/test_privileged_audit_scope.py` (24 tests: authority matrix,
+  `tests/test_privileged_audit_scope.py` (31 tests: authority matrix,
   cross-organization and cross-package isolation, unresolvable-target
   fail-closed behavior, information-absence, and denial-audit durability).
   A denied privileged-audit access attempt is itself now durably audited.
+- **Privileged-audit retrieval never selects `summary`/`metadata` at any
+  phase, and completeness no longer depends on an arbitrary scan ceiling
+  (foundation correction cycle 3, CTCF-AUDIT-SCOPE-021 /
+  CTCF-AUDIT-RETRIEVAL-022 / CTCF-AUDIT-WINDOW-023; ADR-043).** An
+  independent revalidation of cycle 2 found and reproduced three gaps in
+  the mechanism above: (a) a `CapabilityGrant` whose scope is inherited
+  entirely through `role_assignment` (no direct `package`/`organization`
+  on the grant row) resolved to no scope at all, hiding its
+  `CAPABILITY_GRANT` event even from an authorized viewer —
+  `_resolve_scope_for_target` now explicitly follows `role_assignment`
+  as a third resolution step; (b) the candidate scan selected full
+  `AuditEvent` rows, including `summary`/`metadata`, before the per-row
+  scope decision — the scan now selects only
+  `id`/`action`/`occurred_at`/`actor_id`/`content_type_id`/`object_id` at
+  every phase, verified by direct SQL-capture tests asserting no query
+  issued by this path contains the `summary` or `metadata` column names;
+  (c) the scan was capped at the 1,000 most-recent candidate events, so an
+  authorized event older than that many unrelated events could be silently
+  omitted — the scan is now a deterministic, cursor-paginated loop that
+  continues across batches until the requested result count is satisfied
+  or candidates are genuinely exhausted, with no cap on how far back it
+  will look. None of the three is a confirmed browser-facing disclosure —
+  all three are read-path completeness/retrieval-hygiene corrections.
 - **Change Request raw values require field-specific detailed-read
   authority, never mere package participation (foundation correction
   cycle 2, CTCF-CR-PROJ-018; ADR-042).**

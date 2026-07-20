@@ -73,17 +73,25 @@ non-deferred original findings; see `docs/KNOWN_LIMITATIONS.md`):
 
 `a89a9f714684515be1b2de704bf816611e094540`
 
-Latest application-behavior commit — foundation correction cycle 2
-(closes CTCF-AUDIT-017 and CTCF-CR-PROJ-018 found during that
-revalidation; not yet independently revalidated):
+Foundation correction cycle 2 commit (closed CTCF-AUDIT-017 and
+CTCF-CR-PROJ-018; independently revalidated, which itself found and
+reproduced three further gaps in the privileged-audit mechanism cycle 2
+introduced):
+
+`84b12a2187d93f2ccd9992780a5a4b73e54e7cc6`
+
+Latest application-behavior commit — foundation correction cycle 3
+(closes CTCF-AUDIT-SCOPE-021, CTCF-AUDIT-RETRIEVAL-022, and
+CTCF-AUDIT-WINDOW-023 found during that revalidation; not yet
+independently revalidated):
 
 The commit containing this revision; obtain its immutable hash with
-`git rev-parse HEAD`. Its parent is `a89a9f714684515be1b2de704bf816611e094540`.
+`git rev-parse HEAD`. Its parent is `84b12a2187d93f2ccd9992780a5a4b73e54e7cc6`.
 
 Tests:
 
-`496/496 passing` (472 from the foundation remediation plus 24 from
-foundation correction cycle 2)
+`511/511 passing` (472 from the foundation remediation, 24 from
+foundation correction cycle 2, 15 from foundation correction cycle 3)
 
 Migrations:
 
@@ -94,9 +102,10 @@ Ahead / behind after fetch:
 `0 / 0` (once pushed)
 
 The commits after `58889c8` through Gate 0 were documentation-only. The
-foundation remediation (`a89a9f7`) and this correction cycle are genuine
-application-behavior changes, each with their own passing test evidence
-recorded above and in `docs/implementation-log.md`.
+foundation remediation (`a89a9f7`) and both correction cycles (`84b12a2`
+and this cycle) are genuine application-behavior changes, each with their
+own passing test evidence recorded above and in
+`docs/implementation-log.md`.
 
 Application behavior is authoritative only when:
 

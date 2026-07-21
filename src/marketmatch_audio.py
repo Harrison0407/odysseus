@@ -20,6 +20,8 @@ from src.marketmatch_canonical_wav import BYTE_RATE
 
 
 DEFAULT_MAX_DURATION_SECONDS = 21_600
+FFPROBE_TIMEOUT_HARD_MAX_SECONDS = 300.0
+FFMPEG_TIMEOUT_HARD_MAX_SECONDS = 7_200.0
 WAV_FRAMING_OVERHEAD_BYTES = 4_096
 PROBE_OUTPUT_LIMIT_BYTES = 64 * 1024
 MAX_MEDIA_STREAMS = 4
@@ -34,7 +36,7 @@ SUPPORTED_AUDIO_CODECS = frozenset({
 })
 
 
-def _positive_number_env(name: str, default: float) -> float:
+def _positive_number_env(name: str, default: float, *, maximum: float | None = None) -> float:
     raw = os.getenv(name)
     if raw is None or not raw.strip():
         return default
@@ -44,6 +46,8 @@ def _positive_number_env(name: str, default: float) -> float:
         raise ValueError(f"{name} must be a positive number") from exc
     if not math.isfinite(value) or value <= 0:
         raise ValueError(f"{name} must be a positive number")
+    if maximum is not None and value > maximum:
+        raise ValueError(f"{name} exceeds its hard maximum")
     return value
 
 
@@ -58,10 +62,12 @@ def _duration_env() -> float:
 
 MARKETMATCH_AUDIO_MAX_DURATION_SECONDS = _duration_env()
 MARKETMATCH_FFPROBE_TIMEOUT_SECONDS = _positive_number_env(
-    "MARKETMATCH_FFPROBE_TIMEOUT_SECONDS", 30.0
+    "MARKETMATCH_FFPROBE_TIMEOUT_SECONDS", 30.0,
+    maximum=FFPROBE_TIMEOUT_HARD_MAX_SECONDS,
 )
 MARKETMATCH_FFMPEG_TIMEOUT_SECONDS = _positive_number_env(
-    "MARKETMATCH_FFMPEG_TIMEOUT_SECONDS", 7_200.0
+    "MARKETMATCH_FFMPEG_TIMEOUT_SECONDS", 7_200.0,
+    maximum=FFMPEG_TIMEOUT_HARD_MAX_SECONDS,
 )
 
 
@@ -75,6 +81,7 @@ class MarketMatchAudioCode(str, Enum):
     DURATION_LIMIT_EXCEEDED = "DURATION_LIMIT_EXCEEDED"
     DECODED_OUTPUT_LIMIT_EXCEEDED = "DECODED_OUTPUT_LIMIT_EXCEEDED"
     CONVERSION_FAILED = "CONVERSION_FAILED"
+    AUDIO_PROBE_TIMEOUT = "AUDIO_PROBE_TIMEOUT"
     CONVERSION_TIMEOUT = "CONVERSION_TIMEOUT"
 
 
@@ -204,6 +211,7 @@ async def _run_local_process(
     stdout_path: Path | None = None,
     watched_output: Path | None = None,
     output_limit: int | None = None,
+    timeout_code: MarketMatchAudioCode = MarketMatchAudioCode.CONVERSION_TIMEOUT,
 ) -> int:
     resolved = shutil.which(executable)
     if not resolved:
@@ -233,7 +241,7 @@ async def _run_local_process(
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 await _terminate_and_reap(process)
-                _fail(MarketMatchAudioCode.CONVERSION_TIMEOUT)
+                _fail(timeout_code)
             try:
                 await asyncio.wait_for(process.wait(), timeout=min(0.05, remaining))
             except asyncio.TimeoutError:
@@ -316,7 +324,8 @@ async def inspect_local_audio(
         "-of", "json", "-i", os.fspath(input_path),
     ]
     returncode = await _run_local_process(
-        "ffprobe", arguments, timeout=MARKETMATCH_FFPROBE_TIMEOUT_SECONDS, stdout_path=probe_path
+        "ffprobe", arguments, timeout=MARKETMATCH_FFPROBE_TIMEOUT_SECONDS,
+        stdout_path=probe_path, timeout_code=MarketMatchAudioCode.AUDIO_PROBE_TIMEOUT,
     )
     if returncode != 0:
         _fail(MarketMatchAudioCode.MALFORMED_AUDIO)

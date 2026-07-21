@@ -65,16 +65,44 @@ class CanonicalWavCode(str, Enum):
     INVALID_BACKEND_RESULT = "INVALID_BACKEND_RESULT"
     SEGMENT_LIMIT_EXCEEDED = "SEGMENT_LIMIT_EXCEEDED"
     TRANSCRIPT_LIMIT_EXCEEDED = "TRANSCRIPT_LIMIT_EXCEEDED"
+    MODEL_UNAVAILABLE = "MODEL_UNAVAILABLE"
     BACKEND_FAILED = "BACKEND_FAILED"
+
+
+_SAFE_RESULT_FIELDS = frozenset({
+    "worker_result",
+    "segments",
+    "segments.start_ms",
+    "segments.end_ms",
+    "segments.order",
+    "segments.text",
+    "transcript_text",
+})
+_SAFE_RESULT_TYPES = frozenset({
+    "bool", "bytes", "dict", "float", "generator", "int", "list",
+    "NoneType", "str", "tuple", "unknown",
+})
 
 
 class CanonicalWavError(Exception):
     """A fixed-code failure that never embeds rejected values."""
 
-    def __init__(self, code: CanonicalWavCode):
+    def __init__(
+        self,
+        code: CanonicalWavCode,
+        *,
+        result_field: str | None = None,
+        result_type: str | None = None,
+    ):
         if type(code) is not CanonicalWavCode:
             code = CanonicalWavCode.INVALID_INPUT
         self.code = code
+        self.result_field = result_field if result_field in _SAFE_RESULT_FIELDS else None
+        self.result_type = (
+            result_type
+            if self.result_field is not None and result_type in _SAFE_RESULT_TYPES
+            else None
+        )
         super().__init__(code.value)
 
     def __repr__(self) -> str:
@@ -114,8 +142,24 @@ class CanonicalTranscript:
         return "CanonicalTranscript(<validated>)"
 
 
-def _fail(code: CanonicalWavCode) -> NoReturn:
-    raise CanonicalWavError(code) from None
+def _safe_result_type(value: object) -> str:
+    name = type(value).__name__
+    return name if name in _SAFE_RESULT_TYPES else "unknown"
+
+
+def _fail(
+    code: CanonicalWavCode,
+    *,
+    result_field: str | None = None,
+    result_value: object = None,
+) -> NoReturn:
+    safe_field = result_field if result_field in _SAFE_RESULT_FIELDS else None
+    safe_type = _safe_result_type(result_value) if safe_field is not None else None
+    raise CanonicalWavError(
+        code,
+        result_field=safe_field,
+        result_type=safe_type,
+    ) from None
 
 
 def _validate_decode_inputs(
@@ -410,13 +454,23 @@ def _call_backend(
     result: object = None
     try:
         result = backend(waveform)
+    except CanonicalWavError:
+        raise
     except Exception:
         failed = True
     if failed:
-        _fail(CanonicalWavCode.BACKEND_FAILED)
+        _fail(
+            CanonicalWavCode.BACKEND_FAILED,
+            result_field="worker_result",
+            result_value=result,
+        )
     if inspect.isawaitable(result):
         _close_unexecuted_coroutine(result)
-        _fail(CanonicalWavCode.INVALID_BACKEND_RESULT)
+        _fail(
+            CanonicalWavCode.INVALID_BACKEND_RESULT,
+            result_field="worker_result",
+            result_value=result,
+        )
     return result
 
 
@@ -444,15 +498,23 @@ def _next_backend_segment(iterator: object) -> tuple[bool, object]:
         _fail(CanonicalWavCode.BACKEND_FAILED)
 
 
-def _timestamp_seconds(value: object) -> float:
+def _timestamp_seconds(value: object, *, result_field: str) -> float:
     if type(value) not in (int, float):
-        _fail(CanonicalWavCode.INVALID_BACKEND_RESULT)
+        _fail(
+            CanonicalWavCode.INVALID_BACKEND_RESULT,
+            result_field=result_field,
+            result_value=value,
+        )
     try:
         numeric = float(value)
     except (OverflowError, ValueError):
         _fail(CanonicalWavCode.INVALID_BACKEND_RESULT)
     if not math.isfinite(numeric) or numeric < 0:
-        _fail(CanonicalWavCode.INVALID_BACKEND_RESULT)
+        _fail(
+            CanonicalWavCode.INVALID_BACKEND_RESULT,
+            result_field=result_field,
+            result_value=value,
+        )
     return numeric
 
 
@@ -464,17 +526,32 @@ def _validated_segment(
     remaining_text_bytes: int,
 ) -> tuple[CanonicalTranscriptSegment, float, int]:
     if type(value) is not tuple or len(value) != 3:
-        _fail(CanonicalWavCode.INVALID_BACKEND_RESULT)
-    start = _timestamp_seconds(value[0])
-    end = _timestamp_seconds(value[1])
+        _fail(
+            CanonicalWavCode.INVALID_BACKEND_RESULT,
+            result_field="segments",
+            result_value=value,
+        )
+    start = _timestamp_seconds(value[0], result_field="segments.start_ms")
+    end = _timestamp_seconds(value[1], result_field="segments.end_ms")
     text = value[2]
-    if (
-        start > end
-        or start < previous_end
-        or end > maximum_end
-        or type(text) is not str
-    ):
-        _fail(CanonicalWavCode.INVALID_BACKEND_RESULT)
+    if start > end or start < previous_end:
+        _fail(
+            CanonicalWavCode.INVALID_BACKEND_RESULT,
+            result_field="segments.order",
+            result_value=value,
+        )
+    if end > maximum_end:
+        _fail(
+            CanonicalWavCode.INVALID_BACKEND_RESULT,
+            result_field="segments.end_ms",
+            result_value=value[1],
+        )
+    if type(text) is not str:
+        _fail(
+            CanonicalWavCode.INVALID_BACKEND_RESULT,
+            result_field="segments.text",
+            result_value=text,
+        )
     if len(text) > remaining_text_bytes:
         _fail(CanonicalWavCode.TRANSCRIPT_LIMIT_EXCEEDED)
     encode_failed = False

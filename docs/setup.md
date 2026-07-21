@@ -442,10 +442,12 @@ Key settings:
 | `ODYSSEUS_STT_MAX_AUDIO_BYTES` | `26214400` | Speech-to-text audio cap in bytes (25 MB). |
 | `MARKETMATCH_CALL_AUDIO_MAX_BYTES` | `209715200` | MarketMatch Capture encoded-audio cap (exactly 200 MiB). |
 | `MARKETMATCH_AUDIO_MAX_DURATION_SECONDS` | `21600` | MarketMatch maximum decoded-audio duration (six hours). |
-| `MARKETMATCH_FFPROBE_TIMEOUT_SECONDS` | `30` | Local MarketMatch media-inspection timeout. |
-| `MARKETMATCH_FFMPEG_TIMEOUT_SECONDS` | `7200` | Local MarketMatch audio-conversion timeout. |
-| `MARKETMATCH_STT_UPLOAD_TIMEOUT_SECONDS` | `600` | MarketMatch streaming-ingress timeout. |
-| `MARKETMATCH_STT_TIMEOUT_SECONDS` | `28800` | End-to-end deadline and isolated transcription-worker deadline. |
+| `MARKETMATCH_FFPROBE_TIMEOUT_SECONDS` | `30` | Local media-inspection timeout; hard maximum 300 seconds. |
+| `MARKETMATCH_FFMPEG_TIMEOUT_SECONDS` | `7200` | Local audio-conversion timeout; hard maximum 7200 seconds. |
+| `MARKETMATCH_STT_UPLOAD_TIMEOUT_SECONDS` | `600` | Streaming-ingress timeout; hard maximum 3600 seconds. |
+| `MARKETMATCH_STT_TIMEOUT_MIN_SECONDS` | `600` | Minimum isolated-worker budget after canonical duration is proved. |
+| `MARKETMATCH_STT_TIMEOUT_SECONDS_PER_AUDIO_SECOND` | `1` | Worker-budget multiplier applied to proved audio duration; hard maximum 60. |
+| `MARKETMATCH_STT_TIMEOUT_SECONDS` | `28800` | Backward-compatible worker-budget maximum; hard maximum 28800 seconds. |
 | `ODYSSEUS_ICS_MAX_BYTES` | `10485760` | Calendar `.ics` import cap in bytes (10 MB). |
 
 All upload-limit vars are validated (must be a positive integer) and optional; an invalid value fails fast at startup.
@@ -462,13 +464,33 @@ validator runs after conversion and before the existing process-isolated local
 Whisper worker. No remote transcription, network conversion, codec download,
 or automatic model download is used.
 
-The decoded duration cap defaults to six hours. Probe, conversion, and
-transcription are bounded; timeout or cancellation terminates and reaps the
-child process. Encoded input, probe output, and canonical WAV are removed on
-every exit. Playlists, network protocols, external references, missing audio,
-multiple audio streams, attachments, malformed containers, and unsupported
-codecs are rejected. A local FFmpeg build can still omit a particular encoder
-or demuxer; only formats proven by that installation are usable.
+The decoded duration cap defaults to six hours. After canonical validation, the
+isolated-worker timeout is deterministic: clamp `proved duration × multiplier`
+between the configured minimum and maximum. Defaults therefore grant 10 minutes
+to short audio, 15 minutes to 15-minute audio, one hour to one-hour audio, and
+six hours to six-hour audio, with an eight-hour hard ceiling. Upload, probe, and
+conversion each retain their own bounded timeout, so malformed short files fail
+without consuming a long transcription budget. Timeout or cancellation
+terminates, escalates to kill when necessary, waits, and reaps the child.
+Encoded input, probe output, and canonical WAV are removed on every exit.
+
+On macOS, the process-isolation boundary performs a locked preflight before
+starting Python's spawn resource tracker or worker. Only invalid standard
+descriptors (`0`, `1`, or `2`) are replaced with an inheritable local null
+descriptor; valid terminal, `nohup`, and redirected descriptors are preserved.
+This keeps detached-terminal startup compatible with Python 3.12 without
+weakening worker isolation.
+
+The browser does not impose a competing transcription timer; user cancellation
+uses `AbortController`. A reverse proxy or ingress placed in front of Odysseus
+must have request-read and response timeouts compatible with the sum of the
+configured upload, probe, conversion, and duration-aware worker budgets. The
+application route is exempt from the generic 45-second request middleware
+because it owns these bounded stages.
+Playlists, network protocols, external references, missing audio, multiple
+audio streams, attachments, malformed containers, and unsupported codecs are
+rejected. A local FFmpeg build can still omit a particular encoder or demuxer;
+only formats proven by that installation are usable.
 
 Manual smoke test:
 

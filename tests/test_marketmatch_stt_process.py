@@ -86,6 +86,12 @@ def _malformed_child(input_connection, result_connection):
     result_connection.close()
 
 
+def _reported_failure_child(input_connection, result_connection):
+    _read_input(input_connection)
+    result_connection.send_bytes(b'{"error":"WORKER_FAILED"}')
+    result_connection.close()
+
+
 def _duplicate_child(input_connection, result_connection):
     _read_input(input_connection)
     result_connection.send_bytes(_message())
@@ -204,8 +210,9 @@ async def test_result_larger_than_pipe_buffer_does_not_deadlock():
 @pytest.mark.parametrize(
     ("target", "expected"),
     [
-        (_crash_child, MarketMatchProcessCode.WORKER_FAILED),
-        (_nonzero_after_result_child, MarketMatchProcessCode.WORKER_FAILED),
+        (_crash_child, MarketMatchProcessCode.WORKER_CRASHED),
+        (_nonzero_after_result_child, MarketMatchProcessCode.WORKER_CRASHED),
+        (_reported_failure_child, MarketMatchProcessCode.WORKER_FAILED),
         (_malformed_child, MarketMatchProcessCode.WORKER_PROTOCOL_ERROR),
         (_duplicate_child, MarketMatchProcessCode.WORKER_PROTOCOL_ERROR),
         (_oversized_child, MarketMatchProcessCode.WORKER_PROTOCOL_ERROR),
@@ -522,6 +529,56 @@ def test_fixed_backend_discards_segment_entirely_inside_padded_final_window(monk
     assert metadata == {"language": "zh", "language_confidence": 0.8}
 
 
+def test_fixed_backend_clips_one_whisper_timestamp_quantum_overlap(monkeypatch):
+    class Model:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def transcribe(self, _waveform):
+            info = types.SimpleNamespace(language="en", language_probability=1.0)
+            return [
+                types.SimpleNamespace(start=0.0, end=1.0, text="first"),
+                types.SimpleNamespace(start=0.98, end=1.5, text="second"),
+            ], info
+
+    monkeypatch.setitem(os.sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=Model))
+
+    assert tuple(process_module._fixed_local_base_backend(np.zeros(32_000))) == (
+        (0.0, 1.0, "first"),
+        (1.0, 1.5, "second"),
+    )
+
+
+def test_fixed_backend_does_not_hide_large_or_reversed_overlap(monkeypatch):
+    class Model:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def transcribe(self, _waveform):
+            info = types.SimpleNamespace(language="en", language_probability=1.0)
+            return [
+                types.SimpleNamespace(start=0.0, end=1.0, text="first"),
+                types.SimpleNamespace(start=0.5, end=0.9, text="second"),
+            ], info
+
+    monkeypatch.setitem(os.sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=Model))
+
+    assert tuple(process_module._fixed_local_base_backend(np.zeros(32_000)))[1][:2] == (0.5, 0.9)
+
+
+def test_missing_local_model_has_distinct_stable_code(monkeypatch):
+    class Model:
+        def __init__(self, *_args, **_kwargs):
+            raise RuntimeError("private model path")
+
+    monkeypatch.setitem(os.sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=Model))
+
+    with pytest.raises(process_module.CanonicalWavError) as caught:
+        process_module._fixed_local_base_backend(np.zeros(16_000))
+    assert caught.value.code is CanonicalWavCode.MODEL_UNAVAILABLE
+    assert "private model path" not in repr(caught.value)
+
+
 def test_trusted_whisper_boundary_converts_numeric_timestamp_types(monkeypatch):
     class Model:
         def __init__(self, *_args, **_kwargs):
@@ -653,6 +710,32 @@ def test_parent_rejects_noncanonical_worker_language(language):
     with pytest.raises(MarketMatchProcessError) as caught:
         process_module._decode_parent_result(payload)
     assert caught.value.code is MarketMatchProcessCode.WORKER_PROTOCOL_ERROR
+
+
+def test_safe_worker_validation_diagnostic_survives_protocol_without_values():
+    payload = process_module._encode_worker_message({
+        "error": CanonicalWavCode.INVALID_BACKEND_RESULT.value,
+        "result_field": "segments.order",
+        "result_type": "tuple",
+    })
+    with pytest.raises(MarketMatchProcessError) as caught:
+        process_module._decode_parent_result(payload)
+    assert caught.value.code is CanonicalWavCode.INVALID_BACKEND_RESULT
+    assert caught.value.result_field == "segments.order"
+    assert caught.value.result_type == "tuple"
+    assert "segments.order" not in str(caught.value)
+
+
+def test_untrusted_diagnostic_labels_are_discarded_before_logging_boundary():
+    error = MarketMatchProcessError(
+        MarketMatchProcessCode.WORKER_PROTOCOL_ERROR,
+        worker_exit_state="/private/worker",
+        result_field="PRIVATE_TRANSCRIPT_CANARY",
+        result_type="PRIVATE_PATH_CANARY",
+    )
+    assert error.worker_exit_state is None
+    assert error.result_field is None
+    assert error.result_type is None
 
 
 def test_long_unicode_result_uses_same_wire_contract_in_process_and_in_route():

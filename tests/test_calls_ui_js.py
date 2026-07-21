@@ -104,8 +104,10 @@ def test_server_media_codes_render_distinct_safe_spanish_errors():
         import { requestCallsTranscription } from 'CALLS_MODULE';
         const codes = [
           'UNSUPPORTED_FORMAT', 'INPUT_LIMIT_EXCEEDED', 'DURATION_LIMIT_EXCEEDED',
-          'MALFORMED_AUDIO', 'NO_AUDIO_STREAM', 'CONVERSION_FAILED', 'WORKER_TIMEOUT',
-          'WORKER_FAILED', 'INPUT_DISCONNECTED', 'FFMPEG_UNAVAILABLE',
+          'MALFORMED_AUDIO', 'NO_AUDIO_STREAM', 'CONVERSION_FAILED', 'AUDIO_PROBE_TIMEOUT',
+          'CONVERSION_TIMEOUT', 'WORKER_TIMEOUT', 'WORKER_CRASHED', 'WORKER_FAILED',
+          'MODEL_UNAVAILABLE', 'INVALID_BACKEND_RESULT', 'WORKER_PROTOCOL_ERROR',
+          'INPUT_DISCONNECTED', 'INPUT_READ_TIMEOUT', 'FFMPEG_UNAVAILABLE',
         ];
         const messages = {};
         for (const code of codes) {
@@ -126,6 +128,14 @@ def test_server_media_codes_render_distinct_safe_spanish_errors():
     assert "200 MiB" in result["INPUT_LIMIT_EXCEEDED"]
     assert "seis horas" in result["DURATION_LIMIT_EXCEEDED"]
     assert "FFmpeg" in result["FFMPEG_UNAVAILABLE"]
+    assert "conversión" in result["CONVERSION_TIMEOUT"]
+    assert "inspección" in result["AUDIO_PROBE_TIMEOUT"]
+    assert result["AUDIO_PROBE_TIMEOUT"] != result["CONVERSION_TIMEOUT"]
+    assert "agotó el tiempo" in result["WORKER_TIMEOUT"]
+    assert "agotó el tiempo" in result["INPUT_READ_TIMEOUT"]
+    assert result["INPUT_READ_TIMEOUT"] != result["INPUT_DISCONNECTED"]
+    assert "validar" in result["WORKER_PROTOCOL_ERROR"]
+    assert result["WORKER_TIMEOUT"] != result["WORKER_PROTOCOL_ERROR"]
 
 
 def test_duplicate_submit_loading_and_cancellation():

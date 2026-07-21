@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -33,7 +34,7 @@ def _hanging_file_worker(_path, _result_connection):
 
 
 def _crashing_file_worker(_path, _result_connection):
-    raise RuntimeError("private crash detail")
+    os._exit(7)
 
 
 def _fictional_file_worker(path, result_connection):
@@ -266,6 +267,21 @@ def test_exact_marketmatch_upload_limit_and_no_duplicate_setting():
     assert "209715200" not in source
 
 
+@pytest.mark.parametrize(
+    ("name", "raw", "maximum"),
+    [
+        ("MARKETMATCH_FFPROBE_TIMEOUT_TEST", "301", 300.0),
+        ("MARKETMATCH_FFMPEG_TIMEOUT_TEST", "7201", 7_200.0),
+        ("MARKETMATCH_FFMPEG_TIMEOUT_TEST", "nan", 7_200.0),
+    ],
+)
+def test_media_timeout_hard_ceilings_fail_safely(monkeypatch, name, raw, maximum):
+    monkeypatch.setenv(name, raw)
+    with pytest.raises(ValueError) as caught:
+        audio._positive_number_env(name, 1.0, maximum=maximum)
+    assert raw not in str(caught.value)
+
+
 def test_process_invocation_has_no_shell_or_remote_protocols():
     source = Path(audio.__file__).read_text(encoding="utf-8")
     assert "shell=True" not in source
@@ -290,6 +306,17 @@ async def test_conversion_process_timeout_and_cancellation_reap(monkeypatch):
             "ffmpeg", ["-c", "import time; time.sleep(10)"], timeout=0.05
         )
     assert raised.value.code is MarketMatchAudioCode.CONVERSION_TIMEOUT
+    assert audio.active_media_process_count() == 0
+
+    with pytest.raises(MarketMatchAudioError) as probe_timeout:
+        await audio._run_local_process(
+            "ffprobe",
+            ["-c", "import time; time.sleep(10)"],
+            timeout=0.05,
+            timeout_code=MarketMatchAudioCode.AUDIO_PROBE_TIMEOUT,
+        )
+    assert probe_timeout.value.code is MarketMatchAudioCode.AUDIO_PROBE_TIMEOUT
+    assert probe_timeout.value.code is not MarketMatchAudioCode.CONVERSION_TIMEOUT
     assert audio.active_media_process_count() == 0
 
     task = asyncio.create_task(audio._run_local_process(
@@ -343,7 +370,7 @@ async def test_file_transcription_crash_is_safe_and_reaped(tmp_path):
             deadline=time.monotonic() + 2,
             _target=_crashing_file_worker,
         )
-    assert raised.value.code is process.MarketMatchProcessCode.WORKER_FAILED
+    assert raised.value.code is process.MarketMatchProcessCode.WORKER_CRASHED
     assert "private crash detail" not in repr(raised.value)
     assert process.active_worker_count() == 0
 

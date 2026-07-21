@@ -31,6 +31,44 @@ MAX_FILE_TRANSCRIPT_UTF8_BYTES = 1_048_576
 _MIN_CANONICAL_WAV_SIZE = 46
 
 
+def canonical_wav_file_duration_ms(
+    path: Path,
+    *,
+    byte_limit: int,
+    duration_limit_ms: int,
+) -> int:
+    """Prove and return file duration from the strict canonical header."""
+
+    if not isinstance(path, Path):
+        _fail(CanonicalWavCode.INVALID_INPUT)
+    descriptor = None
+    try:
+        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        details = os.fstat(descriptor)
+        if not stat.S_ISREG(details.st_mode):
+            _fail(CanonicalWavCode.INVALID_INPUT)
+        header = os.pread(descriptor, 44, 0)
+        sample_count = validate_canonical_wav_layout(
+            header,
+            total_size=details.st_size,
+            byte_limit=byte_limit,
+            duration_limit_ms=duration_limit_ms,
+            maximum_byte_limit=44 + (MAX_FILE_DURATION_MS // 1_000 * BYTE_RATE),
+            maximum_duration_ms=MAX_FILE_DURATION_MS,
+        )
+    except CanonicalWavError:
+        raise
+    except Exception:
+        _fail(CanonicalWavCode.INVALID_WAV)
+    finally:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except Exception:
+                pass
+    return (sample_count * 1_000 + SAMPLE_RATE - 1) // SAMPLE_RATE
+
+
 def decode_canonical_wav_file(
     path: Path,
     *,
@@ -118,5 +156,6 @@ def transcribe_canonical_wav_file(
 
 __all__ = (
     "MAX_FILE_DURATION_MS", "MAX_FILE_SEGMENTS", "MAX_FILE_TRANSCRIPT_UTF8_BYTES",
-    "decode_canonical_wav_file", "transcribe_canonical_wav_file",
+    "canonical_wav_file_duration_ms", "decode_canonical_wav_file",
+    "transcribe_canonical_wav_file",
 )

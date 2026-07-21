@@ -131,6 +131,11 @@ def _clean_pilot_state(monkeypatch):
         del workdir
         return path
     monkeypatch.setattr(route_module, "prepare_canonical_audio", passthrough)
+    monkeypatch.setattr(
+        route_module,
+        "canonical_wav_file_duration_ms",
+        lambda *_args, **_kwargs: 1,
+    )
     yield
     shutdown_active_workers()
     release_admission()
@@ -459,6 +464,104 @@ async def test_read_phase_timeout_is_fixed_and_releases_slot(monkeypatch):
     assert b"INPUT_READ_TIMEOUT" in response.body
     assert try_acquire_admission() is not None
     release_admission()
+
+
+@pytest.mark.parametrize(
+    ("duration_ms", "expected_seconds"),
+    [(1_000, 600.0), (900_000, 900.0), (3_600_000, 3_600.0)],
+)
+def test_duration_aware_worker_timeout_policy(duration_ms, expected_seconds):
+    assert route_module.transcription_timeout_seconds(duration_ms) == expected_seconds
+
+
+def test_configured_worker_timeout_policy_is_bounded(monkeypatch):
+    monkeypatch.setattr(route_module, "MARKETMATCH_STT_TIMEOUT_MIN_SECONDS", 30.0)
+    monkeypatch.setattr(route_module, "MARKETMATCH_STT_TIMEOUT_SECONDS_PER_AUDIO_SECOND", 2.0)
+    monkeypatch.setattr(route_module, "MARKETMATCH_STT_TIMEOUT_SECONDS", 120.0)
+    assert route_module.transcription_timeout_seconds(1_000) == 30.0
+    assert route_module.transcription_timeout_seconds(40_000) == 80.0
+    assert route_module.transcription_timeout_seconds(3_600_000) == 120.0
+
+
+@pytest.mark.parametrize("raw", ["0", "-1", "nan", "inf", "not-a-number"])
+def test_malformed_timeout_configuration_fails_safely(monkeypatch, raw):
+    monkeypatch.setenv("MARKETMATCH_STT_TIMEOUT_FIXTURE", raw)
+    with pytest.raises(ValueError) as caught:
+        route_module._timeout_env("MARKETMATCH_STT_TIMEOUT_FIXTURE", 1.0, maximum=10.0)
+    assert raw not in str(caught.value)
+
+
+async def test_fifteen_minute_audio_gets_duration_budget_not_historical_short_timeout(monkeypatch):
+    monkeypatch.setattr(
+        route_module,
+        "canonical_wav_file_duration_ms",
+        lambda *_args, **_kwargs: 900_000,
+    )
+    observed = []
+
+    async def transcriber(*args, deadline, **kwargs):
+        del args, kwargs
+        observed.append(deadline - asyncio.get_running_loop().time())
+        return MarketMatchProcessResult(900_000, "ok", ((0, 900_000, "ok"),))
+
+    response = await _endpoint(transcriber)(_request(CountedReceive()))
+    assert response.status_code == 200
+    assert observed[0] > 899
+
+
+@pytest.mark.parametrize(
+    ("error", "status", "code"),
+    [
+        (MarketMatchProcessError(route_module.MarketMatchProcessCode.WORKER_TIMEOUT), 504, b"WORKER_TIMEOUT"),
+        (MarketMatchProcessError(route_module.MarketMatchProcessCode.WORKER_CRASHED), 503, b"WORKER_CRASHED"),
+    ],
+)
+async def test_worker_timeout_and_crash_are_not_result_validation(error, status, code):
+    async def failed(*_args, **_kwargs):
+        raise error
+
+    response = await _endpoint(failed)(_request(CountedReceive()))
+    assert response.status_code == status
+    assert code in response.body
+    assert b"WORKER_PROTOCOL_ERROR" not in response.body
+
+
+async def test_safe_failure_log_carries_stage_code_duration_and_field_type(caplog):
+    async def invalid(*_args, **_kwargs):
+        raise MarketMatchProcessError(
+            route_module.MarketMatchProcessCode.WORKER_PROTOCOL_ERROR,
+            worker_exit_state="clean_exit",
+            result_field="segments.order",
+            result_type="tuple",
+        )
+
+    with caplog.at_level("WARNING", logger="marketmatch.stt"):
+        response = await _endpoint(invalid)(_request(CountedReceive()))
+
+    assert response.status_code == 502
+    rendered = "\n".join(record.getMessage() for record in caplog.records)
+    assert "stage=worker_result_validation" in rendered
+    assert "code=WORKER_PROTOCOL_ERROR" in rendered
+    assert "audio_duration_ms=1" in rendered
+    assert "worker_exit_state=clean_exit" in rendered
+    assert "result_field=segments.order" in rendered
+    assert "result_type=tuple" in rendered
+    assert "/private/" not in rendered
+
+
+async def test_canonical_preflight_error_preserves_stable_code_and_stage(monkeypatch, caplog):
+    def invalid_canonical(*_args, **_kwargs):
+        raise route_module.CanonicalWavError(route_module.CanonicalWavCode.INVALID_WAV)
+
+    monkeypatch.setattr(route_module, "canonical_wav_file_duration_ms", invalid_canonical)
+    with caplog.at_level("WARNING", logger="marketmatch.stt"):
+        response = await _endpoint(_ok_transcriber)(_request(CountedReceive()))
+
+    assert response.status_code == 422
+    assert b'"error":"INVALID_WAV"' in response.body
+    rendered = "\n".join(record.getMessage() for record in caplog.records)
+    assert "stage=canonical_validation" in rendered
+    assert "code=INVALID_WAV" in rendered
 
 
 async def test_canonical_error_is_mapped_without_dynamic_detail():

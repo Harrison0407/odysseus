@@ -133,13 +133,19 @@ CR-CREATE-AUTH-GAP, HOLD-CAUSE-CLOSURE-1, NF-V4-2-INCOMPLETE-MAPPING,
 LOCK-ORDER-1-1 — and five additional accepted cleanup items — NF4-A-1,
 PGSTATE-ADMIN-1, CHTR-010-COUNT-2, HOLD-WORDING-1, NF-1-SUMMARY-1). A
 documentation-only Milestone 1 Charter Correction Cycle 5 produced Charter
-version 6, resolving all nine. Charter version 6 has not yet been
-independently revalidated and is not owner-approved.
+version 6, resolving all nine. Charter version 6 was itself independently
+revalidated, delta-only (commit
+`e9b5cb31eedcea219ac35c906dfbf65e5ff4d2de`, the same commit introducing
+version 6); the result was MILESTONE 1 CHARTER VERSION 6 APPROVED FOR
+OWNER ACCEPTANCE — the first clean pass in this Charter's revalidation
+history, with no findings requiring correction. Harrison (owner)
+subsequently explicitly accepted Charter version 6, at the same commit,
+as the approved architectural and functional contract for Milestone 1, on
+2026-07-21.
 
-**Next governing activity: one delta-only independent revalidation of
-Charter version 6 against the commit introducing it — the version
-5→version 6 diff, the four blocking findings, the five listed cleanup
-items, repository cleanliness, and status accuracy only.**
+**Next governing activity: await Harrison's separate, explicit
+authorization to begin Milestone 1 (A1–A6) implementation.** Owner
+acceptance of Charter version 6 does not itself authorize implementation.
 A1–A6 implementation is not authorized and has not started.
 
 Tests (as independently reproduced during the cycle-3 revalidation that

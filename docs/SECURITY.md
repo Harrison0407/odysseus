@@ -166,11 +166,20 @@ capability-mapping description (Charter §13); and the corrected
 matching human decision/revocation exactly (Charter §11.3, §11.5,
 §14.1a). Five further cleanup items (NF4-A-1, PGSTATE-ADMIN-1,
 CHTR-010-COUNT-2, HOLD-WORDING-1, NF-1-SUMMARY-1) were also resolved. All
-remain design-only — none has been implemented, and Charter version 6 has
-not itself been independently revalidated.
+remain design-only — none has been implemented. Charter version 6 was
+subsequently independently revalidated, delta-only, against commit
+`e9b5cb31eedcea219ac35c906dfbf65e5ff4d2de` (the same commit introducing
+version 6), returning MILESTONE 1 CHARTER VERSION 6 APPROVED FOR OWNER
+ACCEPTANCE with no findings requiring correction — the first clean pass in
+this Charter's revalidation history. Harrison (owner) then explicitly
+accepted Charter version 6, at the same commit, as the approved
+architectural and functional contract for Milestone 1. This acceptance
+does not authorize implementation of A1–A6.
 
 None of this has been implemented. A1–A6 do not exist in the codebase as of
-this entry; this section documents the approved design only.
+this entry; this section documents the approved, owner-accepted design
+only. Implementation authorization is a separate, not-yet-given owner
+decision.
 
 ## Implemented and verified in this delivery
 

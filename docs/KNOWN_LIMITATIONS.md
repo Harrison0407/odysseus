@@ -112,14 +112,19 @@ CORRECTION (four blocking findings — CR-CREATE-AUTH-GAP,
 HOLD-CAUSE-CLOSURE-1, NF-V4-2-INCOMPLETE-MAPPING, LOCK-ORDER-1-1 — and
 five additional accepted cleanup items); a **Milestone 1 Charter
 Correction Cycle 5** produced Charter version 6, resolving all nine —
-again with no application code, template, test, or migration changed. The
-exact next action is **one delta-only independent revalidation** against
-the commit introducing version 6, reviewing only the version 5→version 6
-diff, the four blocking findings, the five listed cleanup items,
-repository cleanliness, and status accuracy. A1–A6 — Configurable
-Procurement Gates — remains approved and planned but is **not authorized**
-by this acceptance or by the Charter's own authorship; implementation has
-not started. The existing `ProcurementPackage.Status` is a separate state
+again with no application code, template, test, or migration changed.
+Version 6 was itself independently revalidated, delta-only, against the
+commit introducing it (`e9b5cb31eedcea219ac35c906dfbf65e5ff4d2de`), and
+returned **MILESTONE 1 CHARTER VERSION 6 APPROVED FOR OWNER ACCEPTANCE**
+— the first clean pass in this Charter's revalidation history, with no
+findings requiring correction. Harrison (owner) then explicitly accepted
+Charter version 6, at the same commit, as the approved architectural and
+functional contract for Milestone 1, on 2026-07-21. The exact next action
+is to **await Harrison's separate, explicit authorization to begin
+Milestone 1 (A1–A6) implementation**. A1–A6 — Configurable Procurement
+Gates — remains approved and planned but is **not authorized** by this
+acceptance or by the Charter's own authorship; implementation has not
+started. The existing `ProcurementPackage.Status` is a separate state
 machine and must not be represented as A1–A6 gate
 execution.
 
@@ -161,7 +166,7 @@ Current unresolved limitations, grouped by official roadmap disposition:
 - **Milestone 1:** configurable, versioned A1–A6 gate definitions, evidence
   schemas, progression, exceptions, expiry/revocation, and live validation.
   The design for all of this is now specified in
-  `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md` (version 5, corrected
+  `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md` (version 6, corrected
   after independent revalidation found twelve findings in version 1 —
   REVAL-001–REVAL-012, all resolved in version 2 — then found ten further
   findings in version 2 itself — NF-1, REVAL-004-RESIDUAL,
@@ -169,13 +174,21 @@ Current unresolved limitations, grouped by official roadmap disposition:
   REVAL-011-ENFORCEMENT, NF-2, NF-3, NF-4, NF-7 — all resolved in version
   3, then found three blocking findings, two additional accepted
   findings, and one editorial defect in version 3 itself — NF-NEW-1,
-  NF-NEW-2, NF-NEW-3, NF-NEW-4, NF-NEW-5 — all resolved in version 4, and
-  then found two blocking findings and eight additional accepted findings
+  NF-NEW-2, NF-NEW-3, NF-NEW-4, NF-NEW-5 — all resolved in version 4, then
+  found two blocking findings and eight additional accepted findings
   in version 4 itself — RISKFLAG-HOLD-1, NF4-A, DOC-COUNT-1, LOCK-ORDER-1,
   NF4-C, NF-V4-2, README-STALE, IMPL-LOG-COUNT, NF-V4-5, TRACE-1 — all
-  resolved in version 5); none of it is implemented yet — this remains a
-  full open limitation until Milestone 1 is actually built, tested, and
-  completed per that Charter's §20.
+  resolved in version 5, then found four blocking findings and five
+  additional accepted cleanup items in version 5 itself —
+  CR-CREATE-AUTH-GAP, HOLD-CAUSE-CLOSURE-1, NF-V4-2-INCOMPLETE-MAPPING,
+  LOCK-ORDER-1-1, NF4-A-1, PGSTATE-ADMIN-1, CHTR-010-COUNT-2,
+  HOLD-WORDING-1, NF-1-SUMMARY-1 — all resolved in version 6, which was
+  then independently revalidated with no findings requiring correction
+  and owner-accepted by Harrison); none of it is implemented yet — this
+  remains a full open limitation until Milestone 1 is actually built,
+  tested, and completed per that Charter's §20. Owner acceptance of the
+  Charter does not authorize implementation, which remains a separate,
+  not-yet-given owner decision.
 - **Milestone 2:** complete `es`/`en`/`zh-Hans` internationalization
   foundation; OCR and automated translation engines remain deferred until the
   authorized-projection and localization boundaries are complete.

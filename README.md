@@ -193,16 +193,23 @@ documentation-only **Milestone 1 Charter Correction Cycle 5** produced
 Charter version 6, resolving all nine findings — again with no application
 code, template, test, or migration changed.
 
-Exact next action: **run one delta-only independent revalidation of
-Charter version 6 against the commit introducing it — reviewing only the
-version 5→version 6 diff, the four blocking findings, the five listed
-cleanup items, repository cleanliness, and status accuracy, not a new,
-full architecture audit. Do not begin A1–A6 implementation.**
+Charter version 6 was then itself independently revalidated, delta-only,
+against commit `e9b5cb31eedcea219ac35c906dfbf65e5ff4d2de` (the same commit
+introducing version 6); the result was **MILESTONE 1 CHARTER VERSION 6
+APPROVED FOR OWNER ACCEPTANCE** — the first clean pass in this Charter's
+revalidation history, with no findings requiring correction. Following
+that result, Harrison (owner) explicitly accepted Charter version 6, at
+the same commit, as the approved architectural and functional contract
+for Milestone 1, on 2026-07-21.
 
-Milestone 1 remains planned and approved; neither foundation acceptance nor
-this Charter's own authorship authorizes A1–A6 implementation, which begins
-only after independent Charter revalidation and explicit owner approval of
-the Charter itself.
+Exact next action: **await Harrison's separate, explicit authorization to
+begin Milestone 1 (A1–A6) implementation. Do not begin A1–A6
+implementation absent that separate authorization.**
+
+Milestone 1 remains planned and approved; owner acceptance of the Charter
+is a distinct decision from implementation authorization, and only the
+former has been given. A1–A6 implementation begins only after Harrison's
+separate, explicit authorization.
 
 ## Production deployment
 

@@ -4228,12 +4228,46 @@ CORRECTION**. Version 6 (this document) corrects all nine:
 documentation dispositions only. A1–A6 remain unimplemented. Version 6 of
 this Charter has not itself been independently revalidated — see §22.
 
+### 21.7 Independent Milestone 1 Charter Version 6 Revalidation — clean pass, no findings
+
+The independent Milestone 1 Charter Version 6 Revalidation was performed
+against commit `e9b5cb31eedcea219ac35c906dfbf65e5ff4d2de` (the same commit
+that introduces version 6), as the delta-only review §22 called for:
+scoped to the Version 5→Version 6 diff, the four blocking findings closed
+in that cycle (CR-CREATE-AUTH-GAP, HOLD-CAUSE-CLOSURE-1,
+NF-V4-2-INCOMPLETE-MAPPING, LOCK-ORDER-1-1), the five additional cleanup
+items (NF4-A-1, PGSTATE-ADMIN-1, CHTR-010-COUNT-2, HOLD-WORDING-1,
+NF-1-SUMMARY-1), repository cleanliness, and status accuracy — not a new,
+full architecture audit of this Charter's accumulated content. The
+revalidation was read-only and confirmed: HEAD exactly matched
+`e9b5cb31eedcea219ac35c906dfbf65e5ff4d2de`; upstream was identical;
+ahead/behind was 0/0; working tree was clean; the Version 5→6 diff
+touched exactly nine Markdown files with no Python, template, test, or
+migration file changed; 72/72 migrations were applied with 0 pending; no
+`apps.procurement_gates` implementation existed; A1–A6 remained
+unimplemented; and the existing Handoff `GateOverride` workflow remained
+untouched. It independently confirmed genuine resolution of all nine
+Version 5→6 items named above.
+
+**Result: MILESTONE 1 CHARTER VERSION 6 APPROVED FOR OWNER ACCEPTANCE.**
+No Critical or High contradiction was found. This is the first clean pass
+in this Charter's revalidation history — versions 1 through 5 each
+returned a REQUIRES CORRECTION verdict. No Version 7 correction cycle is
+required on account of this revalidation.
+
+Following this result, Harrison (owner) explicitly accepted Milestone 1
+Procurement Gates Charter Version 6, at commit
+`e9b5cb31eedcea219ac35c906dfbf65e5ff4d2de`, as the approved architectural
+and functional contract for Milestone 1, on 2026-07-21. **This acceptance
+does not authorize implementation of A1–A6.** Implementation
+authorization remains a separate, explicit owner decision, not yet given.
+
 ---
 
 ## 22. Status and next action
 
-**MILESTONE 1 CHARTER VERSION 6 FINAL CORRECTION COMPLETE — READY FOR
-DELTA-ONLY INDEPENDENT REVALIDATION.**
+**MILESTONE 1 CHARTER VERSION 6 CLOSED AND OWNER-ACCEPTED — IMPLEMENTATION
+NOT YET AUTHORIZED.**
 
 Version 1 of this Charter was independently revalidated and returned
 MILESTONE 1 CHARTER REQUIRES CORRECTION, with twelve findings
@@ -4287,17 +4321,21 @@ human override approval/rejection/revocation) and five additional,
 closely-related non-blocking cleanup items (NF4-A-1, PGSTATE-ADMIN-1,
 CHTR-010-COUNT-2, HOLD-WORDING-1, NF-1-SUMMARY-1) — nine items in total,
 all listed in §21.6. Version 6 (this document) corrects all nine.
-Version 6 has **not** itself been independently revalidated. Version 6 is
-documentation-only — no application code, template, test, or migration
-was written or modified to produce it. Version 6 is not owner-approved.
-A1–A6 remain unimplemented. Milestone 1 implementation remains
-unauthorized. PostgreSQL and live validation (§15, §19) remain
-outstanding. The exact next action is a new, delta-only independent
-revalidation of Version 6 against the commit that introduces this
-version: review only the Version 5→Version 6 diff, the four blocking
-findings (CR-CREATE-AUTH-GAP, HOLD-CAUSE-CLOSURE-1,
-NF-V4-2-INCOMPLETE-MAPPING, LOCK-ORDER-1-1), the five listed cleanup items
-(NF4-A-1, PGSTATE-ADMIN-1, CHTR-010-COUNT-2, HOLD-WORDING-1,
-NF-1-SUMMARY-1), repository cleanliness, and status accuracy — not a new,
-full architecture audit of this Charter's entire accumulated content.
-Do not begin A1–A6 implementation.
+Version 6 was independently revalidated (the Independent Milestone 1
+Charter Version 6 Revalidation, performed against commit
+`e9b5cb31eedcea219ac35c906dfbf65e5ff4d2de`, the same commit that
+introduces version 6, as a delta-only review per this section's prior
+instruction) and returned **MILESTONE 1 CHARTER VERSION 6 APPROVED FOR
+OWNER ACCEPTANCE**, with no findings requiring correction — see §21.7.
+Following that result, Harrison (owner) explicitly accepted Version 6, at
+the same commit, as the approved architectural and functional contract
+for Milestone 1, on 2026-07-21. Version 6 is documentation-only — no
+application code, template, test, or migration was written or modified to
+produce it, and none has been written or modified since. A1–A6 remain
+unimplemented. Milestone 1 implementation remains **unauthorized**: owner
+acceptance of this Charter is a distinct decision from implementation
+authorization, and only the former has been given. PostgreSQL and live
+validation (§15, §19) remain outstanding future implementation-closure
+requirements. The exact next action is to await Harrison's separate,
+explicit authorization to begin Milestone 1 (A1–A6) implementation. Do not
+begin A1–A6 implementation absent that separate authorization.

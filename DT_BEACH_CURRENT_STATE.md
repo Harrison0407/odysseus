@@ -256,16 +256,35 @@ Correction Cycle 5** then produced Charter version 6, resolving all nine:
 
 **No application code, template, test, or migration was written or
 modified during this correction cycle either.** A1–A6 remain entirely
-unimplemented. Charter version 6 has **not** been independently
-revalidated and has **not** been owner-approved. Milestone 1
-implementation remains **not authorized**. PostgreSQL and live validation
-remain outstanding.
+unimplemented.
 
-Exact next action: **run one delta-only independent revalidation of
-Charter version 6 against the commit introducing it — the version
-5→version 6 diff, the four blocking findings, the five listed cleanup
-items, repository cleanliness, and status accuracy only, not a new, full
-architecture audit. Do not begin A1–A6 implementation.**
+**Update — independent Milestone 1 Charter Version 6 Revalidation
+completed, result: MILESTONE 1 CHARTER VERSION 6 APPROVED FOR OWNER
+ACCEPTANCE.** An independent, delta-only revalidation of Charter version 6
+(commit `e9b5cb31eedcea219ac35c906dfbf65e5ff4d2de`, the same commit
+introducing version 6) confirmed genuine resolution of all nine
+Version 5→6 items (CR-CREATE-AUTH-GAP, HOLD-CAUSE-CLOSURE-1,
+NF-V4-2-INCOMPLETE-MAPPING, LOCK-ORDER-1-1, NF4-A-1, PGSTATE-ADMIN-1,
+CHTR-010-COUNT-2, HOLD-WORDING-1, NF-1-SUMMARY-1) against actual
+repository state — HEAD matched the commit exactly, upstream identical,
+ahead/behind 0/0, working tree clean, nine Markdown files changed with no
+Python/template/test/migration touched, 72/72 migrations applied, no
+`apps.procurement_gates` implementation present — and found no Critical
+or High contradiction. This is the first clean pass in this Charter's
+revalidation history.
+
+Following this result, Harrison (owner) explicitly accepted Milestone 1
+Procurement Gates Charter Version 6, at commit
+`e9b5cb31eedcea219ac35c906dfbf65e5ff4d2de`, as the approved architectural
+and functional contract for Milestone 1, on 2026-07-21. **This acceptance
+does not authorize implementation of A1–A6**; implementation authorization
+remains a separate, explicit owner decision, not yet given. PostgreSQL
+and live validation remain outstanding future implementation-closure
+requirements.
+
+Exact next action: **await Harrison's separate, explicit authorization to
+begin Milestone 1 (A1–A6) implementation. Do not begin A1–A6
+implementation absent that separate authorization.**
 
 ---
 

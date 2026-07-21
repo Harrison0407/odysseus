@@ -2269,3 +2269,61 @@ documented order.
     the version 5→version 6 diff, the four blocking findings, the five
     listed cleanup items, repository cleanliness, and status accuracy, not
     a new, full architecture audit. Do not begin A1–A6 implementation.
+
+62. **Milestone 1 Charter Version 6 Revalidation and owner acceptance —
+    documentation-only.** Dated 2026-07-21.
+
+    The independent Milestone 1 Charter Version 6 Revalidation that
+    followed entry 61 reviewed Charter version 6 delta-only, against
+    commit `e9b5cb31eedcea219ac35c906dfbf65e5ff4d2de` (the same commit
+    introducing version 6) — the version 5→version 6 diff, the four
+    blocking findings (CR-CREATE-AUTH-GAP, HOLD-CAUSE-CLOSURE-1,
+    NF-V4-2-INCOMPLETE-MAPPING, LOCK-ORDER-1-1), the five listed cleanup
+    items (NF4-A-1, PGSTATE-ADMIN-1, CHTR-010-COUNT-2, HOLD-WORDING-1,
+    NF-1-SUMMARY-1), repository cleanliness, and status accuracy — and
+    returned **MILESTONE 1 CHARTER VERSION 6 APPROVED FOR OWNER
+    ACCEPTANCE**, with no findings requiring correction. This is the first
+    clean pass in this Charter's revalidation history; versions 1 through
+    5 each returned a REQUIRES CORRECTION verdict.
+
+    Following that result, Harrison (owner) explicitly accepted Milestone
+    1 Procurement Gates Charter Version 6, at commit
+    `e9b5cb31eedcea219ac35c906dfbf65e5ff4d2de`, as the approved
+    architectural and functional contract for Milestone 1. This acceptance
+    does not authorize implementation of A1–A6; implementation
+    authorization remains a separate, explicit owner decision, not yet
+    given.
+
+    This entry records that acceptance in: `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md`
+    (new §21.7, and §22 updated from "ready for revalidation" to "closed
+    and owner-accepted"), `DT_BEACH_CURRENT_STATE.md`,
+    `DT_BEACH_SOURCE_OF_TRUTH_INDEX.md`, `README.md`, `docs/SECURITY.md`,
+    `docs/KNOWN_LIMITATIONS.md`. `docs/architecture-decisions.md` and
+    `docs/REQUIREMENTS_TRACEABILITY.md` were reviewed; no substantive
+    changes were required beyond what version 6's own entries already
+    captured at the level of detail those documents maintain.
+
+    Fresh evidence for this cycle: HEAD confirmed at
+    `e9b5cb31eedcea219ac35c906dfbf65e5ff4d2de` before editing; branch
+    `integration/dt-beach-supply-control-1.0.0`; upstream
+    `origin/integration/dt-beach-supply-control-1.0.0`; ahead/behind `0/0`;
+    working tree clean before editing; no `apps.procurement_gates`
+    directory or app present. A local Python/Django environment was not
+    available in the session performing this recording, so `manage.py
+    check`, `makemigrations --check --dry-run`, `migrate --check`, and
+    `showmigrations --plan` could not be re-executed directly by that
+    session; migration state (72/72 applied, 0 pending) is carried forward
+    from entry 61's fresh confirmation, unchanged by this documentation-only
+    cycle, and was not independently re-verified here.
+
+    **Status distinctions, precise:** Charter version 6 is *independently
+    revalidated* (clean pass, this entry) and *owner-accepted* (this
+    entry). A1–A6 remain entirely *unimplemented* — nothing in this entry
+    changes that. Milestone 1 implementation is **not authorized** by this
+    entry; owner acceptance of the Charter and authorization to implement
+    are distinct decisions, and only the former has been given. PostgreSQL
+    and live validation (§15, §19) remain outstanding.
+
+    Exact next action: await Harrison's separate, explicit authorization
+    to begin Milestone 1 (A1–A6) implementation. Do not begin A1–A6
+    implementation absent that separate authorization.

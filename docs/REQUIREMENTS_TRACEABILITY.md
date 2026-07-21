@@ -66,10 +66,15 @@ HOLD-CAUSE-CLOSURE-1, NF-V4-2-INCOMPLETE-MAPPING, LOCK-ORDER-1-1) and five
 additional accepted cleanup items (NF4-A-1, PGSTATE-ADMIN-1,
 CHTR-010-COUNT-2, HOLD-WORDING-1, NF-1-SUMMARY-1); a Milestone 1 Charter
 Correction Cycle 5 produced version 6, resolving all nine, again
-documentation-only. The exact next action is one delta-only independent
-revalidation session against the commit introducing version 6, reviewing
-only the version 5→version 6 diff, the four blocking findings, the five
-listed cleanup items, repository cleanliness, and status accuracy.
+documentation-only. An independent Milestone 1 Charter Version 6
+Revalidation, delta-only against the commit introducing version 6
+(`e9b5cb31eedcea219ac35c906dfbf65e5ff4d2de`), then returned MILESTONE 1
+CHARTER VERSION 6 APPROVED FOR OWNER ACCEPTANCE with no findings requiring
+correction — the first clean pass in this Charter's revalidation history.
+Harrison (owner) then explicitly accepted Charter version 6, at the same
+commit, as the approved architectural and functional contract for
+Milestone 1. The exact next action is to await Harrison's separate,
+explicit authorization to begin Milestone 1 (A1–A6) implementation.
 A1–A6 implementation remains not started and is not authorized by this
 acceptance or by the Charter's own authorship; `ProcurementPackage.Status`
 is not evidence of gate execution.

@@ -1,4 +1,5 @@
 import asyncio
+from decimal import Decimal
 import json
 import os
 import signal
@@ -418,7 +419,19 @@ def test_stale_admission_lease_cannot_release_a_new_request():
         b"null",
         b"{}",
         b'{"error":"UNKNOWN"}',
+        (
+            b'{"error":"WORKER_FAILED","duration_ms":1,'
+            b'"segments":[],"transcript_text":""}'
+        ),
         _message(duration_ms=0),
+        _message(text="", segments=[]),
+        json.dumps({
+            "duration_ms": 1,
+            "segments": [{"start_ms": 0, "end_ms": 1, "text": "ok"}],
+        }).encode(),
+        _message(segments=[{"start_ms": 0.0, "end_ms": 1, "text": "ok"}]),
+        _message(segments=[{"start_ms": 0, "end_ms": float("nan"), "text": "ok"}]),
+        _message(segments=[{"start_ms": 0, "end_ms": 1, "text": 7}]),
         _message(segments=[{"start_ms": 2, "end_ms": 1, "text": "ok"}]),
         _message(text="different", segments=[{"start_ms": 0, "end_ms": 1, "text": "ok"}]),
         json.dumps(
@@ -488,6 +501,44 @@ def test_fixed_backend_clamps_whisper_frame_overshoot_to_short_wav_duration(monk
     assert metadata == {"language": "en", "language_confidence": 0.9}
 
 
+def test_fixed_backend_discards_segment_entirely_inside_padded_final_window(monkeypatch):
+    class Model:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def transcribe(self, _waveform, **_kwargs):
+            del _kwargs
+            info = types.SimpleNamespace(language="zh-Hans", language_probability=0.8)
+            return [
+                types.SimpleNamespace(start=0.0, end=0.20, text="虚构。"),
+                types.SimpleNamespace(start=0.30, end=1.00, text="padding"),
+            ], info
+
+    monkeypatch.setitem(os.sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=Model))
+    metadata = {}
+    result = tuple(process_module._fixed_local_base_backend(np.zeros(4_000), metadata))
+
+    assert result == ((0.0, 0.2, "虚构。"),)
+    assert metadata == {"language": "zh", "language_confidence": 0.8}
+
+
+def test_trusted_whisper_boundary_converts_numeric_timestamp_types(monkeypatch):
+    class Model:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def transcribe(self, _waveform):
+            info = types.SimpleNamespace(language="en", language_probability=1.0)
+            return [types.SimpleNamespace(start=Decimal("0"), end=1, text="ok")], info
+
+    monkeypatch.setitem(
+        os.sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=Model)
+    )
+    result = tuple(process_module._fixed_local_base_backend(np.zeros(16_000)))
+
+    assert result == ((0.0, 1.0, "ok"),)
+
+
 def test_v2_worker_accepts_short_wav_when_whisper_end_uses_padded_frame(monkeypatch):
     receive = _MemoryReceiveConnection(_canonical_wav_frames(4_000))
     send = _MemorySendConnection()
@@ -502,7 +553,9 @@ def test_v2_worker_accepts_short_wav_when_whisper_end_uses_padded_frame(monkeypa
             info = types.SimpleNamespace(language="en", language_probability=0.9)
             return [segment], info
 
-    monkeypatch.setitem(os.sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=Model))
+    monkeypatch.setitem(
+        os.sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=Model)
+    )
     process_module._marketmatch_stt_child(receive, send, 2)
 
     payload = json.loads(send.messages[0])
@@ -535,6 +588,23 @@ def test_fixed_backend_exposes_genuine_global_language_metadata(monkeypatch, raw
     assert metadata == {"language": "zh", "language_confidence": 0.875}
 
 
+@pytest.mark.parametrize("raw_language", ["zh-Hant", "yue", "unknown", None])
+def test_fixed_backend_maps_unsupported_detected_language_to_und(monkeypatch, raw_language):
+    class Model:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def transcribe(self, _waveform):
+            segment = types.SimpleNamespace(start=0, end=1, text="fictional")
+            info = types.SimpleNamespace(language=raw_language, language_probability=0.5)
+            return [segment], info
+
+    monkeypatch.setitem(os.sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=Model))
+    metadata = {}
+    tuple(process_module._fixed_local_base_backend(np.zeros(16_000), metadata))
+    assert metadata == {"language": "und", "language_confidence": 0.5}
+
+
 def test_requested_mandarin_reaches_existing_local_whisper_boundary(monkeypatch):
     observed = []
 
@@ -557,18 +627,63 @@ def test_requested_mandarin_reaches_existing_local_whisper_boundary(monkeypatch)
     assert observed == [{"language": "zh"}]
 
 
-def test_parent_accepts_language_metadata_without_segment_language_invention():
+def test_parent_requires_canonical_language_metadata_without_segment_language_invention():
     payload = process_module._encode_worker_message({
         "duration_ms": 1000,
         "segments": [{"start_ms": 0, "end_ms": 1000, "text": "hola"}],
         "transcript_text": "hola",
-        "language": "es-DO",
+        "language": "es",
         "language_confidence": 0.91,
     })
     result = process_module._decode_parent_result(payload)
     assert result.language == "es"
     assert result.language_confidence == 0.91
     assert result.segments == ((0, 1000, "hola"),)
+
+
+@pytest.mark.parametrize("language", ["zh-Hans", "zh-Hant", "fr", "", None])
+def test_parent_rejects_noncanonical_worker_language(language):
+    payload = process_module._encode_worker_message({
+        "duration_ms": 1,
+        "segments": [{"start_ms": 0, "end_ms": 1, "text": "ok"}],
+        "transcript_text": "ok",
+        "language": language,
+        "language_confidence": None,
+    })
+    with pytest.raises(MarketMatchProcessError) as caught:
+        process_module._decode_parent_result(payload)
+    assert caught.value.code is MarketMatchProcessCode.WORKER_PROTOCOL_ERROR
+
+
+def test_long_unicode_result_uses_same_wire_contract_in_process_and_in_route():
+    text = ("虚构会议。" * 2_500) + "<b>instructions stay text</b>"
+    payload = process_module._encode_worker_message({
+        "duration_ms": 10,
+        "segments": [{"start_ms": 0, "end_ms": 10, "text": text}],
+        "transcript_text": text,
+        "language": "zh",
+        "language_confidence": None,
+    })
+    decoded = process_module._decode_parent_result(
+        payload,
+        transcript_utf8_limit=process_module.MAX_FILE_TRANSCRIPT_UTF8_BYTES,
+        segment_limit=process_module.MAX_FILE_SEGMENTS,
+    )
+    revalidated = process_module.validate_marketmatch_process_result(
+        decoded,
+        duration_limit_ms=1_000,
+    )
+    assert len(revalidated.transcript_text) > 12_000
+    assert revalidated == decoded
+
+
+def test_mutated_or_wrong_in_process_result_fails_the_worker_protocol_contract():
+    valid = process_module.MarketMatchProcessResult(1, "ok", ((0, 1, "ok"),))
+    object.__setattr__(valid, "segments", ({"start_ms": 0},))
+    for value in (valid, {"duration_ms": 1}):
+        with pytest.raises(MarketMatchProcessError) as caught:
+            process_module.validate_marketmatch_process_result(value, duration_limit_ms=1_000)
+        assert caught.value.code is MarketMatchProcessCode.WORKER_PROTOCOL_ERROR
 
 
 def test_worker_environment_drops_application_secrets(monkeypatch):

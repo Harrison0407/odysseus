@@ -252,7 +252,11 @@ async def test_admin_stored_true_authorizes_calls(tmp_path, monkeypatch):
         worker_calls += 1
         assert wav_path.is_file()
         assert byte_limit > 44 and duration_limit_ms == 21_600_000 and deadline > 0
-        return MarketMatchProcessResult(duration_ms=10, transcript_text="", segments=())
+        return MarketMatchProcessResult(
+            duration_ms=10,
+            transcript_text="fictional",
+            segments=((0, 10, "fictional"),),
+        )
 
     request = _request(
         receive,

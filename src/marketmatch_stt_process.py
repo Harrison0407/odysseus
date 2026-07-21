@@ -206,6 +206,8 @@ def _fixed_local_base_backend(
         segments, info = model.transcribe(waveform)
     else:
         segments, info = model.transcribe(waveform, language=requested_language)
+    # This trusted engine adapter is the only language-normalization boundary.
+    # Everything after it validates the canonical wire value verbatim.
     if type(language_metadata) is dict:
         language_metadata["language"] = normalize_transcript_language(
             getattr(info, "language", None)
@@ -229,6 +231,13 @@ def _fixed_local_base_backend(
         for item in segments:
             start = float(item.start)
             end = float(item.end)
+            # Faster Whisper timestamps are relative to a padded 30-second
+            # inference window.  On a partial final window it can emit a
+            # segment whose start is already beyond the proved PCM duration.
+            # Such a segment describes padding, not source audio, and must not
+            # enter the canonical transcript contract.
+            if math.isfinite(start) and start >= waveform_duration_seconds:
+                continue
             if math.isfinite(end) and end > waveform_duration_seconds:
                 end = waveform_duration_seconds
             yield start, end, str(item.text)
@@ -269,7 +278,7 @@ def _success_payload(
     }
     if include_language_metadata:
         payload.update({
-            "language": normalize_transcript_language(metadata.get("language")),
+            "language": metadata.get("language", "und"),
             "language_confidence": metadata.get("language_confidence")
             if type(metadata.get("language_confidence")) is float
             else None,
@@ -287,7 +296,7 @@ def _encode_worker_message(message: dict) -> bytes:
             sort_keys=True,
         ).encode("utf-8", errors="strict")
     except Exception:
-        encoded = b'{"error":"WORKER_FAILED"}'
+        encoded = b'{"error":"WORKER_PROTOCOL_ERROR"}'
     if len(encoded) > MAX_RESULT_JSON_BYTES:
         return b'{"error":"WORKER_PROTOCOL_ERROR"}'
     return encoded
@@ -486,7 +495,7 @@ def _decode_parent_result(
     duration_ms = value["duration_ms"]
     supplied_segments = value["segments"]
     transcript_text = value["transcript_text"]
-    language = normalize_transcript_language(value.get("language"))
+    language = value.get("language", "und")
     language_confidence = value.get("language_confidence")
     if (
         type(duration_ms) is not int
@@ -494,6 +503,9 @@ def _decode_parent_result(
         or type(supplied_segments) is not list
         or len(supplied_segments) > segment_limit
         or type(transcript_text) is not str
+        or not transcript_text
+        or not supplied_segments
+        or language not in {"es", "en", "zh", "und"}
     ):
         _fail(MarketMatchProcessCode.WORKER_PROTOCOL_ERROR)
     if language_confidence is not None:
@@ -535,6 +547,41 @@ def _decode_parent_result(
         segments=tuple(segments),
         language=language,
         language_confidence=language_confidence,
+    )
+
+
+def validate_marketmatch_process_result(
+    result: object,
+    *,
+    duration_limit_ms: int,
+    transcript_utf8_limit: int = MAX_FILE_TRANSCRIPT_UTF8_BYTES,
+    segment_limit: int = MAX_FILE_SEGMENTS,
+) -> MarketMatchProcessResult:
+    """Revalidate an in-process result with the exact worker wire contract."""
+
+    if type(result) is not MarketMatchProcessResult:
+        _fail(MarketMatchProcessCode.WORKER_PROTOCOL_ERROR)
+    if type(result.segments) is not tuple:
+        _fail(MarketMatchProcessCode.WORKER_PROTOCOL_ERROR)
+    segments = []
+    for segment in result.segments:
+        if type(segment) is not tuple or len(segment) != 3:
+            _fail(MarketMatchProcessCode.WORKER_PROTOCOL_ERROR)
+        segments.append(
+            {"start_ms": segment[0], "end_ms": segment[1], "text": segment[2]}
+        )
+    payload = {
+        "duration_ms": result.duration_ms,
+        "segments": segments,
+        "transcript_text": result.transcript_text,
+        "language": result.language,
+        "language_confidence": result.language_confidence,
+    }
+    return _decode_parent_result(
+        _encode_worker_message(payload),
+        duration_limit_ms=duration_limit_ms,
+        transcript_utf8_limit=transcript_utf8_limit,
+        segment_limit=segment_limit,
     )
 
 
@@ -750,4 +797,5 @@ __all__ = (
     "transcribe_in_spawned_process",
     "transcribe_canonical_file_in_spawned_process",
     "try_acquire_admission",
+    "validate_marketmatch_process_result",
 )

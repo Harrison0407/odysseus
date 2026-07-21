@@ -296,6 +296,43 @@ async def test_genuine_worker_language_metadata_survives_route_response():
     )
 
 
+async def test_route_revalidates_injected_result_with_worker_contract():
+    canary = "PRIVATE_TRANSCRIPT_CANARY"
+
+    async def malformed(*_args, **_kwargs):
+        return MarketMatchProcessResult(
+            duration_ms=10,
+            transcript_text=canary,
+            segments=((0.0, 10, canary),),
+            language="zh-Hans",
+        )
+
+    response = await _endpoint(malformed)(_request(CountedReceive()))
+
+    assert response.status_code == 502
+    assert response.body == b'{"error":"WORKER_PROTOCOL_ERROR","message":"Transcription result was invalid."}'
+    assert canary.encode() not in response.body
+
+
+async def test_route_accepts_long_canonical_mandarin_result():
+    text = "虚构。" * 4_001
+
+    async def long_result(*_args, **_kwargs):
+        return MarketMatchProcessResult(
+            duration_ms=10,
+            transcript_text=text,
+            segments=((0, 10, text),),
+            language="zh",
+            language_confidence=None,
+        )
+
+    response = await _endpoint(long_result)(_request(CountedReceive()))
+
+    assert response.status_code == 200
+    assert len(text) > 12_000
+    assert b'"language":"zh"' in response.body
+
+
 async def test_requested_mandarin_header_reaches_transcriber_without_ui_locale():
     observed = []
 

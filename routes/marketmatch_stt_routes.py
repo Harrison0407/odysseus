@@ -34,6 +34,7 @@ from src.marketmatch_stt_process import (
     release_admission,
     transcribe_canonical_file_in_spawned_process,
     try_acquire_admission,
+    validate_marketmatch_process_result,
 )
 from src.upload_limits import MARKETMATCH_CALL_AUDIO_MAX_BYTES
 
@@ -348,7 +349,10 @@ def setup_marketmatch_stt_routes(
                     }
                     if requested_language is not None:
                         transcriber_kwargs["requested_language"] = requested_language
-                    result = await transcriber(canonical_path, **transcriber_kwargs)
+                    result = validate_marketmatch_process_result(
+                        await transcriber(canonical_path, **transcriber_kwargs),
+                        duration_limit_ms=duration_limit_ms,
+                    )
             finally:
                 cleanup_private_workdir(workspace)
             return _success_response(result)

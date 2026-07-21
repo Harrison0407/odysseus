@@ -19,7 +19,10 @@ from src.marketmatch_canonical_wav import (
     CanonicalWavError,
     validate_canonical_wav_layout,
 )
-from src.marketmatch_canonical_wav_file import decode_canonical_wav_file
+from src.marketmatch_canonical_wav_file import (
+    decode_canonical_wav_file,
+    transcribe_canonical_wav_file,
+)
 from src.upload_limits import MARKETMATCH_CALL_AUDIO_MAX_BYTES
 from src import marketmatch_stt_process as process
 
@@ -31,6 +34,22 @@ def _hanging_file_worker(_path, _result_connection):
 
 def _crashing_file_worker(_path, _result_connection):
     raise RuntimeError("private crash detail")
+
+
+def _fictional_file_worker(path, result_connection):
+    transcript = transcribe_canonical_wav_file(
+        Path(path),
+        byte_limit=1_000,
+        duration_limit_ms=1_000,
+        backend=lambda _waveform: ((0.0, 0.001, "fictional"),),
+    )
+    result_connection.send_bytes(process._encode_worker_message(
+        process._success_payload(
+            transcript,
+            {"language": "zh", "language_confidence": 0.75},
+        )
+    ))
+    result_connection.close()
 
 
 def _require_ffmpeg():
@@ -170,6 +189,31 @@ def test_six_hour_duration_boundary_and_above_limit():
     assert decoded_over.value.code is CanonicalWavCode.DURATION_LIMIT_EXCEEDED
 
 
+def test_generated_canonical_audio_above_historical_twenty_mib_transcribes(tmp_path):
+    duration_seconds = 660
+    data_size = duration_seconds * BYTE_RATE
+    path = tmp_path / "generated-fictional-over-20mib.wav"
+    header = (
+        b"RIFF" + struct.pack("<I", 36 + data_size) + b"WAVEfmt "
+        + struct.pack("<IHHIIHH", 16, 1, 1, 16_000, 32_000, 2, 16)
+        + b"data" + struct.pack("<I", data_size)
+    )
+    with path.open("xb") as generated:
+        generated.write(header)
+        generated.truncate(44 + data_size)
+
+    transcript = transcribe_canonical_wav_file(
+        path,
+        byte_limit=44 + data_size,
+        duration_limit_ms=duration_seconds * 1_000,
+        backend=lambda _waveform: ((0.0, duration_seconds, "fictional generated audio"),),
+    )
+
+    assert path.stat().st_size > 20 * 1024 * 1024
+    assert transcript.duration_ms == duration_seconds * 1_000
+    assert transcript.transcript_text == "fictional generated audio"
+
+
 def test_playlist_and_external_programs_reject_without_following_resources():
     with pytest.raises(MarketMatchAudioError) as playlist:
         audio._parse_probe_payload(_probe("1", format_name="hls"), 21_600)
@@ -301,6 +345,45 @@ async def test_file_transcription_crash_is_safe_and_reaped(tmp_path):
         )
     assert raised.value.code is process.MarketMatchProcessCode.WORKER_FAILED
     assert "private crash detail" not in repr(raised.value)
+    assert process.active_worker_count() == 0
+
+
+async def test_direct_and_process_isolated_file_results_share_one_contract(tmp_path):
+    path = (tmp_path / "canonical.wav").resolve()
+    data_size = 2
+    path.write_bytes(
+        b"RIFF" + struct.pack("<I", 36 + data_size) + b"WAVEfmt "
+        + struct.pack("<IHHIIHH", 16, 1, 1, 16_000, 32_000, 2, 16)
+        + b"data" + struct.pack("<I", data_size) + b"\x00\x00"
+    )
+    direct_transcript = transcribe_canonical_wav_file(
+        path,
+        byte_limit=1_000,
+        duration_limit_ms=1_000,
+        backend=lambda _waveform: ((0.0, 0.001, "fictional"),),
+    )
+    direct = process.validate_marketmatch_process_result(
+        process.MarketMatchProcessResult(
+            duration_ms=direct_transcript.duration_ms,
+            transcript_text=direct_transcript.transcript_text,
+            segments=tuple(
+                (item.start_ms, item.end_ms, item.text)
+                for item in direct_transcript.segments
+            ),
+            language="zh",
+            language_confidence=0.75,
+        ),
+        duration_limit_ms=1_000,
+    )
+    isolated = await process.transcribe_canonical_file_in_spawned_process(
+        path,
+        byte_limit=1_000,
+        duration_limit_ms=1_000,
+        deadline=time.monotonic() + 5,
+        _target=_fictional_file_worker,
+    )
+
+    assert isolated == direct
     assert process.active_worker_count() == 0
 
 

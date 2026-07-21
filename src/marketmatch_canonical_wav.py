@@ -279,26 +279,91 @@ def decode_canonical_wav(
     )
 
 
+def validate_canonical_wav_layout(
+    header: bytes,
+    *,
+    total_size: int,
+    byte_limit: int,
+    duration_limit_ms: int,
+    maximum_byte_limit: int,
+    maximum_duration_ms: int,
+) -> int:
+    """Validate the exact FFmpeg canonical layout from a bounded 44-byte header.
+
+    This pure structural boundary lets a trusted file owner validate long WAVs
+    without copying their complete encoded bytes into Python memory. It accepts
+    only the same PCM parameters and exact ``fmt``/``data`` order as the
+    in-memory adapter and returns the sample-derived count.
+    """
+
+    if (
+        type(header) is not bytes
+        or len(header) != 44
+        or any(type(value) is not int for value in (
+            total_size, byte_limit, duration_limit_ms, maximum_byte_limit,
+            maximum_duration_ms,
+        ))
+        or not 46 <= byte_limit <= maximum_byte_limit
+        or not 0 < duration_limit_ms <= maximum_duration_ms
+    ):
+        _fail(CanonicalWavCode.INVALID_INPUT)
+    if total_size > byte_limit:
+        _fail(CanonicalWavCode.INPUT_LIMIT_EXCEEDED)
+    if total_size < 46:
+        _fail(CanonicalWavCode.INVALID_WAV)
+    if header[:4] != b"RIFF" or header[8:12] != b"WAVE":
+        _fail(CanonicalWavCode.INVALID_WAV)
+    if _read_u32(header, 4) != total_size - 8:
+        _fail(CanonicalWavCode.INVALID_WAV)
+    if header[12:16] != b"fmt " or _read_u32(header, 16) != _PCM_FMT_SIZE:
+        _fail(CanonicalWavCode.UNSUPPORTED_WAV_FORMAT)
+    try:
+        fmt = struct.unpack_from("<HHIIHH", header, 20)
+    except (struct.error, OverflowError):
+        _fail(CanonicalWavCode.INVALID_WAV)
+    if fmt[0] != 1:
+        _fail(CanonicalWavCode.UNSUPPORTED_WAV_FORMAT)
+    if fmt[1:] != (CHANNELS, SAMPLE_RATE, BYTE_RATE, BLOCK_ALIGN, BITS_PER_SAMPLE):
+        _fail(CanonicalWavCode.UNSUPPORTED_WAV_FORMAT)
+    if header[36:40] != b"data":
+        _fail(CanonicalWavCode.INVALID_WAV)
+    data_size = _read_u32(header, 40)
+    if data_size == 0 or data_size % BLOCK_ALIGN or 44 + data_size != total_size:
+        _fail(CanonicalWavCode.INVALID_WAV)
+    sample_count = data_size // BLOCK_ALIGN
+    if sample_count * 1_000 > duration_limit_ms * SAMPLE_RATE:
+        _fail(CanonicalWavCode.DURATION_LIMIT_EXCEEDED)
+    return sample_count
+
+
 def _validate_transcription_limits(
     transcript_utf8_limit: object,
     segment_limit: object,
+    *,
+    maximum_transcript_utf8_bytes: int = MAX_TRANSCRIPT_UTF8_BYTES,
+    maximum_segments: int = MAX_SEGMENTS,
 ) -> tuple[int, int]:
     if (
         type(transcript_utf8_limit) is not int
-        or not 0 <= transcript_utf8_limit <= MAX_TRANSCRIPT_UTF8_BYTES
+        or not 0 <= transcript_utf8_limit <= maximum_transcript_utf8_bytes
     ):
         _fail(CanonicalWavCode.INVALID_INPUT)
-    if type(segment_limit) is not int or not 0 <= segment_limit <= MAX_SEGMENTS:
+    if type(segment_limit) is not int or not 0 <= segment_limit <= maximum_segments:
         _fail(CanonicalWavCode.INVALID_INPUT)
     return transcript_utf8_limit, segment_limit
 
 
-def _validate_waveform(value: object) -> CanonicalWaveform:
+def _validate_waveform(
+    value: object,
+    *,
+    maximum_sample_count: int = _MAX_SAMPLE_COUNT,
+    require_immutable_bytes_backing: bool = True,
+) -> CanonicalWaveform:
     if type(value) is not CanonicalWaveform:
         _fail(CanonicalWavCode.INVALID_INPUT)
     if (
         type(value.sample_count) is not int
-        or not 0 < value.sample_count <= _MAX_SAMPLE_COUNT
+        or not 0 < value.sample_count <= maximum_sample_count
         or type(value.duration_ms) is not int
         or value.duration_ms
         != (value.sample_count * 1_000 + SAMPLE_RATE - 1) // SAMPLE_RATE
@@ -307,7 +372,7 @@ def _validate_waveform(value: object) -> CanonicalWaveform:
         or value.waveform.shape != (value.sample_count,)
         or not value.waveform.flags.c_contiguous
         or value.waveform.flags.writeable
-        or type(value.waveform.base) is not bytes
+        or (require_immutable_bytes_backing and type(value.waveform.base) is not bytes)
         or value.waveform.nbytes != value.sample_count * 4
     ):
         _fail(CanonicalWavCode.INVALID_INPUT)
@@ -433,6 +498,10 @@ def _transcribe_validated_waveform(
     backend: Callable[[np.ndarray], object],
     transcript_utf8_limit: int = MAX_TRANSCRIPT_UTF8_BYTES,
     segment_limit: int = MAX_SEGMENTS,
+    maximum_sample_count: int = _MAX_SAMPLE_COUNT,
+    require_immutable_bytes_backing: bool = True,
+    maximum_transcript_utf8_bytes: int = MAX_TRANSCRIPT_UTF8_BYTES,
+    maximum_segments: int = MAX_SEGMENTS,
 ) -> CanonicalTranscript:
     """Invoke one injected sync backend and bound its lazy segment output.
 
@@ -443,10 +512,16 @@ def _transcribe_validated_waveform(
     concatenated exactly as supplied and bounded by its strict UTF-8 length.
     """
 
-    trusted_waveform = _validate_waveform(waveform)
+    trusted_waveform = _validate_waveform(
+        waveform,
+        maximum_sample_count=maximum_sample_count,
+        require_immutable_bytes_backing=require_immutable_bytes_backing,
+    )
     transcript_limit, segments_limit = _validate_transcription_limits(
         transcript_utf8_limit,
         segment_limit,
+        maximum_transcript_utf8_bytes=maximum_transcript_utf8_bytes,
+        maximum_segments=maximum_segments,
     )
     backend_result = _call_backend(backend, trusted_waveform.waveform)
     iterator = _backend_iterator(backend_result)
@@ -530,4 +605,5 @@ __all__ = (
     "CanonicalWavError",
     "decode_canonical_wav",
     "transcribe_canonical_wav",
+    "validate_canonical_wav_layout",
 )

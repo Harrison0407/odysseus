@@ -741,9 +741,10 @@ from routes.stt_routes import setup_stt_routes
 app.include_router(setup_stt_routes(stt_service))
 logger.info("STT service initialized (provider managed via settings)")
 
-# Controlled MarketMatch Calls pilot (raw canonical WAV; isolated local worker)
+# MarketMatch Capture audio (bounded raw ingress, local conversion, isolated worker)
 from routes.marketmatch_stt_routes import setup_marketmatch_stt_routes
 from routes.marketmatch_calls_analysis_routes import setup_marketmatch_calls_analysis_routes
+from src.marketmatch_audio import shutdown_active_media_processes
 from src.marketmatch_stt_process import shutdown_active_workers
 app.include_router(setup_marketmatch_stt_routes())
 app.include_router(setup_marketmatch_calls_analysis_routes())
@@ -1265,6 +1266,7 @@ async def _shutdown_event():
     # are dismantled. The worker has no shared application state, but shutdown
     # must not leave it running past the app process lifecycle.
     try:
+        await shutdown_active_media_processes()
         await asyncio.to_thread(shutdown_active_workers)
     except Exception as e:
         logger.warning(f"MarketMatch transcription shutdown error: {e}")

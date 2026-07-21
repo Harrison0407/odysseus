@@ -8,7 +8,8 @@ from starlette.requests import Request
 from core.middleware import INTERNAL_TOOL_HEADER
 from routes import marketmatch_stt_routes as route_module
 from routes.auth_routes import SESSION_COOKIE
-from src.marketmatch_canonical_wav import CanonicalWavCode, MAX_WAV_BYTES
+from src.marketmatch_canonical_wav import CanonicalWavCode
+from src.upload_limits import MARKETMATCH_CALL_AUDIO_MAX_BYTES
 from src.marketmatch_stt_process import (
     MarketMatchProcessError,
     MarketMatchProcessResult,
@@ -75,7 +76,7 @@ def _request(
     include_cookie=True,
 ):
     raw_headers = {
-        "content-type": "audio/wav",
+        "content-type": "application/octet-stream",
         "content-length": "1",
     }
     if include_cookie:
@@ -109,8 +110,10 @@ def _endpoint(transcriber):
     return next(route.endpoint for route in router.routes if route.path == route_module.MARKETMATCH_STT_ROUTE)
 
 
-async def _ok_transcriber(wav_bytes, *, deadline):
-    assert wav_bytes
+async def _ok_transcriber(wav_path, *, byte_limit, duration_limit_ms, deadline):
+    assert wav_path.is_file()
+    assert byte_limit > 44
+    assert duration_limit_ms == 21_600_000
     assert deadline > 0
     return MarketMatchProcessResult(
         duration_ms=1,
@@ -124,6 +127,10 @@ def _clean_pilot_state(monkeypatch):
     monkeypatch.setenv("AUTH_ENABLED", "true")
     shutdown_active_workers()
     release_admission()
+    async def passthrough(path, workdir):
+        del workdir
+        return path
+    monkeypatch.setattr(route_module, "prepare_canonical_audio", passthrough)
     yield
     shutdown_active_workers()
     release_admission()
@@ -226,16 +233,13 @@ async def test_rejected_authorization_never_receives_body(monkeypatch, case):
 @pytest.mark.parametrize(
     ("headers", "status"),
     [
-        ({"content-type": "application/octet-stream"}, 415),
         ({"content-type": "multipart/form-data; boundary=x"}, 415),
-        ({"content-type": "audio/wav; charset=binary"}, 415),
         ({"content-encoding": "identity"}, 415),
-        ({"content-length": None}, 411),
         ({"content-length": ""}, 400),
         ({"content-length": "-1"}, 400),
         ({"content-length": "+1"}, 400),
         ({"content-length": "1.0"}, 400),
-        ({"content-length": str(MAX_WAV_BYTES + 1)}, 413),
+        ({"content-length": str(MARKETMATCH_CALL_AUDIO_MAX_BYTES + 1)}, 413),
     ],
 )
 async def test_rejected_ingress_headers_never_receive_or_spawn(headers, status):
@@ -269,8 +273,8 @@ async def test_authorized_request_consumes_body_and_returns_bounded_shape():
 
 
 async def test_genuine_worker_language_metadata_survives_route_response():
-    async def transcriber(wav_bytes, *, deadline):
-        assert wav_bytes and deadline > 0
+    async def transcriber(wav_path, *, byte_limit, duration_limit_ms, deadline):
+        assert wav_path.is_file() and byte_limit > 44 and duration_limit_ms > 0 and deadline > 0
         return MarketMatchProcessResult(
             duration_ms=10,
             transcript_text="那個窗戶",
@@ -303,7 +307,7 @@ async def test_localhost_bypass_without_cookie_identity_never_receives_body(monk
 
 
 async def test_exact_limit_is_accepted(monkeypatch):
-    monkeypatch.setattr(route_module, "MAX_WAV_BYTES", 4)
+    monkeypatch.setattr(route_module, "MARKETMATCH_CALL_AUDIO_MAX_BYTES", 4)
     receive = CountedReceive([{"type": "http.request", "body": b"abcd", "more_body": False}])
     response = await _endpoint(_ok_transcriber)(
         _request(receive, headers={"content-length": "4"})
@@ -312,8 +316,32 @@ async def test_exact_limit_is_accepted(monkeypatch):
     assert receive.calls == 1
 
 
+async def test_missing_content_length_is_streamed_and_accepted(monkeypatch):
+    monkeypatch.setattr(route_module, "MARKETMATCH_CALL_AUDIO_MAX_BYTES", 4)
+    receive = CountedReceive([{"type": "http.request", "body": b"abcd", "more_body": False}])
+    response = await _endpoint(_ok_transcriber)(
+        _request(receive, headers={"content-length": None})
+    )
+    assert response.status_code == 200
+    assert receive.calls == 1
+
+
+def test_exact_200_mib_header_boundary_is_admitted_before_body():
+    request = _request(CountedReceive(), headers={"content-length": "209715200"})
+    assert route_module._validated_ingress_headers(request) == 209715200
+
+
+def test_200_mib_plus_one_header_rejects_before_body():
+    receive = CountedReceive()
+    request = _request(receive, headers={"content-length": "209715201"})
+    with pytest.raises(route_module.MarketMatchRouteError) as raised:
+        route_module._validated_ingress_headers(request)
+    assert raised.value.code is route_module.MarketMatchRouteCode.INPUT_LIMIT_EXCEEDED
+    assert receive.calls == 0
+
+
 async def test_limit_plus_one_stops_after_first_overflow_message(monkeypatch):
-    monkeypatch.setattr(route_module, "MAX_WAV_BYTES", 4)
+    monkeypatch.setattr(route_module, "MARKETMATCH_CALL_AUDIO_MAX_BYTES", 4)
     receive = CountedReceive(
         [
             {"type": "http.request", "body": b"abcde", "more_body": True},
@@ -399,13 +427,23 @@ async def test_busy_second_request_does_not_receive_body():
     assert receive.calls == 0
 
 
-async def test_cancellation_releases_admission():
+async def test_cancellation_releases_admission_and_removes_workspace(monkeypatch):
+    created = []
+    original_create = route_module.create_private_workdir
+
+    def tracked_create():
+        workspace = original_create()
+        created.append(workspace.name)
+        return workspace
+
+    monkeypatch.setattr(route_module, "create_private_workdir", tracked_create)
     async def cancelled(*args, **kwargs):
         del args, kwargs
         raise asyncio.CancelledError
 
     with pytest.raises(asyncio.CancelledError):
         await _endpoint(cancelled)(_request(CountedReceive()))
+    assert created and all(not os.path.exists(path) for path in created)
     assert try_acquire_admission() is not None
     release_admission()
 
@@ -454,4 +492,5 @@ def test_app_registers_exact_timeout_exemption_and_shutdown_cleanup():
     exact_block = source[exact_start:exact_end]
     assert route_module.MARKETMATCH_STT_ROUTE in exact_block
     assert "setup_marketmatch_stt_routes" in source
+    assert "await shutdown_active_media_processes()" in source
     assert "await asyncio.to_thread(shutdown_active_workers)" in source

@@ -31,6 +31,7 @@ const CAPTURE_DOCUMENT_MARKER = [
 ].join('\n');
 const MAX_CALLS_HISTORY_ITEMS = 20;
 export const MAX_CALLS_WAV_BYTES = 20 * 1024 * 1024;
+export const MAX_CALLS_AUDIO_BYTES = 200 * 1024 * 1024;
 export const CALLS_WAV_SAMPLE_RATE = 16000;
 export const MAX_CALLS_ANALYSIS_TRANSCRIPT_CHARS = 12000;
 export const MAX_CAPTURE_PHOTO_BYTES = 20 * 1024 * 1024;
@@ -82,6 +83,26 @@ const STATUS_MESSAGES = Object.freeze({
   413: 'capture.error.wav_size', 415: 'capture.error.wav_format', 422: 'capture.error.wav_invalid',
   429: 'capture.error.busy', 502: 'capture.error.invalid_result',
   503: 'capture.error.model_unavailable', 504: 'capture.error.timeout',
+});
+const TRANSCRIPTION_CODE_MESSAGES = Object.freeze({
+  INPUT_LIMIT_EXCEEDED: 'capture.error.audio_size',
+  DURATION_LIMIT_EXCEEDED: 'capture.error.audio_duration',
+  DECODED_OUTPUT_LIMIT_EXCEEDED: 'capture.error.audio_duration',
+  UNSUPPORTED_FORMAT: 'capture.error.audio_format',
+  EXCESSIVE_STREAMS: 'capture.error.audio_format',
+  EXTERNAL_MEDIA_REJECTED: 'capture.error.audio_format',
+  MALFORMED_AUDIO: 'capture.error.audio_malformed',
+  NO_AUDIO_STREAM: 'capture.error.no_audio_stream',
+  CONVERSION_FAILED: 'capture.error.conversion_failed',
+  CONVERSION_TIMEOUT: 'capture.error.conversion_failed',
+  WORKER_TIMEOUT: 'capture.error.transcription_timeout',
+  WORKER_FAILED: 'capture.error.transcription_failed',
+  BACKEND_FAILED: 'capture.error.transcription_failed',
+  INPUT_DISCONNECTED: 'capture.error.upload_disconnected',
+  INPUT_SIZE_MISMATCH: 'capture.error.upload_disconnected',
+  INPUT_READ_FAILED: 'capture.error.upload_disconnected',
+  INPUT_READ_TIMEOUT: 'capture.error.upload_disconnected',
+  FFMPEG_UNAVAILABLE: 'capture.error.ffmpeg_unavailable',
 });
 
 const GENERIC_FAILURE = 'capture.status.transcription_failed';
@@ -290,16 +311,27 @@ export async function decodeRecordingToCanonicalWav(blob, createAudioContext) {
 }
 
 export function validateCallsFile(file) {
-  if (!file || typeof file.name !== 'string' || !/\.wav$/i.test(file.name)) {
-    return { ok: false, code: 'WAV_REQUIRED', message: t('capture.error.wav_format') };
+  const displayName = sanitizeCallsFilename(file && file.name);
+  if (!file || typeof file.name !== 'string'
+      || !/\.(wav|m4a|mp3|aac|caf|flac|ogg|opus|webm|mp4|mov)$/i.test(displayName)) {
+    return { ok: false, code: 'AUDIO_REQUIRED', message: t('capture.error.audio_format') };
   }
   if (!Number.isSafeInteger(file.size) || file.size <= 0) {
-    return { ok: false, code: 'EMPTY_FILE', message: t('capture.error.wav_empty') };
+    return { ok: false, code: 'EMPTY_FILE', message: t('capture.error.audio_empty') };
   }
-  if (file.size > MAX_CALLS_WAV_BYTES) {
-    return { ok: false, code: 'FILE_TOO_LARGE', message: t('capture.error.wav_size') };
+  if (file.size > MAX_CALLS_AUDIO_BYTES) {
+    return { ok: false, code: 'FILE_TOO_LARGE', message: t('capture.error.audio_size') };
   }
   return { ok: true };
+}
+
+export function sanitizeCallsFilename(value) {
+  if (typeof value !== 'string') return 'audio';
+  const basename = value.replaceAll('\\', '/').split('/').at(-1);
+  const cleaned = [...(basename || '')]
+    .filter((character) => character >= ' ' && character !== '\u007f')
+    .join('').trim();
+  return cleaned.slice(0, 128) || 'audio';
 }
 
 export function formatEncodedSize(bytes) {
@@ -495,6 +527,10 @@ export function fixedCallsError(status) {
   return t(STATUS_MESSAGES[status] || GENERIC_FAILURE);
 }
 
+export function fixedCallsCodeError(code, status) {
+  return t(TRANSCRIPTION_CODE_MESSAGES[code] || STATUS_MESSAGES[status] || GENERIC_FAILURE);
+}
+
 export function fixedCallsAnalysisError(status) {
   return t(ANALYSIS_STATUS_MESSAGES[status] || ANALYSIS_FAILURE);
 }
@@ -552,7 +588,7 @@ export async function requestCallsTranscription(file, { fetchImpl = globalThis.f
     response = await fetchImpl(ENDPOINT, {
       method: 'POST',
       credentials: 'same-origin',
-      headers: { 'Content-Type': 'audio/wav' },
+      headers: { 'Content-Type': 'application/octet-stream' },
       body: file,
       signal,
     });
@@ -564,7 +600,12 @@ export async function requestCallsTranscription(file, { fetchImpl = globalThis.f
   }
   if (!response || response.ok !== true) {
     const status = response && Number.isInteger(response.status) ? response.status : 0;
-    throw new CallsUiError(`HTTP_${status || 'ERROR'}`, fixedCallsError(status), status);
+    let code = '';
+    try {
+      const failure = response && typeof response.json === 'function' ? await response.json() : null;
+      if (failure && typeof failure.error === 'string') code = failure.error;
+    } catch (_) { /* fixed status fallback */ }
+    throw new CallsUiError(code || `HTTP_${status || 'ERROR'}`, fixedCallsCodeError(code, status), status);
   }
   let payload;
   try {
@@ -1534,7 +1575,7 @@ export function createCallsController({
     }
     selectedFile = file;
     selectedSource = 'upload';
-    view.showSelected(file.name, formatEncodedSize(file.size));
+    view.showSelected(sanitizeCallsFilename(file.name), formatEncodedSize(file.size));
     view.setStatus(t('capture.status.file_ready'), 'selected');
     view.setReady(true, 'upload');
     syncCaptureSaveAvailability();

@@ -143,17 +143,33 @@ subsequently explicitly accepted Charter version 6, at the same commit,
 as the approved architectural and functional contract for Milestone 1, on
 2026-07-21.
 
-**Next governing activity: await Harrison's separate, explicit
-authorization to begin Milestone 1 (A1–A6) implementation.** Owner
-acceptance of Charter version 6 does not itself authorize implementation.
-A1–A6 implementation is not authorized and has not started.
+**Update — Milestone 1 Implementation Increment 1 complete (2026-07-21).**
+Following Charter acceptance, Harrison separately, explicitly authorized
+a bounded first implementation increment — Procurement Gate Policy and
+Package Assignment Foundation (`apps.procurement_gates`: `GatePolicy`,
+`GatePolicyVersion`, `PackagePolicyAssignment`; Charter §§1–4 plus the
+corresponding slices of §10/§13). A1–A6 gate *execution* (`GateAttempt`
+and everything downstream) remains entirely unimplemented and
+unauthorized. See `docs/implementation-log.md` entry 63 and ADR-049 for
+full detail.
+
+**Next governing activity: run an independent, increment-only Fable
+review against the Increment 1 commit. Do not begin Increment 2 until
+that review is reconciled and Harrison explicitly authorizes the next
+increment.**
 
 Tests (as independently reproduced during the cycle-3 revalidation that
-led to acceptance):
+led to acceptance, then extended by Increment 1):
 
 `511/511 passing` (472 from the foundation remediation, 24 from
 foundation correction cycle 2, 15 from foundation correction cycle 3);
 72/72 migrations applied; SQLite only — PostgreSQL not validated.
+
+Increment 1 update: `565/565 passing` (511 above + 54 new
+`tests/test_procurement_gates_policy.py` tests); 75/75 migrations applied
+(72 above + 2 new `procurement_gates` migrations + 1 new `audit`
+migration); SQLite only — PostgreSQL concurrency validation not run this
+cycle, recorded as pending.
 
 Migrations:
 

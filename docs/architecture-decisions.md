@@ -2,6 +2,104 @@
 
 Newest first.
 
+## ADR-049 — Milestone 1 Increment 1 implementation: platform-scope capability check, first `RunPython` data migration, and five narrow gap-fills the Charter left to the implementer
+
+**Decision:** This entry records the first actual Milestone 1 application
+code, migrations, and tests (Increment 1 — Procurement Gate Policy and
+Package Assignment Foundation: `apps.procurement_gates.GatePolicy`,
+`GatePolicyVersion`, `PackagePolicyAssignment`), authorized by Harrison
+after the Charter Version 6 owner-acceptance commit (`1e1b247`). Everything
+below is a direct implementation of `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md`
+§§1–4, 10, 13, 14 except where explicitly marked as an implementer
+gap-fill for a point the Charter left unspecified.
+
+1. **`has_capability(..., organization=...)` implemented exactly per
+   Charter §13** — additive keyword-only parameter, mutual exclusivity
+   with `package` enforced by a new `AuthorizationConfigurationError`,
+   identical query shape (`organization=organization, package__isnull=True,
+   role_assignment__isnull=True`). Every pre-existing caller (none of which
+   pass `organization=`) is behaviorally unchanged — verified by the full
+   565-test regression run, not merely by inspection.
+2. **Platform-scope capability check (implementer gap-fill).** The Charter's
+   §13 authorization table names `PUBLISH_GATE_POLICY` as a "platform- or
+   organization-scoped" capability but only ever writes the organization-scoped
+   query shape (worked for `package.organization`, which is never null). A
+   canonical/platform-scoped `GatePolicy` (`organization IS NULL`) has no
+   organization to scope a `has_capability(..., organization=...)` call to,
+   and Charter §13 separately requires every `apps.procurement_gates` call
+   to `has_capability` carry an explicit `package=`/`organization=` scope —
+   an unscoped call is a named authorization-architecture violation.
+   Resolution: `apps.procurement_gates.services._actor_holds_platform_policy_capability`
+   queries `CapabilityGrant` directly for a pure platform grant
+   (`organization`, `package`, and `role_assignment` all `NULL`) instead of
+   routing through `has_capability` at all, so the "no unscoped
+   `has_capability` call" rule is never at risk of being read as satisfied
+   by a technicality.
+3. **First `RunPython` data migration in this repository
+   (`procurement_gates/migrations/0002_seed_canonical_policy_and_assign_packages.py`).**
+   Every prior migration in this codebase is schema-only; seed/demo data has
+   always gone through a management command instead (e.g.
+   `apps.procurement.management.commands.seed_confidentiality_demo`).
+   Charter §4.2 is explicit and binding that the canonical policy seed and
+   existing-package pinning must be "a data migration (§4), not via test
+   fixtures or admin-only manual setup" — that requirement overrides the
+   prior convention for this one feature. The migration uses
+   `apps.get_model` for every schema-bound model (so a later schema change
+   cannot retroactively break it on replay) and imports only
+   `canonical_gate_schema`/`validate_gate_schema` directly from
+   `apps.procurement_gates.services`, since those two functions are pure
+   over plain constants (`GATE_CODES`, `ALL_CAPABILITY_CODES`) and perform
+   no ORM access.
+4. **`gate_schema` per-gate field names (implementer gap-fill).** Charter
+   §3.1 names four of the six per-gate fields exactly
+   (`attempt_creation_capability`, `overridable`,
+   `non_overridable_requirements`, `override_satisfies_successor_predecessor`)
+   but describes the other two only in prose ("the ordered list of required
+   evidence-requirement codes", "the capability code(s) required to record
+   a `GateDecision`"). Implemented as `evidence_requirement_codes` (list)
+   and `decision_capability` (a single string — the §13 authorization table
+   uses it in the singular, e.g. "the specific capability declared in
+   `gate_schema[gate_code]`... e.g. `APPROVE_GATE`"). No other schema key or
+   alias was invented.
+5. **`GATE_POLICY_VERSION_WITHDRAWN` audit action (implementer gap-fill).**
+   Charter §10's action table enumerates every other policy-lifecycle
+   action but is silent on withdrawal (§3.2). Added following the identical
+   naming/meaning pattern as `GATE_POLICY_VERSION_PUBLISHED`.
+6. **No Django admin registration for `apps.procurement_gates` models**
+   (Charter §16.3 option 1 — excluded entirely), rather than option 2 (a
+   dedicated read-only `ModelAdmin`). No prior app in this repository has
+   ever implemented option 2's `has_add_permission`/`has_change_permission`/
+   `has_delete_permission`-overridden pattern — every existing `admin.py` is
+   the same blanket `admin.site.register` loop the Charter names as the
+   anti-pattern this rule exists to prevent. Full exclusion is the smaller,
+   equally-compliant change; a read-only surface remains open for a future
+   increment if genuinely needed.
+7. **Canonical policy seed sets `overridable = False` on all six gates**,
+   not only the Charter-mandated `False` on `A2`. The override mechanism
+   (`ProcurementGateOverride`, Charter §11) is out of scope for this
+   increment; shipping `overridable = True` anywhere in the canonical
+   schema today would advertise a capability nothing yet implements.
+8. **`grant_gate_progression_exemption` (Charter §4.4) requires package-scoped
+   `APPROVE_GATE`** (interim choice). The Charter names no dedicated
+   capability for granting this administrative exemption. `APPROVE_GATE`
+   is reused rather than a new code minted, since Milestone 1 does not
+   otherwise use `APPROVE_GATE` yet (`GateDecision` recording is a later,
+   not-yet-authorized increment) and a dedicated code can be introduced
+   later without any migration if the business decides administrative
+   exemption authority should differ from gate-decision authority.
+
+**Why:** Increment 1's own scope boundary (see
+`docs/implementation-log.md`) forbids redesigning or re-adjudicating the
+accepted Charter and forbids inventing missing schema keys/aliases: every
+point above is either a literal, verified-by-test implementation of an
+already-binding Charter rule, or a narrow, explicitly-flagged gap-fill
+where the Charter under-specified a mechanism this increment's own scope
+requires to exist (a real `PUBLISH_GATE_POLICY` check for the canonical
+policy; real field names for the two unnamed schema entries; a real audit
+action for a state transition the Charter itself defines). None of the
+eight points redefine any Charter-binding rule, model, constraint,
+on_delete behavior, or resolution order.
+
 ## ADR-048 — `ChangeRequest` creation gets a new, named capability code
 enforced before the unmodified foundation is invoked; refreeze gets a
 single, named service with deterministic hold-cause identity; the

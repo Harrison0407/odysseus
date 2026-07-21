@@ -55,6 +55,12 @@ class AuthorizationDenied(Exception):
     """Raised by any governance action a user is not authorized for."""
 
 
+class AuthorizationConfigurationError(Exception):
+    """Raised when a caller misuses an authorization function's scoping
+    contract (a programmer error, never a user-facing denial) -- e.g.
+    passing both `package` and `organization` to has_capability."""
+
+
 # ---------------------------------------------------------------------------
 # Party / Role / Capability resolution
 # ---------------------------------------------------------------------------
@@ -87,17 +93,36 @@ def has_role(user, role_code, *, package=None, project=None) -> bool:
     return active_role_assignments(user, package=package, project=project).filter(role_code=role_code).exists()
 
 
-def has_capability(user, capability_code, *, package=None) -> bool:
+def has_capability(user, capability_code, *, package=None, organization=None) -> bool:
     """Deny by default. A capability is granted only through:
     (1) an explicit, currently-active CapabilityGrant tied directly to
     the user, or to one of their active role assignments in `package`;
     or (2) a role-implied default from ROLE_DEFAULT_CAPABILITIES — which
     deliberately never includes any APPROVE_*/AUTHORIZE_*/EXPORT_*/
-    VIEW_PRIVILEGED_AUDIT-type action."""
+    VIEW_PRIVILEGED_AUDIT-type action.
+
+    `organization` is an additive, keyword-only extension (Milestone 1
+    Charter Section 13): when supplied, evaluation narrows to a pure
+    organization-scoped grant — `organization` matches, `package IS NULL`,
+    `role_assignment IS NULL` — and never falls back to `package`-scoped or
+    unscoped matching. `package` and `organization` are mutually exclusive;
+    every existing caller that passes neither, or only `package`, keeps
+    exactly its current behavior."""
+    if package is not None and organization is not None:
+        raise AuthorizationConfigurationError(
+            "has_capability() accepts package= or organization=, never both."
+        )
     if user is None or not getattr(user, "is_authenticated", False):
         return False
 
     today = timezone.now().date()
+
+    if organization is not None:
+        grants = CapabilityGrant.objects.filter(
+            user=user, capability_code=capability_code, is_active=True,
+            organization=organization, package__isnull=True, role_assignment__isnull=True,
+        )
+        return any(grant.is_currently_active(on_date=today) for grant in grants)
 
     direct_grants = CapabilityGrant.objects.filter(user=user, capability_code=capability_code, is_active=True)
     if package is not None:

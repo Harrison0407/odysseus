@@ -82,6 +82,7 @@ INSTALLED_APPS = [
     "apps.evidenceinbox",
     "apps.unitplans",
     "apps.governance",
+    "apps.procurement_gates",
     "apps.api",
 ]
 

@@ -119,14 +119,41 @@ returned **MILESTONE 1 CHARTER VERSION 6 APPROVED FOR OWNER ACCEPTANCE**
 — the first clean pass in this Charter's revalidation history, with no
 findings requiring correction. Harrison (owner) then explicitly accepted
 Charter version 6, at the same commit, as the approved architectural and
-functional contract for Milestone 1, on 2026-07-21. The exact next action
-is to **await Harrison's separate, explicit authorization to begin
-Milestone 1 (A1–A6) implementation**. A1–A6 — Configurable Procurement
-Gates — remains approved and planned but is **not authorized** by this
-acceptance or by the Charter's own authorship; implementation has not
-started. The existing `ProcurementPackage.Status` is a separate state
-machine and must not be represented as A1–A6 gate
-execution.
+functional contract for Milestone 1, on 2026-07-21.
+
+Harrison then separately, explicitly authorized **Milestone 1
+Implementation Increment 1 — Procurement Gate Policy and Package
+Assignment Foundation**, bounded to `apps.procurement_gates`'s
+configuration/pinning layer (`GatePolicy`, `GatePolicyVersion`,
+`PackagePolicyAssignment`) only — see `docs/implementation-log.md` entry
+63 and ADR-049. That increment is implemented, migrated (75/75
+migrations applied, 0 pending), and tested (565/565 tests passing). The
+following remain open limitations even after Increment 1:
+
+- **A1–A6 gate *execution* remains entirely unimplemented.** No
+  `GateAttempt`, `GateEvaluation`, `GateDecision`, `GateInvalidation`,
+  `PackageGateState`, `PackageFreezeRevision`, `PackageHoldCause`, or
+  `ProcurementGateOverride` model or row exists anywhere in this codebase.
+  The existing `ProcurementPackage.Status` remains a separate state
+  machine and must not be represented as A1–A6 gate execution.
+- **Increment 2 (and every later increment) is not authorized** by
+  Increment 1's implementation or by the Charter's own acceptance.
+  Increment 1's own exact next action is an independent, increment-only
+  Fable review of the resulting commit; Increment 2 must not begin until
+  that review is reconciled and Harrison separately, explicitly
+  authorizes it.
+- **PostgreSQL concurrency validation (Charter §15) was not run this
+  cycle.** Increment 1's `select_for_update()` locks (package-row lock on
+  pinning; policy-version-row lock on publish/withdraw) are implemented
+  exactly per Charter §14.1a but were exercised only sequentially, against
+  SQLite, by this increment's own tests — never under real concurrent
+  load against PostgreSQL. Recorded as pending, not as validated.
+- **Two Charter-underspecified mechanisms were resolved by explicit
+  implementer decision, not by Charter text** — a platform-scope
+  capability check for canonical (organization-less) policy
+  administration, and the two `gate_schema` per-gate field names the
+  Charter described only in prose. See ADR-049 items 2 and 4 for the
+  exact reasoning; neither changes any Charter-binding rule.
 
 ### Privileged-audit N+1 query characteristic (accepted, non-blocking)
 

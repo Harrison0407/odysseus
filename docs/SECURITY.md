@@ -16,11 +16,67 @@ restoration, deployed proxy/cache validation, or production log-sentinel
 analysis — see `docs/KNOWN_LIMITATIONS.md` for the full, current list of
 open operational and security validations.
 
-## Milestone 1 procurement-gate security design (documentation-only, not yet implemented)
+## Milestone 1 Increment 1 security implementation (2026-07-21)
 
-`docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md` defines, but does not
-implement, the authorization, confidentiality, audit, and non-overridable
-control rules for Procurement Gates A1–A6:
+`apps.procurement_gates`'s policy-configuration/package-pinning layer
+(`GatePolicy`, `GatePolicyVersion`, `PackagePolicyAssignment`) is
+implemented and tested — see `docs/implementation-log.md` entry 63 and
+ADR-049. Implemented security controls for this increment specifically:
+
+- `apps.governance.services.has_capability` gained the additive
+  `organization=` keyword-only extension exactly per Charter §13, with a
+  new `AuthorizationConfigurationError` raised if `package` and
+  `organization` are both supplied. Every pre-existing caller is
+  unaffected (verified by the full 565-test regression run).
+- Every `apps.procurement_gates.services` authorization check passes an
+  explicit `package=` or `organization=` scope to `has_capability` — never
+  an unscoped call — enforced by a dedicated architectural test that greps
+  the module source for every `has_capability(...)` call site. The one
+  case `has_capability` cannot express (a platform-scoped, organization-less
+  canonical `GatePolicy`) is resolved by a separate, narrow
+  `CapabilityGrant` query (`_actor_holds_platform_policy_capability`)
+  rather than by calling `has_capability` unscoped.
+- `PUBLISH_GATE_POLICY` and `CREATE_PROCUREMENT_GATE_ATTEMPT` were added
+  to `apps.governance.models.ALL_CAPABILITY_CODES`; neither is implied by
+  any `ROLE_DEFAULT_CAPABILITIES` entry.
+- Denial is audited via the existing `PRIVILEGED_ACCESS_DENIED` mechanism
+  before any mutation occurs — verified by a test asserting a denied
+  publish attempt leaves the `GatePolicyVersion` row unchanged (`DRAFT`).
+- `GatePolicyVersion` immutability after publication (`gate_schema`,
+  `version_number`, `policy`) is enforced at both the service layer
+  (`publish_policy_version`/`update_draft_policy_version` reject the
+  write) and the model layer (`GatePolicyVersion.save()` raises
+  `ValidationError` if any of those three fields changed on an already
+  non-`DRAFT` row) — a direct-write bypass test confirms the model-layer
+  guard independently of the service layer.
+- `GatePolicy.save()` independently rejects `is_canonical_default=True`
+  on any organization-owned row, backstopping the service-layer check and
+  the database's conditional unique constraint (`unique_canonical_gate_policy`).
+- Audit `metadata` for every new action (`GATE_POLICY_CREATED`,
+  `GATE_POLICY_VERSION_PUBLISHED`, `GATE_POLICY_VERSION_WITHDRAWN`,
+  `GATE_POLICY_PINNED`, `GATE_PROGRESSION_EXEMPTION_GRANTED`) is limited to
+  identifiers and state labels (Charter §10.1) — verified by a test
+  asserting metadata keys are a subset of the Charter's safe-field list and
+  that `gate_schema` content never appears in it.
+- No Django admin registration exists for any of the three new models
+  (Charter §16.3 option 1) — verified by a test asserting none of them
+  appear in `django.contrib.admin.site._registry`.
+
+**Not yet implemented — remains open** (unchanged from below): gate
+evidence classification/authorization, `ProcurementGateOverride` and its
+non-overridable-controls list, gate-lifecycle `AuditEvent.Action` codes
+beyond the five policy/pinning ones above, and PostgreSQL-specific
+lock/race validation for this increment's own `select_for_update()` calls
+(package-row lock on pinning, policy-version-row lock on publish/withdraw)
+— exercised only sequentially against SQLite so far, never under real
+concurrent load against PostgreSQL.
+
+## Milestone 1 remaining procurement-gate security design (documentation-only, not yet implemented)
+
+`docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md` defines, but does not yet
+implement beyond the increment above, the remaining authorization,
+confidentiality, audit, and non-overridable control rules for Procurement
+Gates A1–A6:
 
 - Authorization before retrieval, package/organization scoping, and
   same-organization/superuser insufficiency rules apply identically to the
@@ -176,10 +232,13 @@ accepted Charter version 6, at the same commit, as the approved
 architectural and functional contract for Milestone 1. This acceptance
 does not authorize implementation of A1–A6.
 
-None of this has been implemented. A1–A6 do not exist in the codebase as of
-this entry; this section documents the approved, owner-accepted design
-only. Implementation authorization is a separate, not-yet-given owner
-decision.
+None of the *remaining* design in this section has been implemented — A1–A6
+gate *execution* does not exist in the codebase as of this entry; this
+section (below the Increment 1 section above) documents the approved,
+owner-accepted design only. Harrison has separately authorized and
+Increment 1 (policy configuration/package pinning only, see above) has
+implemented; Increment 2 onward remains a separate, not-yet-given owner
+decision pending independent Fable review of the Increment 1 commit.
 
 ## Implemented and verified in this delivery
 

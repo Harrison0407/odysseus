@@ -286,6 +286,50 @@ Exact next action: **await Harrison's separate, explicit authorization to
 begin Milestone 1 (A1–A6) implementation. Do not begin A1–A6
 implementation absent that separate authorization.**
 
+**Update — Milestone 1 Implementation Increment 1 complete (2026-07-21).**
+Harrison separately, explicitly authorized a bounded first implementation
+increment: **Procurement Gate Policy and Package Assignment Foundation**
+— the new `apps.procurement_gates` app (`GatePolicy`, `GatePolicyVersion`,
+`PackagePolicyAssignment`), covering Charter §§1–4 (gate codes, policy
+architecture, publication rule, canonical default, package pinning,
+existing-package migration) and the corresponding slices of §10
+(audit taxonomy) and §13 (authorization). Explicitly excluded from this
+increment, per its own boundary: `GateAttempt`, `GateEvaluation`,
+`GateDecision`, `GateInvalidation`, `PackageGateState`,
+`PackageFreezeRevision`, `PackageHoldCause`, `ProcurementGateOverride`,
+evidence-bundle creation/mapping, gate evaluation, A1 completion, A2
+freeze, A3–A6 behavior, `ChangeRequest`/`RiskFlag` wrappers, refreeze,
+holds, override lifecycle, any procurement-gates UI/API, and any change to
+`apps.workflow`.
+
+Starting reconciliation for this cycle: HEAD confirmed at `1e1b247` (short
+SHA) before editing; branch `integration/dt-beach-supply-control-1.0.0`;
+upstream identical; ahead/behind `0/0`; working tree clean; 72/72
+migrations applied, 0 pending; no `apps.procurement_gates` implementation
+present. Result: 54 new tests added (`tests/test_procurement_gates_policy.py`),
+full regression suite **565/565 passing** (511 prior + 54 new);
+`python manage.py check`, `makemigrations --check --dry-run`, and
+`migrate --check` all clean; `showmigrations --plan` shows 75/75 applied,
+0 pending (72 prior + `procurement_gates` 0001/0002 + `audit`'s new
+`Action`-choices migration). Verified against both a fresh empty SQLite
+database (seeds exactly one canonical policy + published version, zero
+package assignments) and the real populated development database (one
+existing `frozen` package, pinned exactly once, `pinned_by = NULL`,
+`is_frozen`/`frozen_snapshot`/`is_on_hold`/`Status` all unchanged), with
+re-run idempotency confirmed. PostgreSQL concurrency validation was not
+run this cycle — recorded as pending, not as validated. Full detail:
+`docs/implementation-log.md` entry 63, `docs/architecture-decisions.md`
+ADR-049.
+
+**A1–A6 gate *execution* remains entirely unimplemented.** No
+`GateAttempt` or any row downstream of it exists anywhere in this
+codebase. Increment 2 is **not authorized** by this entry.
+
+Exact next action: **run an independent, increment-only Fable review
+against the Increment 1 commit. Do not begin Increment 2 until that
+review is reconciled and Harrison explicitly authorizes the next
+increment.**
+
 ---
 
 ## Historical record: Foundation correction cycle 3 mechanism

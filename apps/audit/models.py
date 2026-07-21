@@ -48,6 +48,19 @@ class AuditEvent(BaseModel):
         PRIVILEGED_ACCESS_DENIED = "privileged_access_denied", "Acceso privilegiado denegado"
         RISK_FLAG = "risk_flag", "Señal de riesgo"
         DERIVED_ARTIFACT = "derived_artifact", "Artefacto derivado"
+        # Milestone 1 Increment 1 (apps.procurement_gates policy foundation,
+        # Charter Section 10). GATE_POLICY_VERSION_WITHDRAWN is an
+        # implementer gap-fill: the Charter's Section 10 table enumerates
+        # every other policy-lifecycle action but is silent on withdrawal;
+        # this follows the same naming/meaning pattern as the sibling
+        # GATE_POLICY_VERSION_PUBLISHED action.
+        GATE_POLICY_CREATED = "gate_policy_created", "Política de gate creada"
+        GATE_POLICY_VERSION_PUBLISHED = "gate_policy_version_published", "Versión de política de gate publicada"
+        GATE_POLICY_VERSION_WITHDRAWN = "gate_policy_version_withdrawn", "Versión de política de gate retirada"
+        GATE_POLICY_PINNED = "gate_policy_pinned", "Política de gate fijada al paquete"
+        GATE_PROGRESSION_EXEMPTION_GRANTED = (
+            "gate_progression_exemption_granted", "Exención de progresión de gates otorgada"
+        )
         OTHER = "other", "Otro"
 
     action = models.CharField(max_length=40, choices=Action.choices)

@@ -20,10 +20,21 @@ from foundation correction cycle 3, which closed three further gaps found by
 independently revalidating cycle 2's own privileged-audit mechanism:
 CTCF-AUDIT-SCOPE-021, CTCF-AUDIT-RETRIEVAL-022, CTCF-AUDIT-WINDOW-023).
 This correction cycle was independently revalidated and, on 2026-07-20,
-explicitly owner-accepted by Harrison — the foundation is now closed. The
-independent Milestone 1 Charter review is the next required control
-point. What is not yet built is listed honestly in
-`docs/KNOWN_LIMITATIONS.md`; the official milestone order is governed by
+explicitly owner-accepted by Harrison — the foundation is now closed.
+Harrison then explicitly authorized **Milestone 1 Implementation
+Increment 1 — Procurement Gate Policy and Package Assignment
+Foundation**, now implemented: `apps.procurement_gates` (`GatePolicy`,
+`GatePolicyVersion`, `PackagePolicyAssignment`) — configurable, versioned
+A1–A6 gate policy schemas, canonical/organization-specific resolution,
+and permanent package pinning, with 54 new tests (565/565 total passing).
+A1–A6 gate *execution* (`GateAttempt` and everything downstream) remains
+entirely unimplemented and unauthorized — see
+`docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md`,
+`docs/implementation-log.md` entry 63, and ADR-049. An independent,
+increment-only Fable review of the Increment 1 commit is the next
+required control point before Increment 2 may be authorized. What is not
+yet built is listed honestly in `docs/KNOWN_LIMITATIONS.md`; the official
+milestone order is governed by
 `docs/MARKETMATCH_ARCHITECTURE_RECONCILIATION_AND_ROADMAP.md`.
 
 ## What's implemented
@@ -44,6 +55,7 @@ point. What is not yet built is listed honestly in
   and manifest records are package/classification scoped, while legacy records
   retain organization scope).
 - A validated production deployment: Docker Compose (Postgres + Gunicorn + Caddy), with backup/restore/persistence genuinely exercised (see `docs/FINAL_VALIDATION_REPORT.md`).
+- Milestone 1 Increment 1: configurable, versioned A1–A6 procurement gate policy schemas (`apps.procurement_gates`), canonical-default/organization-specific resolution, and permanent package-to-policy-version pinning. Gate *execution* is not yet implemented — this is the configuration foundation only.
 
 ## Documentation
 
@@ -202,14 +214,20 @@ that result, Harrison (owner) explicitly accepted Charter version 6, at
 the same commit, as the approved architectural and functional contract
 for Milestone 1, on 2026-07-21.
 
-Exact next action: **await Harrison's separate, explicit authorization to
-begin Milestone 1 (A1–A6) implementation. Do not begin A1–A6
-implementation absent that separate authorization.**
+Following Charter acceptance, Harrison separately, explicitly authorized
+**Milestone 1 Implementation Increment 1 — Procurement Gate Policy and
+Package Assignment Foundation**, bounded to the configuration/pinning
+layer only (`GatePolicy`, `GatePolicyVersion`, `PackagePolicyAssignment` —
+none of `GateAttempt`, `GateEvaluation`, `GateDecision`,
+`ProcurementGateOverride`, freeze/change-control, or any gate-execution
+behavior). That increment is now implemented, migrated, and tested
+(565/565 tests passing) — see `docs/implementation-log.md` entry 63 and
+ADR-049.
 
-Milestone 1 remains planned and approved; owner acceptance of the Charter
-is a distinct decision from implementation authorization, and only the
-former has been given. A1–A6 implementation begins only after Harrison's
-separate, explicit authorization.
+Exact next action: **run an independent, increment-only Fable review
+against the Increment 1 commit. Do not begin Increment 2 (or any A1–A6
+gate-execution work) until that review is reconciled and Harrison
+explicitly authorizes the next increment.**
 
 ## Production deployment
 

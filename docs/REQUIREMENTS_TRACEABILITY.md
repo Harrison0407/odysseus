@@ -17,6 +17,15 @@ both retained for historical accuracy. Historical milestone counts below
 are retained where they describe the evidence available at that point in
 the delivery.
 
+Milestone 1 Increment 1 status (2026-07-21): **IMPLEMENTED AND
+TESTED — READY FOR INDEPENDENT FABLE REVIEW**, not yet independently
+reviewed or reconciled. **565 tests collected, 565 passed, 0 failed
+(511 prior + 54 new); migrations clean (75/75 applied)** — see
+`docs/implementation-log.md` entry 63 and ADR-049. This is the
+Procurement Gate Policy and Package Assignment Foundation only; A1–A6
+gate execution remains unimplemented and Increment 2 remains
+unauthorized.
+
 The Controlled Transparency, Commercial Confidentiality & Authorization
 Foundation is **independently revalidated and owner accepted** as the
 latest completed product milestone. Foundation correction cycle 2 closed
@@ -73,11 +82,31 @@ CHARTER VERSION 6 APPROVED FOR OWNER ACCEPTANCE with no findings requiring
 correction — the first clean pass in this Charter's revalidation history.
 Harrison (owner) then explicitly accepted Charter version 6, at the same
 commit, as the approved architectural and functional contract for
-Milestone 1. The exact next action is to await Harrison's separate,
-explicit authorization to begin Milestone 1 (A1–A6) implementation.
-A1–A6 implementation remains not started and is not authorized by this
-acceptance or by the Charter's own authorship; `ProcurementPackage.Status`
-is not evidence of gate execution.
+Milestone 1. Harrison subsequently, separately authorized **Milestone 1
+Implementation Increment 1 — Procurement Gate Policy and Package
+Assignment Foundation**, bounded to the configuration/pinning layer only
+(`apps.procurement_gates`: `GatePolicy`, `GatePolicyVersion`,
+`PackagePolicyAssignment`) — see `docs/implementation-log.md` entry 63 and
+ADR-049. That increment is implemented, migrated, and tested (565/565
+tests passing); A1–A6 gate *execution* (`GateAttempt` and everything
+downstream of it) remains entirely unimplemented, and Increment 2 remains
+unauthorized pending an independent, increment-only Fable review of the
+Increment 1 commit and Harrison's separate, explicit authorization.
+`ProcurementPackage.Status` is still not evidence of gate execution.
+
+## Milestone 1 Increment 1 — Procurement Gate Policy and Package Assignment Foundation
+
+| Capability | Module(s) | DB records | UI | Test(s) | Status |
+|---|---|---|---|---|---|
+| Stable A1–A6 gate codes and canonical order | `apps.procurement_gates.models.GATE_CODES` | — | — | `TestInstallationAndGateCodes` | Done |
+| Gate policy family + versioned, immutable-once-published schema | `apps.procurement_gates` | `GatePolicy`, `GatePolicyVersion` | none (Charter §16.3 admin exclusion — no Django admin surface) | `TestPublicationRule` (11 tests) | Done |
+| Canonical default singleton + organization-specific resolution | `apps.procurement_gates.services` | `GatePolicy.is_canonical_default` | — | `TestCanonicalDefault` (8 tests) | Done |
+| Permanent package-to-policy-version pinning | `apps.procurement_gates` | `PackagePolicyAssignment` | — | `TestPackagePinning` (6 tests) | Done |
+| Deterministic canonical seed + existing-package migration | `apps/procurement_gates/migrations/0002_...` | — | — | `TestExistingPackageMigration` (4 tests) | Done — verified against both an empty and the real populated database |
+| Organization-scoped `has_capability` extension | `apps.governance.services` | — | — | `TestOrganizationScopedHasCapability` (9 tests) | Done |
+| Policy-administration authorization (incl. cross-org denial) | `apps.procurement_gates.services` | — | — | `TestPolicyAdministrationAuthorization` (4 tests) | Done |
+| §4.4 administrative gate-progression exemption | `apps.procurement_gates` | `PackagePolicyAssignment.gate_progression_exempt` | — | `TestGateProgressionExemption` (3 tests) | Done |
+| A1–A6 gate execution (`GateAttempt`/`GateEvaluation`/`GateDecision`/overrides/freeze/change-control) | — | — | — | — | **Not started — separate, unauthorized increment** |
 
 ## Priority 0 capabilities (spec section 5)
 

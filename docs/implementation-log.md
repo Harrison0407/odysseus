@@ -2327,3 +2327,142 @@ documented order.
     Exact next action: await Harrison's separate, explicit authorization
     to begin Milestone 1 (A1–A6) implementation. Do not begin A1–A6
     implementation absent that separate authorization.
+
+63. **Milestone 1 Implementation Increment 1 — Procurement Gate Policy and
+    Package Assignment Foundation.** Dated 2026-07-21.
+
+    Harrison explicitly authorized this bounded first implementation
+    increment following entry 62's owner acceptance of Charter Version 6.
+    Fresh evidence confirmed before editing: HEAD at `1e1b247` (short SHA,
+    matching the authorization baseline); branch
+    `integration/dt-beach-supply-control-1.0.0`; upstream identical;
+    ahead/behind `0/0`; working tree clean; 72/72 existing migrations
+    applied, 0 pending; no `apps.procurement_gates` directory or app
+    present. `python manage.py check` was run directly in this session
+    (a local venv was set up outside the repository path, which contains a
+    literal `:` that `python -m venv` refuses inside).
+
+    Implemented exactly the bounded scope: new isolated
+    `apps.procurement_gates` app; `GATE_CODES = ("A1", ..., "A6")`;
+    `GatePolicy`, `GatePolicyVersion`, `PackagePolicyAssignment` with every
+    Charter §3/§3.5-defined field, constraint, and `on_delete` rule;
+    publication-time `gate_schema` completeness validation (Charter §3.2);
+    draft editing, publication, and withdrawal through
+    `apps.procurement_gates.services` only, never a bare model save() for
+    the state transitions themselves; model-level `save()` guards as the
+    backstop against direct-write bypass of published-version immutability
+    and organization-owned-cannot-be-canonical; canonical/organization
+    resolution per the exact §3.3 precedence; permanent package pinning
+    with the Pattern B `select_for_update()` lock (§14.1a); deterministic,
+    idempotent canonical Version 1 seeding and existing-package pinning via
+    a new data migration
+    (`procurement_gates/migrations/0002_seed_canonical_policy_and_assign_packages.py`
+    — the repository's first `RunPython` migration, see ADR-049).
+
+    Explicitly not implemented, per the increment boundary: `GateAttempt`,
+    `GateEvaluation`, `GateDecision`, `GateInvalidation`, `PackageGateState`,
+    `PackageFreezeRevision`, `PackageHoldCause`, `ProcurementGateOverride`,
+    evidence-bundle creation/mapping, gate evaluation, A1 completion, A2
+    freeze, A3–A6 behavior, `ChangeRequest`/`RiskFlag` wrappers, refreeze,
+    holds, override lifecycle, any procurement-gates UI/API, and any change
+    to `apps.workflow`.
+
+    Two capability codes were added to the existing registry
+    (`apps.governance.models.ALL_CAPABILITY_CODES`):
+    `PUBLISH_GATE_POLICY`, `CREATE_PROCUREMENT_GATE_ATTEMPT` (the latter is
+    registered now, as Charter §3.2 requires every canonical
+    `gate_schema` entry's `attempt_creation_capability` to name a
+    registered code, even though attempt creation itself is not
+    implemented until a later increment). `apps.governance.services.has_capability`
+    gained the additive `organization=` keyword exactly per Charter §13,
+    with a new `AuthorizationConfigurationError` for the
+    `package`+`organization` mutual-exclusivity case. Five new
+    `audit.AuditEvent.Action` members were added:
+    `GATE_POLICY_CREATED`, `GATE_POLICY_VERSION_PUBLISHED`,
+    `GATE_POLICY_VERSION_WITHDRAWN` (implementer gap-fill — see ADR-049),
+    `GATE_POLICY_PINNED`, `GATE_PROGRESSION_EXEMPTION_GRANTED`. See ADR-049
+    for the full list of implementer decisions made where the Charter did
+    not specify an exact mechanism (platform-scope capability check,
+    `gate_schema` field names for the two Charter left unnamed, and three
+    smaller gap-fills), and the reasoning for each.
+
+    Migrations added: `apps/procurement_gates/migrations/0001_initial.py`
+    (schema), `apps/procurement_gates/migrations/0002_seed_canonical_policy_and_assign_packages.py`
+    (data); `apps/audit/migrations/0004_add_gate_policy_action_codes.py`
+    (the five new `Action` choices). No other app's migration history
+    changed. Verified against both a fresh, empty SQLite database (seeds
+    exactly one canonical policy + published version, zero
+    `PackagePolicyAssignment` rows, per Charter §4.5) and the real
+    populated development database (one existing package, `frozen` status,
+    pinned exactly once, `pinned_by = NULL`, `is_frozen`/`frozen_snapshot`/
+    `is_on_hold`/`Status` all unchanged) — then re-applied to confirm
+    idempotency (unapplying and re-running migration 0002 created no
+    duplicate `GatePolicy`, `GatePolicyVersion`, `PackagePolicyAssignment`,
+    or `AuditEvent` rows).
+
+    54 new tests added in `tests/test_procurement_gates_policy.py`,
+    covering: publication rule (draft editable, published immutable at
+    both the service and model layer, missing/extra/malformed
+    `gate_schema` keys rejected, `A2.overridable=True` rejected outright,
+    unregistered `attempt_creation_capability` rejected, supersession
+    chain); canonical default (singleton constraint, organization-owned
+    cannot be canonical at both layers, organization policy preferred over
+    canonical, availability invariant on withdrawal); package pinning
+    (permanence/idempotency, unpublished-version rejection, DB-level
+    duplicate-assignment backstop, `PROTECT` deletion blocking); the
+    existing-package migration (empty-database and populated,
+    all-four-status coverage, idempotent re-run, zero fabricated gate
+    history); the `has_capability(organization=...)` extension (every
+    scenario in Charter §13's required test list, adapted to this
+    increment's actual `PUBLISH_GATE_POLICY` consumer: correct-org success,
+    wrong-org/package-only/hybrid-grant/inactive-grant/superuser-only/
+    membership-only failure, mutual-exclusivity error, legacy-caller
+    regression, and an architectural test that greps
+    `apps.procurement_gates.services` for any unscoped `has_capability`
+    call); policy-administration authorization (denial before mutation,
+    denial audited, platform-scope-vs-org-scope separation,
+    cross-organization denial); audit-event metadata safety (no
+    `gate_schema` content, keys limited to the Charter §10.1 safe set); the
+    §4.4 administrative exemption (reason required, capability required,
+    granted and audited distinctly from a pass); and architecture
+    preservation (no reference to `apps.workflow`, pinning never changes
+    `ProcurementPackage.status`, no Django admin registration for any of
+    the three new models).
+
+    Full regression suite: **565 passed, 0 failed** (511 prior + 54 new),
+    run via `python -m pytest -q` against SQLite
+    (`USE_SQLITE_FOR_TESTS=1`, this repository's existing test-database
+    convention — see `docs/KNOWN_LIMITATIONS.md` for what that does and
+    does not validate). `python manage.py check`,
+    `makemigrations --check --dry-run`, and `migrate --check` all passed
+    with no findings; `showmigrations --plan` showed 75/75 migrations
+    applied (72 prior + the 2 new `procurement_gates` migrations + 1 new
+    `audit` migration for the 5 new `Action` choices), 0 pending, after
+    `migrate` was run against the real development database. **PostgreSQL concurrency validation was not run this
+    cycle — recorded as pending**, consistent with Charter §15; the
+    `select_for_update()` locks specified by Charter §14.1a are
+    implemented but only exercised sequentially by this increment's own
+    tests, not under real concurrent load against PostgreSQL.
+
+    This entry, `docs/REQUIREMENTS_TRACEABILITY.md`,
+    `docs/KNOWN_LIMITATIONS.md`, `docs/SECURITY.md`,
+    `docs/architecture-decisions.md` (new ADR-049), `README.md`,
+    `DT_BEACH_CURRENT_STATE.md`, and `DT_BEACH_SOURCE_OF_TRUTH_INDEX.md`
+    were all updated to record Increment 1 as implemented-and-verified
+    while explicitly marking Increments 2+ (A1 gate execution onward) as
+    unimplemented and unauthorized.
+
+    **Status distinctions, precise:** Increment 1 (policy configuration
+    and package pinning) is implemented, migrated, and tested. A1–A6 gate
+    *execution* remains entirely unimplemented — no `GateAttempt` ever
+    exists in this codebase yet, and nothing in this entry changes that.
+    Milestone 1 as a whole is **not complete**; only its first, narrowly
+    bounded increment is. Increment 2 is **not authorized** by this entry
+    and must not begin until an independent, increment-only Fable review
+    of the resulting commit is reconciled and Harrison separately,
+    explicitly authorizes it.
+
+    Exact next action: run an independent, increment-only Fable review
+    against the resulting commit. Do not begin Increment 2 until that
+    review is reconciled and Harrison explicitly authorizes the next
+    increment.

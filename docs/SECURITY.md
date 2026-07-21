@@ -37,8 +37,42 @@ uses the shared policy lock. Denial and exemption audit metadata contains safe
 identifiers/codes only. PostgreSQL concurrency execution remains pending; the
 accepted validation is SQLite-only (615 collected, 613 passed, 2 PostgreSQL-
 only tests skipped; 77/77 migrations, 0 pending). This acceptance does not
-claim PostgreSQL validation. Increment 2 remains unauthorized and requires a
-separate explicit owner decision.
+claim PostgreSQL validation. At the time of Increment 1 closure, Increment 2
+still required a separate owner decision; the later authorization and bounded
+implementation are recorded immediately below.
+
+## Milestone 1 Increment 2 security implementation (2026-07-21)
+
+Harrison separately authorized **Gate Execution Core and A1 Deal Established**
+from baseline `193fdfb720662a235b259b97694a0d5e3d8edcaa`. The implementation
+uses existing `CapabilityGrant` resolution and adds only the stable
+`EVALUATE_PROCUREMENT_GATE` and `REQUEST_PROCUREMENT_GATE_REVIEW` codes;
+neither has a role-default implication. The already registered
+`CREATE_PROCUREMENT_GATE_ATTEMPT` and policy-pinned decision capability remain
+the attempt/decision controls.
+
+The first A1 attempt requires the exact organization-scoped bootstrap grant.
+Evaluation, review, later A1 attempts, and decisions require exact package
+scope; organization membership, role names, unscoped grants, wrong-package
+grants, expired/inactive grants, and superuser status alone do not authorize
+them. Services resolve only safe target identifiers before authorization,
+revalidate capability after locks, and use attempt→package lock order for
+evaluation/review/decision. A passing decision enforces preparer/requester and
+approver separation.
+
+Attempt/evaluation/decision rows are protected against instance, queryset,
+base-manager, bulk, admin, delete, and cascade bypasses. The state table is a
+non-authoritative, direct-write-blocked cache rebuilt solely from immutable
+history and exemption state. Audit/evaluation/projection metadata contains IDs,
+stable codes, booleans, counts, and lifecycle states only; sentinel tests prove
+package, supplier/factory, role, risk/change, policy-schema, and commercial
+content is absent. No evidence payload is copied.
+
+SQLite validation collected 655 tests: 649 passed and 6 PostgreSQL-only race
+tests skipped; 79/79 migrations applied, 0 pending. PostgreSQL lock/race
+execution remains pending and is not claimed. A2 freeze/evaluation, A3–A6,
+new hold causes, invalidation, overrides, evidence mapping, UI, APIs, and
+Increment 3 remain absent and unauthorized.
 
 `apps.procurement_gates`'s policy-configuration/package-pinning layer
 (`GatePolicy`, `GatePolicyVersion`, `PackagePolicyAssignment`) is

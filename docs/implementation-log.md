@@ -2550,3 +2550,58 @@ documented order.
     not authorize or implement Increment 2. Increment 2 requires a separate
     explicit owner decision. Exact next action: await Harrison's separate
     explicit authorization for Increment 2.
+
+66. **Milestone 1 Implementation Increment 2 — Gate Execution Core and A1
+    Deal Established.** Dated 2026-07-21.
+
+    Harrison separately and explicitly authorized this bounded increment from
+    synchronized baseline `193fdfb720662a235b259b97694a0d5e3d8edcaa` on
+    `integration/dt-beach-supply-control-1.0.0` (upstream identical,
+    ahead/behind `0/0`, clean tree, 77/77 migrations applied). Increment 1
+    remains closed and owner-accepted at
+    `220be7aa030b656fb960151c92166594ba539a26`.
+
+    Implemented schema-only migrations `audit.0005` and
+    `procurement_gates.0005`; immutable/non-deletable `GateAttempt`,
+    `GateEvaluation`, and `GateDecision`; and direct-write-blocked,
+    rebuildable-only `PackageGateState`. Canonical services provide explicit
+    package initialization, A1 re-attempt creation after a return,
+    confidentiality-safe A1 evaluation, review request, separated pass/return,
+    pure `compute_gate_state`/`derive_current_gate`, and deterministic cache
+    rebuild. A1 pass closes its attempt and makes A2 current as `NOT_STARTED`;
+    it creates no A2 attempt, evaluation, decision, freeze, or pass.
+
+    Authorization reuses `CapabilityGrant`: first A1 bootstrap is exact
+    organization scope; evaluation/review/later attempts/decisions are exact
+    package scope; capabilities are rechecked after locks. Superuser, tenant,
+    role name, expired/inactive/unscoped/wrong-package grants are insufficient.
+    Approval separates opener/evaluator/reviewer from decider. Immutable rows
+    block instance/queryset/base-manager/bulk/admin/delete/cascade bypasses.
+    Audit and evaluation payloads use only identifiers, stable codes, booleans,
+    counts, and lifecycle labels, with unique confidential sentinels proving
+    absence of package, Party, supplier/factory, commercial, schema, risk, and
+    ChangeRequest content.
+
+    Existing packages receive no fabricated attempt, evaluation, decision,
+    pass, or projection from migration; the explicit initialization service is
+    authorized and idempotent. Package status, freeze/hold data,
+    ChangeRequests, RiskFlags, evidence, and Handoffs remain unchanged.
+    `apps.workflow` code/migrations and its Handoff-specific `GateOverride`
+    remain untouched.
+
+    Added 36 passing tests: 35 focused execution tests plus one new
+    MigrationExecutor preservation/no-fabrication test. Four additional
+    PostgreSQL-only concurrency tests cover simultaneous initialization,
+    re-attempt creation, A1 decisions, and duplicate A2 projection activation;
+    together with Increment 1's two races, all six skip on SQLite. Fresh full
+    regression: **655 collected, 649 passed, 6 skipped**. Development database:
+    SQLite, **79/79 migrations applied, 0 pending**. Real PostgreSQL execution
+    remains pending and is not claimed.
+
+    Explicitly excluded: A2 evaluation/freeze/refreeze,
+    `PackageFreezeRevision`, A3–A6 behavior, evidence mapping,
+    `GateInvalidation`, `PackageHoldCause`, `ProcurementGateOverride`, UI,
+    APIs, forms, serializers, templates, reports, notifications, and Increment
+    3. Exact next action: run a read-only, Increment-2-only Codex verification
+    against the resulting commit. Do not begin Increment 3 until that
+    verification is reconciled and Harrison separately authorizes it.

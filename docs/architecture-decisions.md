@@ -2,6 +2,43 @@
 
 Newest first.
 
+## ADR-051 — Increment 2 A1 execution history, explicit initialization, and rebuildable state
+
+**Decision:** Harrison explicitly authorized Milestone 1 Increment 2 from
+baseline `193fdfb720662a235b259b97694a0d5e3d8edcaa`, limited to the gate
+execution foundation and A1 Deal Established. Increment 1 remains
+owner-accepted and unchanged.
+
+1. `GateAttempt`, `GateEvaluation`, and `GateDecision` are immutable,
+   non-deletable authoritative history. Attempts pin both the permanent
+   assignment and exact policy version, copy only stable creation/decision
+   capability codes, number under package lock, and permit one open attempt.
+2. Existing packages are not backfilled with inferred activity. The authorized,
+   idempotent initialization service creates the first A1 attempt and a
+   rebuildable A1–A6 cache; no migration fabricates a pass or execution row.
+3. A1 uses discrete, stable checks for persisted tenant, active package-scoped
+   Party roles, visibility, decision authority, critical-role ambiguity,
+   blocking RiskFlags/ChangeRequests, and package hold. Stored summaries never
+   contain Party/package names, evidence, schema, or commercial content.
+4. A satisfied evaluation is not a pass. Review is explicit; an authorized,
+   separated decision closes the attempt as `PASSED` or `FAILED`. A pass makes
+   A2 current only as `NOT_STARTED`; a return requires a new numbered A1
+   attempt.
+5. `PackageGateState` is a service-controlled cache only. Pure state functions
+   never lock, write, audit, or initialize; deterministic rebuild derives from
+   immutable history and package exemption.
+6. Lock order follows the Charter: package-only for attempt creation and
+   attempt→package for evaluation/review/decision. Six PostgreSQL-only race
+   tests now cover Increment 1 and 2 concurrency; SQLite skips are accurate and
+   PostgreSQL execution remains pending.
+
+No A2 evaluation/freeze, A3–A6 operation, evidence mapping, invalidation, new
+hold cause, procurement override, UI/API, or `apps.workflow` change is included.
+
+**Status:** implemented locally; 655 collected, 649 passed, 6 PostgreSQL-only
+skipped on SQLite; 79/79 migrations applied, 0 pending. Ready for read-only
+Increment 2 Codex verification. Increment 3 remains unauthorized.
+
 ## ADR-050 — Increment 1 Codex correction: permanent history guards, dedicated assignment/exemption authority, canonical serialization, and frozen migration replay
 
 **Decision:** Codex implementation verification of Increment 1 commit
@@ -47,8 +84,9 @@ dual canonical withdrawal. They are skipped on SQLite; PostgreSQL execution
 remains pending and is not claimed. No GateAttempt, gate execution, workflow
 change, or Increment 2 behavior is introduced.
 
-**Status:** correction implemented; Increment 1 pending read-only Codex
-re-verification and Harrison acceptance. Increment 2 remains unauthorized.
+**Status:** correction implemented, Codex re-verified, and Increment 1
+owner-accepted at `220be7aa030b656fb960151c92166594ba539a26`. Increment 2 was
+later authorized separately and is governed by ADR-051.
 
 ## ADR-049 — Milestone 1 Increment 1 implementation: platform-scope capability check, first `RunPython` data migration, and five narrow gap-fills the Charter left to the implementer
 

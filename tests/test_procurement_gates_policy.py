@@ -2,8 +2,8 @@
 package-assignment foundation (apps.procurement_gates), per
 docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md Sections 1-4, 10, 13, 14.
 
-Gate execution (GateAttempt/GateEvaluation/GateDecision/overrides) is a
-separate, not-yet-authorized increment and is not exercised here.
+Gate execution is exercised separately by the bounded Increment 2 test module;
+this file remains the Increment 1 policy/assignment regression boundary.
 """
 
 import re

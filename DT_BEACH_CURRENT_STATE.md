@@ -6,8 +6,9 @@ Last updated: 2026-07-21
 
 **The Controlled Transparency, Commercial Confidentiality & Authorization
 Foundation is closed and owner-accepted. Foundation correction cycles 2
-and 3 have both been independently revalidated. Milestone 1 implementation
-has not begun.**
+and 3 have both been independently revalidated. Milestone 1 Increment 1 is
+closed and owner-accepted; Increment 2 is implemented and awaiting read-only
+Codex verification. Increment 3 is not authorized.**
 
 Accepted foundation implementation commit:
 
@@ -321,9 +322,10 @@ run this cycle — recorded as pending, not as validated. Full detail:
 `docs/implementation-log.md` entry 63, `docs/architecture-decisions.md`
 ADR-049.
 
-**A1–A6 gate *execution* remains entirely unimplemented.** No
-`GateAttempt` or any row downstream of it exists anywhere in this
-codebase. Increment 2 is **not authorized** by this entry.
+**Historical Increment 1 boundary:** A1–A6 gate *execution* was entirely
+unimplemented at Increment 1 completion. No
+`GateAttempt` or any row downstream of it existed anywhere in the
+codebase at that point. Increment 2 was **not authorized** by that entry.
 
 Exact next action: **run an independent, increment-only Fable review
 against the Increment 1 commit. Do not begin Increment 2 until that
@@ -359,6 +361,39 @@ unauthorized and requires a separate explicit owner decision.
 
 Exact next action: **await Harrison's separate explicit authorization for
 Increment 2.**
+
+**Update — Milestone 1 Implementation Increment 2 complete locally
+(2026-07-21).** Harrison separately and explicitly authorized **Gate Execution
+Core and A1 Deal Established** from synchronized baseline
+`193fdfb720662a235b259b97694a0d5e3d8edcaa`. Increment 1 remains closed and
+owner-accepted.
+
+The bounded implementation adds immutable/non-deletable `GateAttempt`,
+`GateEvaluation`, and `GateDecision` history and rebuildable-only
+`PackageGateState`; organization-authorized/idempotent package initialization;
+package-authorized A1 evaluation and review; separated, capability-controlled
+A1 pass/return; pure state computation; and A2 becoming current as
+`NOT_STARTED` after A1 passes. It adds `audit.0005` and
+`procurement_gates.0005`. Existing packages receive no fabricated attempt,
+evaluation, decision, pass, or projection; initialization remains explicit.
+`ProcurementPackage.Status`, freeze/hold fields, ChangeRequests, RiskFlags,
+evidence, and workflow Handoffs remain independent and unchanged.
+
+Explicitly absent: A2 evaluation/freeze, `PackageFreezeRevision`, A3–A6
+execution, `GateInvalidation`, `PackageHoldCause`,
+`ProcurementGateOverride`, evidence mapping, UI/API/forms/templates, and every
+Increment 3 behavior. `apps.workflow` code and migrations are unchanged.
+
+Fresh SQLite evidence before commit: **655 collected, 649 passed, 6 skipped**;
+the six skips are PostgreSQL-only concurrency tests (assignment, canonical
+withdrawal, simultaneous initialization, simultaneous re-attempt creation,
+simultaneous A1 decision, and duplicate A2 projection activation). **79/79
+migrations applied, 0 pending.** Real PostgreSQL concurrency execution remains
+pending and is not claimed as validated.
+
+Exact next action: **run a read-only, Increment-2-only Codex verification
+against the resulting commit. Do not begin Increment 3 until that verification
+is reconciled and Harrison separately authorizes it.**
 
 ---
 

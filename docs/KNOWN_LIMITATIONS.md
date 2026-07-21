@@ -130,10 +130,11 @@ configuration/pinning layer (`GatePolicy`, `GatePolicyVersion`,
 migrations applied, 0 pending), and tested (565/565 tests passing). The
 following remain open limitations even after Increment 1:
 
-- **A1–A6 gate *execution* remains entirely unimplemented.** No
+- **At Increment 1 completion, A1–A6 gate execution was entirely
+  unimplemented.** No
   `GateAttempt`, `GateEvaluation`, `GateDecision`, `GateInvalidation`,
   `PackageGateState`, `PackageFreezeRevision`, `PackageHoldCause`, or
-  `ProcurementGateOverride` model or row exists anywhere in this codebase.
+  `ProcurementGateOverride` model or row existed at that point.
   The existing `ProcurementPackage.Status` remains a separate state
   machine and must not be represented as A1–A6 gate execution.
 - **Increment 2 (and every later increment) is not authorized** by
@@ -168,9 +169,34 @@ Increment 1 at that commit on 2026-07-21. The two real concurrency tests are
 PostgreSQL-only and were skipped in the SQLite environment (615 collected, 613
 passed, 2 skipped; 77/77 migrations, 0 pending), so PostgreSQL concurrency
 execution remains an explicit open limitation and is not claimed as validated.
-Increment 1 is closed and owner-accepted. Increment 2 remains unauthorized and
-absent; exact next action: await Harrison's separate explicit authorization
-for Increment 2.
+Increment 1 is closed and owner-accepted. At that correction/acceptance point,
+Increment 2 was unauthorized and absent; its later authorization and current
+boundary are recorded in the update immediately below.
+
+**Increment 2 update (2026-07-21).** Harrison subsequently gave that separate
+authorization for **Gate Execution Core and A1 Deal Established**, from
+baseline `193fdfb720662a235b259b97694a0d5e3d8edcaa`. `GateAttempt`,
+`GateEvaluation`, `GateDecision`, and rebuildable-only `PackageGateState` now
+exist; A1 initialization, evaluation, review, pass, and return are operational.
+A valid A1 pass makes A2 the current gate with state `NOT_STARTED` but creates
+no A2 attempt or operational behavior.
+
+Open boundaries remain explicit:
+
+- Real PostgreSQL execution is still pending. Six concurrency tests are
+  PostgreSQL-only and were skipped on SQLite; the current result is 655
+  collected, 649 passed, 6 skipped, with 79/79 migrations applied and 0
+  pending. This is not a PostgreSQL-validation claim.
+- Existing packages are not backfilled with fabricated history. They require
+  the explicit, authorized, idempotent initialization service; exempt packages
+  never receive fabricated progression.
+- A2 evaluation/freeze/refreeze, `PackageFreezeRevision`, A3–A6 operational
+  behavior, evidence mapping, `GateInvalidation`, `PackageHoldCause`,
+  `ProcurementGateOverride`, UI/API/forms/templates, and workflow changes remain
+  unimplemented. Increment 3 is not authorized.
+
+Exact next action: read-only, Increment-2-only Codex verification and Harrison
+reconciliation. Do not begin Increment 3 without separate owner authorization.
 
 ### Privileged-audit N+1 query characteristic (accepted, non-blocking)
 

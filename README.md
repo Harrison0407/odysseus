@@ -27,12 +27,19 @@ Foundation**, now implemented: `apps.procurement_gates` (`GatePolicy`,
 `GatePolicyVersion`, `PackagePolicyAssignment`) — configurable, versioned
 A1–A6 gate policy schemas, canonical/organization-specific resolution,
 and permanent package pinning, with 54 new tests (565/565 total passing).
-A1–A6 gate *execution* (`GateAttempt` and everything downstream) remains
-entirely unimplemented and unauthorized — see
+A1–A6 gate *execution* was not part of Increment 1. Harrison separately
+authorized **Increment 2 — Gate Execution Core and A1 Deal Established** on
+2026-07-21 from baseline
+`193fdfb720662a235b259b97694a0d5e3d8edcaa`; that bounded increment now
+implements immutable `GateAttempt`, `GateEvaluation`, `GateDecision`, and
+rebuildable `PackageGateState` history plus authorized A1 initialization,
+evaluation, review, pass/return, and A2 readiness only. A2 evaluation/freeze,
+A3–A6 behavior, overrides, new holds, invalidation, evidence mapping, UI, and
+APIs remain excluded — see
 `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md`,
-`docs/implementation-log.md` entry 63 and ADR-049. Following the correction
-recorded in entry 64 and ADR-050, the same read-only Increment 1 Codex
-verification is the next required control point. What is not
+`docs/implementation-log.md` entry 63 and ADR-049. The correction recorded in
+entry 64 and ADR-050 subsequently passed read-only Increment 1 Codex
+verification and received owner acceptance. What is not
 yet built is listed honestly in `docs/KNOWN_LIMITATIONS.md`; the official
 milestone order is governed by
 `docs/MARKETMATCH_ARCHITECTURE_RECONCILIATION_AND_ROADMAP.md`.
@@ -53,8 +60,9 @@ Increment 1 on 2026-07-21. Acceptance evidence: 615 tests collected, 613
 passed, 2 PostgreSQL-only concurrency tests skipped on SQLite, and 77/77
 migrations applied with 0 pending. Increment 1 is closed and owner-accepted.
 PostgreSQL concurrency execution remains pending and is not claimed as
-validated. Increment 2 remains unauthorized and requires a separate explicit
-owner decision.
+validated. Increment 1 remains closed and owner-accepted. Increment 2 is now
+implemented pending read-only Codex verification and Harrison reconciliation;
+Increment 3 remains unauthorized.
 
 ## What's implemented
 
@@ -74,7 +82,8 @@ owner decision.
   and manifest records are package/classification scoped, while legacy records
   retain organization scope).
 - A validated production deployment: Docker Compose (Postgres + Gunicorn + Caddy), with backup/restore/persistence genuinely exercised (see `docs/FINAL_VALIDATION_REPORT.md`).
-- Milestone 1 Increment 1: configurable, versioned A1–A6 procurement gate policy schemas (`apps.procurement_gates`), canonical-default/organization-specific resolution, and permanent package-to-policy-version pinning. Gate *execution* is not yet implemented — this is the configuration foundation only.
+- Milestone 1 Increment 1: configurable, versioned A1–A6 procurement gate policy schemas (`apps.procurement_gates`), canonical-default/organization-specific resolution, and permanent package-to-policy-version pinning.
+- Milestone 1 Increment 2: immutable A1 execution history, package-gate initialization, confidentiality-safe A1 evaluation, authorized review/pass/return, pure current-state derivation, and rebuildable projection. Passing A1 makes A2 current but creates no A2 attempt, evaluation, decision, or freeze.
 
 ## Documentation
 
@@ -117,6 +126,11 @@ Visit `http://localhost:8000/`. Pilot user passwords are printed once by
 ```bash
 pytest
 ```
+Current Increment 2 validation: **655 collected, 649 passed, 6 skipped** on
+SQLite; all six skips are real PostgreSQL-only lock/race tests. **79/79
+migrations are applied, 0 pending.** PostgreSQL concurrency execution remains
+pending and is not claimed as validated.
+
 511 tests, covering the live-container fixture import, document
 upload/duplicate-detection/authorization, the receiving/inventory ledger,
 object-level permission scoping, gate controls and formal handoffs,
@@ -243,8 +257,13 @@ behavior). That increment is now implemented, migrated, and tested
 (565/565 tests passing) — see `docs/implementation-log.md` entry 63 and
 ADR-049.
 
-Exact next action: **await Harrison's separate explicit authorization for
-Increment 2.**
+Increment 2 was subsequently authorized and implemented from baseline
+`193fdfb720662a235b259b97694a0d5e3d8edcaa`; see implementation-log entry 66
+and ADR-051.
+
+Exact next action: **run a read-only, Increment-2-only Codex verification
+against the resulting commit. Do not begin Increment 3 until that verification
+is reconciled and Harrison separately authorizes it.**
 
 ## Production deployment
 

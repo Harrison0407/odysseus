@@ -17,8 +17,8 @@ both retained for historical accuracy. Historical milestone counts below
 are retained where they describe the evidence available at that point in
 the delivery.
 
-Milestone 1 Increment 1 status (2026-07-21): **CLOSED AND OWNER-ACCEPTED;
-INCREMENT 2 NOT AUTHORIZED**. Codex verification of implementation commit
+Milestone 1 Increment 1 closure record (2026-07-21): **CLOSED AND
+OWNER-ACCEPTED**. Codex verification of implementation commit
 `9b803911` reported CX-I1-001 through CX-I1-010; CX-I1-001 through CX-I1-009
 were corrected and CX-I1-010 reconciled at correction/final accepted commit
 `220be7aa030b656fb960151c92166594ba539a26`. Read-only Codex re-verification
@@ -28,9 +28,20 @@ Medium Increment 1 defect, and Harrison explicitly accepted Increment 1 at
 that commit. See `docs/implementation-log.md` entries 64–65 and ADR-050.
 Accepted evidence: **615 collected, 613 passed, 2 PostgreSQL-only concurrency
 tests skipped; 77/77 migrations applied, 0 pending, on SQLite**. PostgreSQL
-concurrency execution remains pending and is not claimed as validated. A1–A6
-gate execution remains unimplemented; Increment 2 requires a separate explicit
-owner decision.
+concurrency execution remains pending and is not claimed as validated. At that
+closure point A1–A6 execution was unimplemented and Increment 2 still required
+a separate decision; the subsequently authorized Increment 2 is recorded
+immediately below.
+
+Milestone 1 Increment 2 status (2026-07-21): **IMPLEMENTED; READY FOR
+READ-ONLY CODEX VERIFICATION; INCREMENT 3 NOT AUTHORIZED**. Harrison separately
+authorized **Gate Execution Core and A1 Deal Established** from baseline
+`193fdfb720662a235b259b97694a0d5e3d8edcaa`. The bounded implementation adds
+immutable A1 execution history and a rebuildable projection, explicit package
+initialization, A1 evaluation/review/pass/return, and A2 readiness only. Fresh
+SQLite evidence: **655 collected, 649 passed, 6 PostgreSQL-only tests skipped;
+79/79 migrations applied, 0 pending**. PostgreSQL concurrency remains pending
+and is not claimed as validated. See implementation-log entry 66 and ADR-051.
 
 The Controlled Transparency, Commercial Confidentiality & Authorization
 Foundation is **independently revalidated and owner accepted** as the
@@ -120,7 +131,20 @@ Increment 1 commit and Harrison's separate, explicit authorization.
 | CX-I1-007 historical migration safety | `procurement_gates.0002`–`.0004` | frozen RunPython; unconditional constraint; protected base managers | — | `test_procurement_gates_migrations.py` | Corrected |
 | CX-I1-008 dedicated exemption authority | `grant_gate_progression_exemption` | `EXEMPT_PACKAGE_FROM_PROCUREMENT_GATES` | — | `TestDedicatedExemptionCapability` | Corrected |
 | CX-I1-009 safe audit metadata | governance/procurement-gates services | identifier/code-only metadata | — | sentinel denial/success tests | Corrected |
-| A1–A6 gate execution (`GateAttempt`/`GateEvaluation`/`GateDecision`/overrides/freeze/change-control) | — | — | — | — | **Not started — separate, unauthorized increment** |
+| A1 execution core (`GateAttempt`/`GateEvaluation`/`GateDecision`) | `apps.procurement_gates.models/services` | immutable append-only history | none | `test_procurement_gates_execution.py`; PostgreSQL concurrency construction | **Increment 2 done; PostgreSQL execution pending** |
+| A2–A6 operational execution, override/freeze/invalidation/change-control wrappers | — | — | — | — | **Not started — Increment 3+ unauthorized** |
+
+## Milestone 1 Increment 2 — Gate Execution Core and A1 Deal Established
+
+| Capability | Module(s) | DB records | UI | Test(s) | Status |
+|---|---|---|---|---|---|
+| Immutable attempts with transactional numbering and one open attempt | `apps.procurement_gates.models/services` | `GateAttempt` | none | initialization, constraint, mutation, deletion, re-attempt, PostgreSQL race tests | Done for A1 |
+| Confidentiality-safe, append-only A1 evaluation | `apps.procurement_gates.services.evaluate_a1` | `GateEvaluation` | none | independent omissions, conflicts, expiry, wrong scope, risk/change/hold, sentinels | Done |
+| Authorized review and separated advancement decision | `request_a1_review`; `decide_a1_advancement` | `GateDecision`; immutable attempt closure | none | capabilities, separation, stale evaluation, idempotency, pass/return | Done |
+| Pure current-state computation and rebuildable cache | `compute_gate_state`; `derive_current_gate`; `rebuild_gate_state` | `PackageGateState` | none | no-write computation, deterministic rebuild, direct-write denial | Done |
+| A1 pass makes A2 current without implementing A2 | state derivation/projection only | A2 cache row remains `NOT_STARTED`; no A2 attempt | none | approval and duplicate-activation tests | Done within Increment 2 boundary |
+| Additive existing-package migration | `audit.0005`; `procurement_gates.0005` | schema only | — | MigrationExecutor preservation/no-fabrication test; clean/populated SQLite validation | Done |
+| A2 freeze/evaluation; A3–A6; evidence mappings; invalidation; hold causes; overrides; UI/API | — | — | — | — | Excluded; Increment 3+ unauthorized |
 
 ## Priority 0 capabilities (spec section 5)
 

@@ -176,6 +176,21 @@ unauthorized and requires a separate explicit owner decision.
 **Next governing activity:** await Harrison's separate explicit authorization
 for Increment 2.
 
+**Update — Milestone 1 Implementation Increment 2 complete locally
+(2026-07-21).** Harrison separately authorized **Gate Execution Core and A1
+Deal Established** from baseline
+`193fdfb720662a235b259b97694a0d5e3d8edcaa`. The implementation is limited to
+immutable attempt/evaluation/decision history, rebuildable package-gate state,
+explicit initialization, and A1 evaluation/review/pass/return; A1 passage makes
+A2 current only as `NOT_STARTED`. SQLite validation collected 655 tests: 649
+passed and 6 PostgreSQL-only concurrency tests skipped; 79/79 migrations are
+applied with 0 pending. PostgreSQL execution is pending, not claimed.
+
+Increment 3 and A2 evaluation/freeze, A3–A6 execution, invalidation, new hold
+causes, overrides, evidence mapping, UI, and API work remain unauthorized and
+absent. **Next governing activity:** read-only, Increment-2-only Codex
+verification, followed by Harrison reconciliation. Do not begin Increment 3.
+
 Tests (as independently reproduced during the cycle-3 revalidation that
 led to acceptance, then extended by Increment 1):
 

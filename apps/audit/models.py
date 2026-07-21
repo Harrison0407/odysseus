@@ -61,6 +61,13 @@ class AuditEvent(BaseModel):
         GATE_PROGRESSION_EXEMPTION_GRANTED = (
             "gate_progression_exemption_granted", "Exención de progresión de gates otorgada"
         )
+        PACKAGE_GATES_INITIALIZED = "package_gates_initialized", "Gates del paquete inicializados"
+        GATE_ATTEMPT_OPENED = "gate_attempt_opened", "Intento de gate abierto"
+        GATE_EVALUATED = "gate_evaluated", "Gate evaluado"
+        GATE_REVIEW_REQUESTED = "gate_review_requested", "Revisión de gate solicitada"
+        GATE_PASSED = "gate_passed", "Gate aprobado"
+        GATE_FAILED = "gate_failed", "Gate rechazado"
+        GATE_ADVANCEMENT_BLOCKED = "gate_advancement_blocked", "Avance de gate bloqueado"
         OTHER = "other", "Otro"
 
     action = models.CharField(max_length=40, choices=Action.choices)

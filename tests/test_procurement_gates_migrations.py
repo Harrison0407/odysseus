@@ -13,6 +13,8 @@ pytestmark = pytest.mark.django_db(transaction=True)
 
 FROM = [("procurement_gates", "0001_initial")]
 TO = [("procurement_gates", "0002_seed_canonical_policy_and_assign_packages")]
+EXECUTION_FROM = [("procurement_gates", "0004_protect_base_manager_writes")]
+EXECUTION_TO = [("procurement_gates", "0005_gateattempt_gateevaluation_gatedecision_and_more")]
 
 
 def _prepare_prior_state():
@@ -159,3 +161,64 @@ def test_corrective_migration_rejects_duplicate_assignments():
     source_text = open(source.__file__).read()
     assert "apps.procurement_gates.services" not in source_text
     assert "apps.procurement_gates.models" not in source_text
+
+
+def test_execution_schema_migration_is_additive_and_fabricates_no_history():
+    try:
+        executor = MigrationExecutor(connection)
+        executor.migrate(EXECUTION_FROM)
+        before_apps = executor.loader.project_state(EXECUTION_FROM).apps
+        Organization = before_apps.get_model("accounts", "Organization")
+        Package = before_apps.get_model("procurement", "ProcurementPackage")
+        Policy = before_apps.get_model("procurement_gates", "GatePolicy")
+        Version = before_apps.get_model("procurement_gates", "GatePolicyVersion")
+        Assignment = before_apps.get_model("procurement_gates", "PackagePolicyAssignment")
+
+        org = Organization.objects.create(name="Increment 2 migration org", default_currency="USD")
+        package = Package.objects.create(
+            organization=org,
+            code="increment-2-existing",
+            name="Existing package",
+            status="frozen",
+            is_frozen=True,
+            frozen_snapshot={"preserve": "yes"},
+            is_on_hold=True,
+        )
+        policy = Policy.objects.filter(is_canonical_default=True).first()
+        if policy is None:
+            policy = Policy.objects.create(
+                organization=None, code="migration-canonical", name="Migration canonical",
+                is_active=True, is_canonical_default=True,
+            )
+        version = Version.objects.filter(policy=policy, status="published").first()
+        if version is None:
+            version = Version.objects.create(
+                policy=policy, version_number=1, status="published",
+                gate_schema={code: {} for code in ("A1", "A2", "A3", "A4", "A5", "A6")},
+            )
+        assignment = Assignment.objects.create(
+            package=package, policy_version=version, pinned_at=package.created_at,
+            gate_progression_exempt=False,
+        )
+
+        executor = MigrationExecutor(connection)
+        executor.migrate(EXECUTION_TO)
+        after_apps = executor.loader.project_state(EXECUTION_TO).apps
+        PackageAfter = after_apps.get_model("procurement", "ProcurementPackage")
+        AssignmentAfter = after_apps.get_model("procurement_gates", "PackagePolicyAssignment")
+        GateAttempt = after_apps.get_model("procurement_gates", "GateAttempt")
+        GateEvaluation = after_apps.get_model("procurement_gates", "GateEvaluation")
+        GateDecision = after_apps.get_model("procurement_gates", "GateDecision")
+        PackageGateState = after_apps.get_model("procurement_gates", "PackageGateState")
+
+        refreshed = PackageAfter.objects.get(pk=package.pk)
+        assert (
+            refreshed.status, refreshed.is_frozen, refreshed.frozen_snapshot, refreshed.is_on_hold,
+        ) == ("frozen", True, {"preserve": "yes"}, True)
+        assert AssignmentAfter.objects.filter(pk=assignment.pk, policy_version_id=version.pk).exists()
+        assert GateAttempt.objects.count() == 0
+        assert GateEvaluation.objects.count() == 0
+        assert GateDecision.objects.count() == 0
+        assert PackageGateState.objects.count() == 0
+    finally:
+        _restore_latest()

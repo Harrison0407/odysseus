@@ -2,6 +2,54 @@
 
 Newest first.
 
+## ADR-050 — Increment 1 Codex correction: permanent history guards, dedicated assignment/exemption authority, canonical serialization, and frozen migration replay
+
+**Decision:** Codex implementation verification of Increment 1 commit
+`9b803911` reported CX-I1-001 through CX-I1-010. Harrison authorized a
+correction bounded to those findings. This ADR supersedes ADR-049 item 3's
+live-service migration import and item 8's interim `APPROVE_GATE` reuse;
+ADR-049 otherwise remains the historical implementation decision.
+
+1. `PackagePolicyAssignment` is unconditionally unique by package and
+   immutable/non-deletable through instance, queryset, bulk, admin, and
+   cascade paths, including Django's base-manager route. The retained
+   `is_active` field cannot authorize a second row. Migration 0003 fails
+   loudly if pre-existing duplicates exist; migration 0004 binds each base
+   manager to its protected queryset.
+2. Published/withdrawn `GatePolicyVersion` records are transition-controlled,
+   immutable, and non-deletable across the same bypass paths. Draft edits and
+   lifecycle transitions use narrow internal write contexts reached only by
+   authorized services.
+3. Canonical ownership has a database check constraint. Canonical publication,
+   withdrawal, and atomic version replacement lock the shared `GatePolicy`
+   row before version locks and availability checks.
+4. Both `decision_capability` and `attempt_creation_capability` must be stable
+   registered codes.
+5. `ASSIGN_GATE_POLICY` is a new package-scoped, no-default-role capability.
+   The public assignment boundary accepts only actor/package/version IDs,
+   locks and authorizes the persisted package before policy retrieval, reloads
+   explicit versions, enforces tenant eligibility, and fails closed on
+   ambiguous organization policy families. A separate private system path is
+   limited to canonical bootstrap assignment.
+6. `EXEMPT_PACKAGE_FROM_PROCUREMENT_GATES` replaces `APPROVE_GATE` for the
+   administrative exemption. It is package-scoped, has no role default, and
+   remains distinct from any gate decision or pass.
+7. Denial and exemption audit metadata contains identifiers, capability/state
+   codes, and no package display text, schema, or protected reason.
+8. Migration 0002 now freezes canonical Version 1 data in the migration file,
+   imports no live service/model/registry, uses historical models exclusively,
+   and retains its documented irreversible no-op reverse. MigrationExecutor
+   tests replay the corrected file from its prior state on empty and populated
+   databases and invoke the frozen forward function twice.
+
+Two PostgreSQL-only concurrency tests are included for package assignment and
+dual canonical withdrawal. They are skipped on SQLite; PostgreSQL execution
+remains pending and is not claimed. No GateAttempt, gate execution, workflow
+change, or Increment 2 behavior is introduced.
+
+**Status:** correction implemented; Increment 1 pending read-only Codex
+re-verification and Harrison acceptance. Increment 2 remains unauthorized.
+
 ## ADR-049 — Milestone 1 Increment 1 implementation: platform-scope capability check, first `RunPython` data migration, and five narrow gap-fills the Charter left to the implementer
 
 **Decision:** This entry records the first actual Milestone 1 application

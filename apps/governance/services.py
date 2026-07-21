@@ -278,13 +278,25 @@ def visible_classifications_for(user, package=None) -> set:
     return {c for c in Classification.values if can_view_classification(user, c, package=package)}
 
 
-def log_denied_attempt(user, action_code, *, package=None, resource=None, required_capability=None):
+def log_denied_attempt(
+    user, action_code, *, package=None, organization=None, resource=None,
+    required_capability=None, policy_id=None, policy_version_id=None,
+    denial_reason_code="CAPABILITY_REQUIRED",
+):
     """Every denied privileged attempt must appear in the restricted
     audit trail (spec section 20/22) — not only successful actions."""
     audit.log(
         AuditEvent.Action.PRIVILEGED_ACCESS_DENIED, instance=resource if resource is not None else package,
         actor=user, summary=f"Acceso privilegiado denegado: {action_code}",
-        required_capability=required_capability, package=str(package) if package is not None else None,
+        required_capability=required_capability,
+        capability_code=required_capability,
+        package_id=str(package.pk) if package is not None else None,
+        organization_id=str(
+            organization.pk if organization is not None else getattr(package, "organization_id", "")
+        ) or None,
+        policy_id=str(policy_id) if policy_id is not None else None,
+        policy_version_id=str(policy_version_id) if policy_version_id is not None else None,
+        denial_reason_code=denial_reason_code,
     )
 
 

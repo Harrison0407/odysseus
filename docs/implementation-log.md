@@ -2466,3 +2466,64 @@ documented order.
     against the resulting commit. Do not begin Increment 2 until that
     review is reconciled and Harrison explicitly authorizes the next
     increment.
+
+64. **Milestone 1 Increment 1 Codex correction — CX-I1-001 through
+    CX-I1-010.** Dated 2026-07-21.
+
+    Starting evidence matched implementation commit
+    `9b8039118c33c6306013bc8c6fd3ea356fa22a0b` on
+    `integration/dt-beach-supply-control-1.0.0`, upstream identical,
+    ahead/behind `0/0`, clean tree, and 75/75 migrations applied. Harrison
+    explicitly authorized correction of only the Codex implementation
+    verification findings and one commit/push.
+
+    Corrected CX-I1-001 through CX-I1-009: unconditional one-assignment-per-
+    package constraint with fail-loud duplicate migration and immutable/
+    non-deletable assignment history; controlled, one-way, immutable and
+    non-deletable policy-version lifecycle; database canonical-ownership check,
+    shared canonical-policy locking, and atomic published-version replacement;
+    registry validation for both decision and attempt capabilities; the new
+    package-scoped `ASSIGN_GATE_POLICY` public ID-only assignment boundary with
+    persisted tenant eligibility and fail-closed ambiguity; frozen historical
+    migration 0002 with no live imports; dedicated package-scoped
+    `EXEMPT_PACKAGE_FROM_PROCUREMENT_GATES`; and identifier/code-only denial
+    and exemption audit metadata. CX-I1-010 updates the stale Charter banner
+    and current documentation without changing the accepted architecture or
+    historical findings. ADR-050 records these decisions.
+
+    Added `procurement_gates.0003_enforce_increment_1_history`, which first
+    rejects duplicate package assignments, replaces partial active uniqueness
+    with unconditional package uniqueness, and adds the canonical platform-
+    scope check constraint. Added `.0004_protect_base_manager_writes` so
+    Django's base-manager route uses the same guarded querysets and cannot
+    bypass assignment, version, or canonical-identity update controls. The
+    already-recorded 0002 migration was corrected
+    pre-acceptance; Django does not rerun it on the development database, so
+    clean MigrationExecutor replay separately executes the corrected frozen
+    migration on empty and populated prior states, with live services made
+    unavailable and the forward function invoked twice.
+
+    Adversarial coverage includes instance/queryset/bulk/delete bypasses,
+    inactive-row uniqueness and lookup, original-version preservation,
+    lifecycle reversal/deletion, audit rollback, canonical replacement and
+    database checks, invalid/translated/alias capability values, no/wrong/
+    unscoped/inactive grants, cross-organization and stale version assignment,
+    authorization-before-policy retrieval, safe denial metadata, organization
+    ambiguity/disambiguation, dedicated exemption authority, and protected-
+    data migration replay. PostgreSQL-only tests cover concurrent assignment
+    and concurrent canonical withdrawal; they remain skipped on SQLite and
+    PostgreSQL execution is not claimed. Fresh correction evidence: 102 focused
+    correction tests passed with those 2 PostgreSQL-only skips; the relevant
+    governance/procurement/audit/workflow set passed 90/90; the complete suite
+    collected 615 tests, with 613 passed and 2 skipped; and 77/77 migrations
+    were applied on the development SQLite database.
+
+    Scope remains Increment 1 only. No GateAttempt, GateEvaluation,
+    GateDecision, GateInvalidation, PackageGateState, PackageFreezeRevision,
+    PackageHoldCause, ProcurementGateOverride, gate execution, A1 completion,
+    A2 freeze, ChangeRequest/RiskFlag orchestration, UI/API, or workflow change
+    was introduced. Increment 2 remains unauthorized.
+
+    Exact next action: run the same read-only Increment 1 Codex verification
+    against the correction commit. Review only Increment 1 and the correction
+    findings. Do not begin Increment 2.

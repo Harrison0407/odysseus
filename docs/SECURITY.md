@@ -18,6 +18,20 @@ open operational and security validations.
 
 ## Milestone 1 Increment 1 security implementation (2026-07-21)
 
+**Correction status:** Codex verification findings CX-I1-001 through
+CX-I1-009 are implemented in the bounded correction recorded by ADR-050.
+`ASSIGN_GATE_POLICY` and `EXEMPT_PACKAGE_FROM_PROCUREMENT_GATES` are dedicated
+package-scoped capabilities with no role-default implication. Assignment
+authorizes the locked persisted package before retrieving policy
+configuration; explicit policy versions are reloaded and tenant-checked.
+Exemption authority is no longer implied by `APPROVE_GATE`. Package/version
+history is protected across instance, queryset, bulk, and delete paths;
+canonical ownership has a database check and canonical withdrawal/replacement
+uses the shared policy lock. Denial and exemption audit metadata contains safe
+identifiers/codes only. PostgreSQL concurrency execution remains pending; the
+current validation is SQLite-only (615 collected, 613 passed, 2 PostgreSQL-
+only tests skipped; 77/77 migrations).
+
 `apps.procurement_gates`'s policy-configuration/package-pinning layer
 (`GatePolicy`, `GatePolicyVersion`, `PackagePolicyAssignment`) is
 implemented and tested — see `docs/implementation-log.md` entry 63 and
@@ -36,8 +50,9 @@ ADR-049. Implemented security controls for this increment specifically:
   canonical `GatePolicy`) is resolved by a separate, narrow
   `CapabilityGrant` query (`_actor_holds_platform_policy_capability`)
   rather than by calling `has_capability` unscoped.
-- `PUBLISH_GATE_POLICY` and `CREATE_PROCUREMENT_GATE_ATTEMPT` were added
-  to `apps.governance.models.ALL_CAPABILITY_CODES`; neither is implied by
+- `PUBLISH_GATE_POLICY`, `CREATE_PROCUREMENT_GATE_ATTEMPT`,
+  `ASSIGN_GATE_POLICY`, and `EXEMPT_PACKAGE_FROM_PROCUREMENT_GATES` were added
+  to `apps.governance.models.ALL_CAPABILITY_CODES`; none is implied by
   any `ROLE_DEFAULT_CAPABILITIES` entry.
 - Denial is audited via the existing `PRIVILEGED_ACCESS_DENIED` mechanism
   before any mutation occurs — verified by a test asserting a denied

@@ -6,21 +6,33 @@ Creates no GateAttempt/GateEvaluation/GateDecision and fabricates no
 PASSED result. Read-only with respect to ProcurementPackage.Status,
 is_frozen, frozen_at, frozen_by, frozen_snapshot, and is_on_hold.
 
-Uses `apps.get_model` for every schema-bound model, per standard Django
-migration practice, so a later schema change to these models cannot
-retroactively break this migration when replayed on a fresh database.
-`canonical_gate_schema`/`validate_gate_schema` are imported directly from
-`apps.procurement_gates.services` because they are pure functions over
-plain constants (GATE_CODES, ALL_CAPABILITY_CODES) -- they perform no ORM
-access and carry no schema-drift risk.
+Uses `apps.get_model` for every schema-bound model.  The canonical Version 1
+schema is frozen below rather than imported from live services, models, or
+capability registries, so future runtime changes cannot break historical
+replay.  Reverse is deliberately a no-op: these permanent policy pins are
+historical data and this pre-acceptance migration is explicitly irreversible.
 """
 
 from django.db import migrations, transaction
 from django.utils import timezone
 
-from apps.procurement_gates.services import canonical_gate_schema, validate_gate_schema
-
 CANONICAL_POLICY_CODE = "canonical-a1-a6"
+GATE_CODES = ("A1", "A2", "A3", "A4", "A5", "A6")
+
+
+def canonical_gate_schema():
+    """Frozen Version 1 data; never consult live runtime configuration."""
+    return {
+        gate_code: {
+            "evidence_requirement_codes": [],
+            "decision_capability": "APPROVE_GATE",
+            "attempt_creation_capability": "CREATE_PROCUREMENT_GATE_ATTEMPT",
+            "overridable": False,
+            "non_overridable_requirements": [],
+            "override_satisfies_successor_predecessor": False,
+        }
+        for gate_code in GATE_CODES
+    }
 
 
 def seed_and_assign(apps, schema_editor):
@@ -57,13 +69,11 @@ def seed_and_assign(apps, schema_editor):
         version = GatePolicyVersion.objects.filter(policy=policy, version_number=1).first()
         if version is None:
             gate_schema = canonical_gate_schema()
-            validate_gate_schema(gate_schema)
             version = GatePolicyVersion.objects.create(
                 policy=policy, version_number=1, status="draft", gate_schema=gate_schema,
             )
 
         if version.status == "draft":
-            validate_gate_schema(version.gate_schema)
             version.status = "published"
             version.published_at = timezone.now()
             version.published_by = None
@@ -76,7 +86,7 @@ def seed_and_assign(apps, schema_editor):
 
         # --- Step 2: pin every existing package that has no active assignment ---
         already_pinned_package_ids = set(
-            PackagePolicyAssignment.objects.filter(is_active=True).values_list("package_id", flat=True)
+            PackagePolicyAssignment.objects.values_list("package_id", flat=True)
         )
         for package in ProcurementPackage.objects.all():
             if package.pk in already_pinned_package_ids:

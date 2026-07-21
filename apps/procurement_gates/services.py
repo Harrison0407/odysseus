@@ -1,15 +1,8 @@
-"""Service boundary for the procurement gate policy configuration and
-package-pinning foundation (Milestone 1, Increment 1). Every mutation
-Charter Section 3/4 defines goes through exactly one function here --
-never a direct model save() from a view, admin, or migration.
-
-Gate execution (opening/deciding a GateAttempt, overrides, freeze/change
-control) is out of scope for this increment and is not implemented here.
-"""
+"""Authorized services for the Increment 1 policy/pinning foundation only."""
 
 from __future__ import annotations
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from apps.audit import services as audit
@@ -17,10 +10,20 @@ from apps.audit.models import AuditEvent
 from apps.governance.models import ALL_CAPABILITY_CODES, CapabilityGrant
 from apps.governance.services import AuthorizationDenied, has_capability, log_denied_attempt
 
-from .models import GATE_CODES, GatePolicy, GatePolicyVersion, PackagePolicyAssignment
+from .models import (
+    GATE_CODES,
+    GatePolicy,
+    GatePolicyVersion,
+    PackagePolicyAssignment,
+    _allow_controlled_assignment_write,
+    _allow_controlled_policy_write,
+    _allow_controlled_version_write,
+)
 
 PUBLISH_GATE_POLICY = "PUBLISH_GATE_POLICY"
 CREATE_PROCUREMENT_GATE_ATTEMPT = "CREATE_PROCUREMENT_GATE_ATTEMPT"
+ASSIGN_GATE_POLICY = "ASSIGN_GATE_POLICY"
+EXEMPT_PACKAGE_FROM_PROCUREMENT_GATES = "EXEMPT_PACKAGE_FROM_PROCUREMENT_GATES"
 
 _GATE_SCHEMA_ENTRY_FIELDS = {
     "evidence_requirement_codes",
@@ -33,40 +36,28 @@ _GATE_SCHEMA_ENTRY_FIELDS = {
 
 
 class GatePolicyValidationError(Exception):
-    """Raised when a gate_schema, or an input to a policy operation, fails
-    Charter-defined validation."""
+    pass
 
 
 class GatePolicyStateError(Exception):
-    """Raised for an invalid state transition -- double-publish, edit
-    after publish, withdraw a non-published version, re-pin a package,
-    zero usable canonical default, etc."""
+    pass
 
 
-# ---------------------------------------------------------------------------
-# Authorization helpers
-# ---------------------------------------------------------------------------
+class PolicyResolutionAmbiguity(GatePolicyStateError):
+    pass
 
 
 def _actor_holds_platform_policy_capability(actor) -> bool:
-    """PUBLISH_GATE_POLICY held as a pure platform-scoped grant
-    (organization, package, and role_assignment all NULL).
-
-    A canonical/platform-scoped GatePolicy (organization IS NULL) has no
-    owning organization to scope a has_capability(..., organization=...)
-    call to, and Charter Section 13 requires every apps.procurement_gates
-    call to has_capability carry an explicit package= or organization=
-    scope -- an unscoped call is a Milestone 1 authorization-architecture
-    violation. This helper resolves the platform-scope case directly
-    against CapabilityGrant instead of routing an unscoped call through
-    has_capability.
-    """
     if actor is None or not getattr(actor, "is_authenticated", False):
         return False
     today = timezone.now().date()
     grants = CapabilityGrant.objects.filter(
-        user=actor, capability_code=PUBLISH_GATE_POLICY, is_active=True,
-        organization__isnull=True, package__isnull=True, role_assignment__isnull=True,
+        user=actor,
+        capability_code=PUBLISH_GATE_POLICY,
+        is_active=True,
+        organization__isnull=True,
+        package__isnull=True,
+        role_assignment__isnull=True,
     )
     return any(grant.is_currently_active(on_date=today) for grant in grants)
 
@@ -78,26 +69,21 @@ def _require_policy_administration_capability(policy: GatePolicy, actor, *, reso
         authorized = _actor_holds_platform_policy_capability(actor)
     if not authorized:
         log_denied_attempt(
-            actor, PUBLISH_GATE_POLICY, resource=resource if resource is not None else policy,
+            actor,
+            PUBLISH_GATE_POLICY,
+            organization=policy.organization,
+            resource=resource if resource is not None else policy,
             required_capability=PUBLISH_GATE_POLICY,
+            policy_id=policy.pk,
+            policy_version_id=getattr(resource, "pk", None),
         )
         raise AuthorizationDenied("Not authorized to administer this gate policy.")
 
 
-# ---------------------------------------------------------------------------
-# gate_schema validation (Charter Section 3.2, binding)
-# ---------------------------------------------------------------------------
-
-
 def validate_gate_schema(gate_schema) -> None:
-    """Enforces the Charter Section 3.2 gate-schema completeness rule.
-    Called by publish_policy_version; exposed separately so draft authors
-    and tests can validate before attempting to publish."""
-
     if not isinstance(gate_schema, dict):
         raise GatePolicyValidationError("gate_schema must be a JSON object.")
-
-    provided_codes = set(gate_schema.keys())
+    provided_codes = set(gate_schema)
     missing = set(GATE_CODES) - provided_codes
     extra = provided_codes - set(GATE_CODES)
     if missing:
@@ -109,77 +95,59 @@ def validate_gate_schema(gate_schema) -> None:
         entry = gate_schema[gate_code]
         if not isinstance(entry, dict):
             raise GatePolicyValidationError(f"gate_schema[{gate_code}] must be an object.")
-
-        entry_keys = set(entry.keys())
+        entry_keys = set(entry)
         missing_fields = _GATE_SCHEMA_ENTRY_FIELDS - entry_keys
+        extra_fields = entry_keys - _GATE_SCHEMA_ENTRY_FIELDS
         if missing_fields:
             raise GatePolicyValidationError(
                 f"gate_schema[{gate_code}] is missing required fields: {sorted(missing_fields)}"
             )
-        extra_fields = entry_keys - _GATE_SCHEMA_ENTRY_FIELDS
         if extra_fields:
             raise GatePolicyValidationError(
                 f"gate_schema[{gate_code}] contains unrecognized fields: {sorted(extra_fields)}"
             )
 
-        codes = entry["evidence_requirement_codes"]
-        if not isinstance(codes, list) or not all(isinstance(code, str) and code for code in codes):
+        evidence_codes = entry["evidence_requirement_codes"]
+        if not isinstance(evidence_codes, list) or not all(
+            isinstance(code, str) and code for code in evidence_codes
+        ):
             raise GatePolicyValidationError(
-                f"gate_schema[{gate_code}].evidence_requirement_codes must be a list of non-empty strings "
-                "(an empty list is valid -- a gate may require no evidence)."
+                f"gate_schema[{gate_code}].evidence_requirement_codes must be a list of non-empty strings."
             )
 
-        decision_capability = entry["decision_capability"]
-        if not isinstance(decision_capability, str) or not decision_capability:
-            raise GatePolicyValidationError(f"gate_schema[{gate_code}].decision_capability must be a non-empty string.")
-
-        attempt_capability = entry["attempt_creation_capability"]
-        if not isinstance(attempt_capability, str) or not attempt_capability:
-            raise GatePolicyValidationError(
-                f"gate_schema[{gate_code}].attempt_creation_capability is required, non-null, and non-empty."
-            )
-        if attempt_capability not in ALL_CAPABILITY_CODES:
-            raise GatePolicyValidationError(
-                f"gate_schema[{gate_code}].attempt_creation_capability {attempt_capability!r} "
-                "is not a registered capability code."
-            )
+        for field_name in ("decision_capability", "attempt_creation_capability"):
+            capability = entry[field_name]
+            if not isinstance(capability, str) or not capability or capability not in ALL_CAPABILITY_CODES:
+                raise GatePolicyValidationError(
+                    f"gate_schema[{gate_code}].{field_name} must be a registered stable capability code."
+                )
 
         overridable = entry["overridable"]
         if not isinstance(overridable, bool):
             raise GatePolicyValidationError(f"gate_schema[{gate_code}].overridable must be a boolean.")
         if gate_code == "A2" and overridable:
-            raise GatePolicyValidationError(
-                "gate_schema[A2].overridable must always be False (Charter Section 12.1) -- "
-                "A2 is never overridable, with no policy opt-in."
-            )
+            raise GatePolicyValidationError("gate_schema[A2].overridable must always be False.")
 
         non_overridable = entry["non_overridable_requirements"]
-        if not isinstance(non_overridable, list) or not all(isinstance(code, str) for code in non_overridable):
+        if not isinstance(non_overridable, list) or not all(
+            isinstance(code, str) and code for code in non_overridable
+        ):
             raise GatePolicyValidationError(
-                f"gate_schema[{gate_code}].non_overridable_requirements must be a list of strings."
+                f"gate_schema[{gate_code}].non_overridable_requirements must be a list of non-empty strings."
             )
-        if not set(non_overridable).issubset(set(codes)):
+        if not set(non_overridable).issubset(set(evidence_codes)):
             raise GatePolicyValidationError(
-                f"gate_schema[{gate_code}].non_overridable_requirements must be a subset of its own "
-                "evidence_requirement_codes."
+                f"gate_schema[{gate_code}].non_overridable_requirements must be a subset of evidence requirements."
             )
-
-        satisfies_successor = entry["override_satisfies_successor_predecessor"]
-        if not isinstance(satisfies_successor, bool):
+        if not isinstance(entry["override_satisfies_successor_predecessor"], bool):
             raise GatePolicyValidationError(
                 f"gate_schema[{gate_code}].override_satisfies_successor_predecessor must be a boolean."
             )
 
 
 def canonical_gate_schema() -> dict:
-    """The gate_schema shipped for the canonical Version 1 policy (Charter
-    Section 4.2). No evidence requirements and no overrides -- evidence
-    reuse (Section 5) and the override mechanism (Section 11) are later,
-    not-yet-authorized increments; this schema is deliberately the
-    simplest one that is Charter-valid today."""
-
     return {
-        gate_code: {
+        code: {
             "evidence_requirement_codes": [],
             "decision_capability": "APPROVE_GATE",
             "attempt_creation_capability": CREATE_PROCUREMENT_GATE_ATTEMPT,
@@ -187,341 +155,388 @@ def canonical_gate_schema() -> dict:
             "non_overridable_requirements": [],
             "override_satisfies_successor_predecessor": False,
         }
-        for gate_code in GATE_CODES
+        for code in GATE_CODES
     }
 
 
-# ---------------------------------------------------------------------------
-# GatePolicy / GatePolicyVersion administration
-# ---------------------------------------------------------------------------
-
-
 def create_gate_policy(*, organization, code, name, actor, is_active=True) -> GatePolicy:
-    if organization is not None:
-        authorized = has_capability(actor, PUBLISH_GATE_POLICY, organization=organization)
-    else:
-        authorized = _actor_holds_platform_policy_capability(actor)
+    authorized = (
+        has_capability(actor, PUBLISH_GATE_POLICY, organization=organization)
+        if organization is not None
+        else _actor_holds_platform_policy_capability(actor)
+    )
     if not authorized:
-        log_denied_attempt(actor, PUBLISH_GATE_POLICY, required_capability=PUBLISH_GATE_POLICY)
+        log_denied_attempt(
+            actor, PUBLISH_GATE_POLICY, organization=organization,
+            required_capability=PUBLISH_GATE_POLICY,
+        )
         raise AuthorizationDenied("Not authorized to create a gate policy.")
-
     with transaction.atomic():
         policy = GatePolicy.objects.create(
             organization=organization, code=code, name=name, is_active=is_active, created_by=actor,
         )
         audit.log(
             AuditEvent.Action.GATE_POLICY_CREATED, instance=policy, actor=actor,
-            summary=f"Gate policy created: {code}",
-            organization_id=str(organization.pk) if organization is not None else None,
-            prior_state=None, resulting_state="CREATED",
+            summary="Gate policy created", organization_id=str(organization.pk) if organization else None,
+            policy_id=str(policy.pk), prior_state=None, resulting_state="CREATED",
         )
     return policy
 
 
 def set_canonical_default(policy: GatePolicy, actor) -> GatePolicy:
-    """Flags a platform-scoped GatePolicy as the canonical default
-    (Charter Section 3.3). Rejects any organization-owned policy outright
-    -- enforced here (service layer) and again by GatePolicy.save() as a
-    backstop; a second attempt while one already holds the flag is
-    rejected by the database's conditional unique constraint."""
-
     if not _actor_holds_platform_policy_capability(actor):
-        log_denied_attempt(actor, PUBLISH_GATE_POLICY, resource=policy, required_capability=PUBLISH_GATE_POLICY)
+        log_denied_attempt(
+            actor, PUBLISH_GATE_POLICY, resource=policy, required_capability=PUBLISH_GATE_POLICY,
+            policy_id=policy.pk,
+        )
         raise AuthorizationDenied("Not authorized to set a canonical default gate policy.")
-
     with transaction.atomic():
-        locked = GatePolicy.objects.select_for_update().get(pk=policy.pk)
+        locked_policies = list(GatePolicy.objects.select_for_update().order_by("pk"))
+        locked = next((item for item in locked_policies if item.pk == policy.pk), None)
+        if locked is None:
+            raise GatePolicyValidationError("GatePolicy does not exist.")
         if locked.organization_id is not None:
             raise GatePolicyValidationError("An organization-owned GatePolicy can never be canonical.")
-        locked.is_canonical_default = True
-        locked.save(update_fields=["is_canonical_default", "updated_at"])
+        if not locked.versions.filter(status=GatePolicyVersion.Status.PUBLISHED).exists():
+            raise GatePolicyStateError("A canonical policy must already have a published version.")
+        with _allow_controlled_policy_write():
+            # Clear the old marker before setting the new marker because both
+            # supported databases check this unique constraint immediately.
+            for current in locked_policies:
+                if current.pk != locked.pk and current.is_canonical_default:
+                    current.is_canonical_default = False
+                    current.save(update_fields=["is_canonical_default", "updated_at"])
+            if not locked.is_canonical_default:
+                locked.is_canonical_default = True
+                locked.save(update_fields=["is_canonical_default", "updated_at"])
     return locked
 
 
-def create_draft_policy_version(*, policy: GatePolicy, actor, gate_schema, supersedes=None) -> GatePolicyVersion:
-    _require_policy_administration_capability(policy, actor)
-
+def create_draft_policy_version(*, policy, actor, gate_schema, supersedes=None) -> GatePolicyVersion:
+    persisted_policy = GatePolicy.objects.get(pk=policy.pk)
+    _require_policy_administration_capability(persisted_policy, actor)
     with transaction.atomic():
-        locked_policy = GatePolicy.objects.select_for_update().get(pk=policy.pk)
-        last_version_number = (
+        locked_policy = GatePolicy.objects.select_for_update().get(pk=persisted_policy.pk)
+        if supersedes is not None and supersedes.policy_id != locked_policy.pk:
+            raise GatePolicyValidationError("supersedes must belong to the same policy family.")
+        last_number = (
             GatePolicyVersion.objects.filter(policy=locked_policy)
-            .order_by("-version_number")
-            .values_list("version_number", flat=True)
-            .first()
+            .order_by("-version_number").values_list("version_number", flat=True).first()
         ) or 0
-        version = GatePolicyVersion.objects.create(
-            policy=locked_policy, version_number=last_version_number + 1,
-            status=GatePolicyVersion.Status.DRAFT, gate_schema=gate_schema, supersedes=supersedes,
-            created_by=actor,
+        return GatePolicyVersion.objects.create(
+            policy=locked_policy, version_number=last_number + 1,
+            status=GatePolicyVersion.Status.DRAFT, gate_schema=gate_schema,
+            supersedes=supersedes, created_by=actor,
         )
-    return version
 
 
-def update_draft_policy_version(*, policy_version: GatePolicyVersion, actor, gate_schema) -> GatePolicyVersion:
-    _require_policy_administration_capability(policy_version.policy, actor, resource=policy_version)
-
+def update_draft_policy_version(*, policy_version, actor, gate_schema) -> GatePolicyVersion:
+    policy = GatePolicy.objects.get(pk=policy_version.policy_id)
+    _require_policy_administration_capability(policy, actor, resource=policy_version)
     with transaction.atomic():
+        GatePolicy.objects.select_for_update().get(pk=policy.pk)
         locked = GatePolicyVersion.objects.select_for_update().get(pk=policy_version.pk)
         if locked.status != GatePolicyVersion.Status.DRAFT:
             raise GatePolicyStateError("Only a DRAFT policy version may be edited.")
         locked.gate_schema = gate_schema
-        locked.save(update_fields=["gate_schema", "updated_at"])
+        with _allow_controlled_version_write():
+            locked.save(update_fields=["gate_schema", "updated_at"])
     return locked
 
 
-def publish_policy_version(policy_version: GatePolicyVersion, actor) -> GatePolicyVersion:
-    """One-way DRAFT -> PUBLISHED transition (Charter Section 3.2).
-    Publication-time gate_schema completeness validation is the sole gate
-    -- there is no partial/incremental publication."""
-
-    _require_policy_administration_capability(policy_version.policy, actor, resource=policy_version)
-
-    with transaction.atomic():
-        locked = GatePolicyVersion.objects.select_for_update().get(pk=policy_version.pk)
-        if locked.status != GatePolicyVersion.Status.DRAFT:
-            raise GatePolicyStateError(f"Policy version is already {locked.status}; cannot publish.")
-
-        validate_gate_schema(locked.gate_schema)
-
-        locked.status = GatePolicyVersion.Status.PUBLISHED
-        locked.published_at = timezone.now()
-        locked.published_by = actor if getattr(actor, "pk", None) else None
+def _publish_locked_version(locked, actor):
+    if locked.status != GatePolicyVersion.Status.DRAFT:
+        raise GatePolicyStateError(f"Policy version is already {locked.status}; cannot publish.")
+    validate_gate_schema(locked.gate_schema)
+    locked.status = GatePolicyVersion.Status.PUBLISHED
+    locked.published_at = timezone.now()
+    locked.published_by = actor if getattr(actor, "pk", None) else None
+    with _allow_controlled_version_write():
         locked.save(update_fields=["status", "published_at", "published_by", "updated_at"])
-
-        audit.log(
-            AuditEvent.Action.GATE_POLICY_VERSION_PUBLISHED, instance=locked, actor=actor,
-            summary=f"Gate policy version {locked.version_number} published for {locked.policy.code}",
-            organization_id=str(locked.policy.organization_id) if locked.policy.organization_id else None,
-            policy_version_id=str(locked.pk), prior_state="DRAFT", resulting_state="PUBLISHED",
-        )
+    audit.log(
+        AuditEvent.Action.GATE_POLICY_VERSION_PUBLISHED, instance=locked, actor=actor,
+        summary="Gate policy version published",
+        organization_id=str(locked.policy.organization_id) if locked.policy.organization_id else None,
+        policy_id=str(locked.policy_id), policy_version_id=str(locked.pk),
+        prior_state="DRAFT", resulting_state="PUBLISHED",
+    )
     return locked
 
 
-def withdraw_policy_version(policy_version: GatePolicyVersion, actor, reason: str) -> GatePolicyVersion:
-    """PUBLISHED -> WITHDRAWN (Charter Section 3.2). Never mutates
-    gate_schema and never affects any existing PackagePolicyAssignment.
-    Rejected outright if this is the canonical default's only published
-    version with no replacement (the availability invariant, Section 3.3)."""
+def publish_policy_version(policy_version, actor) -> GatePolicyVersion:
+    policy = GatePolicy.objects.get(pk=policy_version.policy_id)
+    _require_policy_administration_capability(policy, actor, resource=policy_version)
+    with transaction.atomic():
+        locked_policy = GatePolicy.objects.select_for_update().get(pk=policy.pk)
+        locked = GatePolicyVersion.objects.select_for_update().select_related("policy").get(
+            pk=policy_version.pk, policy=locked_policy
+        )
+        return _publish_locked_version(locked, actor)
 
+
+def _withdraw_locked_version(locked, actor, reason):
+    if locked.status != GatePolicyVersion.Status.PUBLISHED:
+        raise GatePolicyStateError("Only a PUBLISHED policy version may be withdrawn.")
+    if locked.policy.is_canonical_default and not GatePolicyVersion.objects.filter(
+        policy=locked.policy, status=GatePolicyVersion.Status.PUBLISHED,
+    ).exclude(pk=locked.pk).exists():
+        raise GatePolicyStateError("Cannot withdraw the final usable canonical published version.")
+    locked.status = GatePolicyVersion.Status.WITHDRAWN
+    locked.withdrawal_reason = reason
+    with _allow_controlled_version_write():
+        locked.save(update_fields=["status", "withdrawal_reason", "updated_at"])
+    audit.log(
+        AuditEvent.Action.GATE_POLICY_VERSION_WITHDRAWN, instance=locked, actor=actor,
+        summary="Gate policy version withdrawn",
+        organization_id=str(locked.policy.organization_id) if locked.policy.organization_id else None,
+        policy_id=str(locked.policy_id), policy_version_id=str(locked.pk),
+        prior_state="PUBLISHED", resulting_state="WITHDRAWN",
+    )
+    return locked
+
+
+def withdraw_policy_version(policy_version, actor, reason: str) -> GatePolicyVersion:
     if not reason:
         raise GatePolicyValidationError("A written reason is required to withdraw a gate policy version.")
-
-    _require_policy_administration_capability(policy_version.policy, actor, resource=policy_version)
-
+    policy = GatePolicy.objects.get(pk=policy_version.policy_id)
+    _require_policy_administration_capability(policy, actor, resource=policy_version)
     with transaction.atomic():
-        locked = GatePolicyVersion.objects.select_for_update().get(pk=policy_version.pk)
-        if locked.status != GatePolicyVersion.Status.PUBLISHED:
-            raise GatePolicyStateError("Only a PUBLISHED policy version may be withdrawn.")
+        locked_policy = GatePolicy.objects.select_for_update().get(pk=policy.pk)
+        locked = GatePolicyVersion.objects.select_for_update().select_related("policy").get(
+            pk=policy_version.pk, policy=locked_policy
+        )
+        return _withdraw_locked_version(locked, actor, reason)
 
-        if locked.policy.is_canonical_default:
-            remaining = GatePolicyVersion.objects.filter(
-                policy__is_canonical_default=True, status=GatePolicyVersion.Status.PUBLISHED,
-            ).exclude(pk=locked.pk)
-            if not remaining.exists():
-                raise GatePolicyStateError(
-                    "Cannot withdraw the canonical default's only published version -- no replacement exists "
-                    "(availability invariant, Charter Section 3.3)."
+
+def replace_canonical_policy_version(
+    *, replacement_policy_version, actor, prior_policy_version=None, withdrawal_reason=""
+) -> GatePolicyVersion:
+    """Atomically publish a replacement and optionally withdraw its predecessor."""
+    policy = GatePolicy.objects.get(pk=replacement_policy_version.policy_id)
+    _require_policy_administration_capability(policy, actor, resource=replacement_policy_version)
+    with transaction.atomic():
+        locked_policy = GatePolicy.objects.select_for_update().get(pk=policy.pk)
+        if not locked_policy.is_canonical_default:
+            raise GatePolicyValidationError("Replacement service applies only to the canonical policy.")
+        replacement = GatePolicyVersion.objects.select_for_update().select_related("policy").get(
+            pk=replacement_policy_version.pk, policy=locked_policy
+        )
+        replacement = _publish_locked_version(replacement, actor)
+        if prior_policy_version is not None:
+            if not withdrawal_reason:
+                raise GatePolicyValidationError("A withdrawal reason is required when replacing a prior version.")
+            prior = GatePolicyVersion.objects.select_for_update().select_related("policy").get(
+                pk=prior_policy_version.pk, policy=locked_policy
+            )
+            if prior.pk == replacement.pk:
+                raise GatePolicyValidationError("Replacement and prior versions must differ.")
+            _withdraw_locked_version(prior, actor, withdrawal_reason)
+        if not GatePolicyVersion.objects.filter(
+            policy=locked_policy, status=GatePolicyVersion.Status.PUBLISHED
+        ).exists():
+            raise GatePolicyStateError("Canonical replacement left no usable published version.")
+        return replacement
+
+
+def _resolve_policy_version_for_organization(*, organization, explicit_policy_version_id=None):
+    if explicit_policy_version_id is not None:
+        version = GatePolicyVersion.objects.select_related("policy").get(pk=explicit_policy_version_id)
+        eligible_scope = version.policy.is_canonical_default or version.policy.organization_id == organization.pk
+        if (
+            version.status != GatePolicyVersion.Status.PUBLISHED
+            or not version.policy.is_active
+            or not eligible_scope
+        ):
+            raise GatePolicyValidationError("Explicit policy version is not eligible for this package.")
+        return version
+
+    policy_ids = list(
+        GatePolicy.objects.filter(
+            organization=organization, is_active=True,
+            versions__status=GatePolicyVersion.Status.PUBLISHED,
+        ).values_list("pk", flat=True).distinct()
+    )
+    if len(policy_ids) > 1:
+        raise PolicyResolutionAmbiguity("Multiple eligible organization gate-policy families exist.")
+    if len(policy_ids) == 1:
+        return GatePolicyVersion.objects.filter(
+            policy_id=policy_ids[0], status=GatePolicyVersion.Status.PUBLISHED,
+        ).order_by("-version_number").first()
+
+    canonical_policies = GatePolicy.objects.filter(is_canonical_default=True, is_active=True)
+    if canonical_policies.count() != 1:
+        raise GatePolicyStateError("Exactly one usable canonical policy is required.")
+    version = GatePolicyVersion.objects.filter(
+        policy=canonical_policies.get(), status=GatePolicyVersion.Status.PUBLISHED,
+    ).order_by("-version_number").first()
+    if version is None:
+        raise GatePolicyStateError("No usable canonical published version exists.")
+    return version
+
+
+def _create_assignment_locked(*, locked_package, policy_version, pinned_by):
+    existing = PackagePolicyAssignment.objects.filter(package=locked_package).first()
+    if existing is not None:
+        return existing
+    try:
+        with transaction.atomic():
+            with _allow_controlled_assignment_write():
+                assignment = PackagePolicyAssignment.objects.create(
+                    package=locked_package, policy_version=policy_version,
+                    pinned_at=timezone.now(), pinned_by=pinned_by, created_by=pinned_by,
                 )
-
-        locked.status = GatePolicyVersion.Status.WITHDRAWN
-        locked.withdrawal_reason = reason
-        locked.save(update_fields=["status", "withdrawal_reason", "updated_at"])
-
-        audit.log(
-            AuditEvent.Action.GATE_POLICY_VERSION_WITHDRAWN, instance=locked, actor=actor,
-            summary=f"Gate policy version {locked.version_number} withdrawn for {locked.policy.code}", reason=reason,
-            organization_id=str(locked.policy.organization_id) if locked.policy.organization_id else None,
-            policy_version_id=str(locked.pk), prior_state="PUBLISHED", resulting_state="WITHDRAWN",
-        )
-    return locked
-
-
-# ---------------------------------------------------------------------------
-# Canonical / organization-specific policy resolution (Charter Section 3.3)
-# ---------------------------------------------------------------------------
-
-
-def resolve_policy_version_for_package(*, organization, requested_policy_version=None) -> GatePolicyVersion:
-    """Resolution order (Charter Section 3.3, fixed, not configurable):
-    (1) an explicit policy version chosen by an authorized admin;
-    (2) else the requesting organization's own active GatePolicy's latest
-        PUBLISHED version, if one exists;
-    (3) else the one policy with is_canonical_default=True's latest
-        PUBLISHED version.
-    """
-
-    if requested_policy_version is not None:
-        if requested_policy_version.status != GatePolicyVersion.Status.PUBLISHED:
-            raise GatePolicyValidationError("Only a PUBLISHED policy version may be assigned to a package.")
-        return requested_policy_version
-
-    org_version = (
-        GatePolicyVersion.objects.filter(
-            policy__organization=organization, policy__is_active=True, status=GatePolicyVersion.Status.PUBLISHED,
-        )
-        .order_by("-policy__created_at", "-version_number")
-        .first()
+    except IntegrityError:
+        return PackagePolicyAssignment.objects.get(package=locked_package)
+    audit.log(
+        AuditEvent.Action.GATE_POLICY_PINNED, instance=assignment, actor=pinned_by,
+        summary="Gate policy version pinned to package",
+        organization_id=str(locked_package.organization_id), package_id=str(locked_package.pk),
+        assignment_id=str(assignment.pk), policy_id=str(policy_version.policy_id),
+        policy_version_id=str(policy_version.pk), prior_state=None, resulting_state="PINNED",
     )
-    if org_version is not None:
-        return org_version
-
-    canonical_version = (
-        GatePolicyVersion.objects.filter(
-            policy__is_canonical_default=True, status=GatePolicyVersion.Status.PUBLISHED,
-        )
-        .order_by("-version_number")
-        .first()
-    )
-    if canonical_version is None:
-        raise GatePolicyStateError("No usable canonical default gate policy version exists.")
-    return canonical_version
-
-
-# ---------------------------------------------------------------------------
-# Package pinning (Charter Section 3.4, 14.1a Pattern B)
-# ---------------------------------------------------------------------------
-
-
-def assign_policy_to_package(*, package, policy_version=None, pinned_by=None) -> PackagePolicyAssignment:
-    """Permanent, one-time PackagePolicyAssignment creation. Locks the
-    ProcurementPackage row first (Pattern B, Charter Section 14.1a) --
-    there is no child row to lock yet. Idempotent: a second call for an
-    already-pinned package returns the existing assignment rather than
-    creating a duplicate or re-pinning (Section 3.4, 14.4)."""
-
-    from apps.procurement.models import ProcurementPackage
-
-    with transaction.atomic():
-        locked_package = ProcurementPackage.objects.select_for_update().get(pk=package.pk)
-
-        existing = PackagePolicyAssignment.objects.filter(package=locked_package, is_active=True).first()
-        if existing is not None:
-            return existing
-
-        resolved_version = resolve_policy_version_for_package(
-            organization=locked_package.organization, requested_policy_version=policy_version,
-        )
-        if resolved_version.status != GatePolicyVersion.Status.PUBLISHED:
-            raise GatePolicyValidationError("A PackagePolicyAssignment must pin a PUBLISHED policy version.")
-
-        assignment = PackagePolicyAssignment.objects.create(
-            package=locked_package, policy_version=resolved_version, pinned_at=timezone.now(),
-            pinned_by=pinned_by, is_active=True, created_by=pinned_by,
-        )
-
-        audit.log(
-            AuditEvent.Action.GATE_POLICY_PINNED, instance=assignment, actor=pinned_by,
-            summary=f"Gate policy version pinned to package {locked_package.code}",
-            organization_id=str(locked_package.organization_id), package_id=str(locked_package.pk),
-            policy_version_id=str(resolved_version.pk), prior_state=None, resulting_state="PINNED",
-        )
     return assignment
 
 
-def grant_gate_progression_exemption(assignment: PackagePolicyAssignment, actor, reason: str) -> PackagePolicyAssignment:
-    """Administrative exemption (Charter Section 4.4) -- explicitly not a
-    historical pass. Requires a written reason and is itself an audited
-    action."""
+def assign_policy_to_package(actor, package_id, *, explicit_policy_version_id=None):
+    """The sole user-callable assignment boundary."""
+    from apps.procurement.models import ProcurementPackage
 
-    if not reason:
-        raise GatePolicyValidationError("A written reason is required to grant a gate-progression exemption.")
+    if hasattr(package_id, "pk") or hasattr(explicit_policy_version_id, "pk"):
+        raise TypeError("Assignment accepts persisted UUID values, never model objects.")
+    denied = False
+    with transaction.atomic():
+        locked_package = ProcurementPackage.objects.select_for_update().get(pk=package_id)
+        if not has_capability(actor, ASSIGN_GATE_POLICY, package=locked_package):
+            log_denied_attempt(
+                actor, ASSIGN_GATE_POLICY, package=locked_package,
+                required_capability=ASSIGN_GATE_POLICY,
+                policy_version_id=explicit_policy_version_id,
+            )
+            denied = True
+        else:
+            existing = PackagePolicyAssignment.objects.filter(package=locked_package).first()
+            if existing is not None:
+                return existing
+            version = _resolve_policy_version_for_organization(
+                organization=locked_package.organization,
+                explicit_policy_version_id=explicit_policy_version_id,
+            )
+            return _create_assignment_locked(
+                locked_package=locked_package, policy_version=version, pinned_by=actor,
+            )
+    if denied:
+        raise AuthorizationDenied("Not authorized to assign a gate policy to this package.")
 
-    if not has_capability(actor, "APPROVE_GATE", package=assignment.package):
-        log_denied_attempt(
-            actor, "APPROVE_GATE", package=assignment.package, resource=assignment,
-            required_capability="APPROVE_GATE",
-        )
-        raise AuthorizationDenied("Not authorized to grant a gate-progression exemption for this package.")
+
+def _assign_policy_to_package_system(package_id, *, policy_version_id):
+    """Private bootstrap path: fixed IDs only, never accepts an actor or caller policy object."""
+    from apps.procurement.models import ProcurementPackage
 
     with transaction.atomic():
-        locked = PackagePolicyAssignment.objects.select_for_update().get(pk=assignment.pk)
-        locked.gate_progression_exempt = True
-        locked.exemption_reason = reason
-        locked.exemption_granted_by = actor
-        locked.exemption_granted_at = timezone.now()
-        locked.save(
-            update_fields=[
-                "gate_progression_exempt", "exemption_reason", "exemption_granted_by", "exemption_granted_at",
-                "updated_at",
-            ]
+        locked_package = ProcurementPackage.objects.select_for_update().get(pk=package_id)
+        existing = PackagePolicyAssignment.objects.filter(package=locked_package).first()
+        if existing is not None:
+            return existing
+        version = GatePolicyVersion.objects.select_related("policy").get(
+            pk=policy_version_id,
+            status=GatePolicyVersion.Status.PUBLISHED,
+            policy__is_canonical_default=True,
+            policy__is_active=True,
         )
-        audit.log(
-            AuditEvent.Action.GATE_PROGRESSION_EXEMPTION_GRANTED, instance=locked, actor=actor,
-            summary="Gate progression exemption granted", reason=reason,
-            package_id=str(locked.package_id), prior_state="NOT_EXEMPT", resulting_state="EXEMPT",
+        return _create_assignment_locked(
+            locked_package=locked_package, policy_version=version, pinned_by=None,
         )
-    return locked
 
 
-# ---------------------------------------------------------------------------
-# Deterministic canonical seeding + existing-package migration (Charter
-# Section 4.2). System-initiated -- no actor, mirrors the pinned_by=NULL
-# system-assignment convention. Safe to call repeatedly (idempotent).
-# ---------------------------------------------------------------------------
+def grant_gate_progression_exemption(actor, package_id, reason: str):
+    if not reason:
+        raise GatePolicyValidationError("A written reason is required to grant a gate-progression exemption.")
+    from apps.procurement.models import ProcurementPackage
+
+    denied = False
+    with transaction.atomic():
+        locked_package = ProcurementPackage.objects.select_for_update().get(pk=package_id)
+        if not has_capability(actor, EXEMPT_PACKAGE_FROM_PROCUREMENT_GATES, package=locked_package):
+            log_denied_attempt(
+                actor, EXEMPT_PACKAGE_FROM_PROCUREMENT_GATES, package=locked_package,
+                required_capability=EXEMPT_PACKAGE_FROM_PROCUREMENT_GATES,
+            )
+            denied = True
+        else:
+            assignment = PackagePolicyAssignment.objects.select_for_update().get(package=locked_package)
+            if assignment.gate_progression_exempt:
+                return assignment
+            assignment.gate_progression_exempt = True
+            assignment.exemption_reason = reason
+            assignment.exemption_granted_by = actor
+            assignment.exemption_granted_at = timezone.now()
+            with _allow_controlled_assignment_write():
+                assignment.save(update_fields=[
+                    "gate_progression_exempt", "exemption_reason", "exemption_granted_by",
+                    "exemption_granted_at", "updated_at",
+                ])
+            audit.log(
+                AuditEvent.Action.GATE_PROGRESSION_EXEMPTION_GRANTED,
+                instance=assignment, actor=actor, summary="Gate progression exemption granted",
+                organization_id=str(locked_package.organization_id),
+                package_id=str(locked_package.pk), assignment_id=str(assignment.pk),
+                policy_version_id=str(assignment.policy_version_id),
+                capability_code=EXEMPT_PACKAGE_FROM_PROCUREMENT_GATES,
+                exempt=True,
+                prior_state="NOT_EXEMPT", resulting_state="EXEMPT",
+            )
+            return assignment
+    if denied:
+        raise AuthorizationDenied("Not authorized to exempt this package from procurement gates.")
+
 
 CANONICAL_POLICY_CODE = "canonical-a1-a6"
 
 
 def seed_canonical_policy() -> GatePolicy:
-    """Idempotent. Creates the canonical default GatePolicy + initial
-    PUBLISHED GatePolicyVersion if not already present. Works on an empty
-    database and is safe to re-run."""
-
-    policy = GatePolicy.objects.filter(is_canonical_default=True).first()
-    if policy is None:
-        policy = GatePolicy.objects.create(
-            organization=None, code=CANONICAL_POLICY_CODE, name="Canonical A1-A6 Procurement Gate Policy",
-            is_active=True, is_canonical_default=True,
-        )
-        audit.log(
-            AuditEvent.Action.GATE_POLICY_CREATED, instance=policy, actor=None,
-            summary="Canonical default gate policy seeded", organization_id=None,
-            prior_state=None, resulting_state="CREATED",
-        )
-
-    version = GatePolicyVersion.objects.filter(policy=policy, version_number=1).first()
-    if version is None:
-        version = GatePolicyVersion.objects.create(
-            policy=policy, version_number=1, status=GatePolicyVersion.Status.DRAFT, gate_schema=canonical_gate_schema(),
-        )
-
-    if version.status == GatePolicyVersion.Status.DRAFT:
-        validate_gate_schema(version.gate_schema)
-        version.status = GatePolicyVersion.Status.PUBLISHED
-        version.published_at = timezone.now()
-        version.published_by = None
-        version.save(update_fields=["status", "published_at", "published_by", "updated_at"])
-        audit.log(
-            AuditEvent.Action.GATE_POLICY_VERSION_PUBLISHED, instance=version, actor=None,
-            summary="Canonical gate policy version 1 published (system seed)",
-            policy_version_id=str(version.pk), prior_state="DRAFT", resulting_state="PUBLISHED",
-        )
-
-    return policy
+    with transaction.atomic():
+        policy = GatePolicy.objects.filter(is_canonical_default=True).first()
+        if policy is None:
+            with _allow_controlled_policy_write():
+                policy = GatePolicy.objects.create(
+                    organization=None, code=CANONICAL_POLICY_CODE,
+                    name="Canonical A1-A6 Procurement Gate Policy",
+                    is_active=True, is_canonical_default=True,
+                )
+            audit.log(
+                AuditEvent.Action.GATE_POLICY_CREATED, instance=policy, actor=None,
+                summary="Canonical default gate policy seeded", policy_id=str(policy.pk),
+                prior_state=None, resulting_state="CREATED",
+            )
+        version = GatePolicyVersion.objects.filter(policy=policy, version_number=1).first()
+        if version is None:
+            version = GatePolicyVersion.objects.create(
+                policy=policy, version_number=1, status=GatePolicyVersion.Status.DRAFT,
+                gate_schema=canonical_gate_schema(),
+            )
+        if version.status == GatePolicyVersion.Status.DRAFT:
+            validate_gate_schema(version.gate_schema)
+            version.status = GatePolicyVersion.Status.PUBLISHED
+            version.published_at = timezone.now()
+            with _allow_controlled_version_write():
+                version.save(update_fields=["status", "published_at", "published_by", "updated_at"])
+            audit.log(
+                AuditEvent.Action.GATE_POLICY_VERSION_PUBLISHED, instance=version, actor=None,
+                summary="Canonical gate policy version 1 published",
+                policy_id=str(policy.pk), policy_version_id=str(version.pk),
+                prior_state="DRAFT", resulting_state="PUBLISHED",
+            )
+        return policy
 
 
 def assign_canonical_policy_to_existing_packages() -> int:
-    """Existing-package migration step (Charter Section 4.2/4.5). Pins
-    every ProcurementPackage that has no active PackagePolicyAssignment
-    yet to the canonical default's published version, pinned_by=None.
-    Idempotent -- safe to re-run; creates no duplicate assignments.
-    Creates no GateAttempt/GateEvaluation/GateDecision and fabricates no
-    PASSED result -- A1-A6 progression is represented only by the
-    absence of any attempt.
-
-    Read-only with respect to ProcurementPackage.Status, is_frozen,
-    frozen_at, frozen_by, frozen_snapshot, and is_on_hold."""
-
     from apps.procurement.models import ProcurementPackage
 
-    seed_canonical_policy()
-
+    policy = seed_canonical_policy()
+    version = policy.versions.filter(status=GatePolicyVersion.Status.PUBLISHED).order_by("version_number").first()
     assigned = 0
-    package_ids = ProcurementPackage.objects.exclude(
-        policy_assignments__is_active=True,
-    ).values_list("pk", flat=True)
-    for package_id in list(package_ids):
-        package = ProcurementPackage.objects.get(pk=package_id)
-        assign_policy_to_package(package=package, pinned_by=None)
-        assigned += 1
+    for package_id in ProcurementPackage.objects.exclude(policy_assignments__isnull=False).values_list("pk", flat=True):
+        before = PackagePolicyAssignment.objects.filter(package_id=package_id).exists()
+        _assign_policy_to_package_system(package_id, policy_version_id=version.pk)
+        assigned += int(not before)
     return assigned

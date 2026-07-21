@@ -330,6 +330,28 @@ against the Increment 1 commit. Do not begin Increment 2 until that
 review is reconciled and Harrison explicitly authorizes the next
 increment.**
 
+**Update — Increment 1 Codex correction implemented (2026-07-21).** Codex
+implementation verification of commit `9b803911` found CX-I1-001 through
+CX-I1-010. The authorized bounded correction closes CX-I1-001 through
+CX-I1-009 and reconciles CX-I1-010 without adding gate execution: permanent
+assignment cardinality/immutability; policy-version lifecycle immutability;
+canonical database and shared-lock protection; registered decision
+capabilities; tenant-safe authorized assignment via `ASSIGN_GATE_POLICY`;
+fail-closed organization-policy ambiguity; frozen historical RunPython logic;
+dedicated `EXEMPT_PACKAGE_FROM_PROCUREMENT_GATES`; and identifier-only audit
+metadata. Additive migrations `procurement_gates.0003` and `.0004` enforce
+database invariants and route the Django base managers through the protected
+querysets. The
+corrected Increment 1 remains pending read-only Codex re-verification and
+Harrison acceptance. Fresh correction validation collected 615 tests: 613
+passed and the 2 real PostgreSQL concurrency tests were skipped on SQLite;
+77/77 migrations are applied. PostgreSQL concurrency execution remains pending
+and is not claimed. Increment 2 remains unauthorized.
+
+Exact next action: **run the same read-only Increment 1 Codex verification
+against the correction commit. Review only Increment 1 and the correction
+findings. Do not begin Increment 2.**
+
 ---
 
 ## Historical record: Foundation correction cycle 3 mechanism

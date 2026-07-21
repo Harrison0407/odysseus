@@ -30,12 +30,25 @@ and permanent package pinning, with 54 new tests (565/565 total passing).
 A1–A6 gate *execution* (`GateAttempt` and everything downstream) remains
 entirely unimplemented and unauthorized — see
 `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md`,
-`docs/implementation-log.md` entry 63, and ADR-049. An independent,
-increment-only Fable review of the Increment 1 commit is the next
-required control point before Increment 2 may be authorized. What is not
+`docs/implementation-log.md` entry 63 and ADR-049. Following the correction
+recorded in entry 64 and ADR-050, the same read-only Increment 1 Codex
+verification is the next required control point. What is not
 yet built is listed honestly in `docs/KNOWN_LIMITATIONS.md`; the official
 milestone order is governed by
 `docs/MARKETMATCH_ARCHITECTURE_RECONCILIATION_AND_ROADMAP.md`.
+
+Codex implementation verification of Increment 1 commit `9b803911` found
+CX-I1-001 through CX-I1-010. The bounded correction closes CX-I1-001 through
+CX-I1-009 and reconciles CX-I1-010: permanent assignment/version history is
+guarded across instance/queryset/bulk/delete paths; canonical availability
+uses a shared policy lock and atomic replacement; assignment and exemption
+use dedicated package-scoped capabilities; organization-policy ambiguity
+fails closed; audit metadata is identifier-safe; and the original RunPython
+migration is frozen against live-code drift. Increment 1 remains pending
+read-only Codex re-verification and Harrison acceptance. Increment 2 remains
+unauthorized. Fresh correction validation: 615 tests collected, 613 passed,
+2 PostgreSQL-only concurrency tests skipped; 77/77 migrations applied on
+SQLite. PostgreSQL concurrency execution remains pending.
 
 ## What's implemented
 
@@ -224,10 +237,9 @@ behavior). That increment is now implemented, migrated, and tested
 (565/565 tests passing) — see `docs/implementation-log.md` entry 63 and
 ADR-049.
 
-Exact next action: **run an independent, increment-only Fable review
-against the Increment 1 commit. Do not begin Increment 2 (or any A1–A6
-gate-execution work) until that review is reconciled and Harrison
-explicitly authorizes the next increment.**
+Exact next action: **run the same read-only Increment 1 Codex verification
+against the correction commit, reviewing only Increment 1 and CX-I1-001
+through CX-I1-010. Do not begin Increment 2.**
 
 ## Production deployment
 

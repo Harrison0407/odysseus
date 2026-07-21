@@ -1,30 +1,130 @@
-"""Procurement Gate Policy and Package Assignment Foundation (Milestone 1,
-Increment 1). Implements only the configuration/pinning layer defined by
-docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md Sections 1-4: GatePolicy,
-GatePolicyVersion, PackagePolicyAssignment. Gate execution (GateAttempt,
-GateEvaluation, GateDecision, overrides, freeze/change-control) is a
-separate, not-yet-authorized increment -- nothing here evaluates or
-records A1-A6 progression.
+"""Procurement gate policy and permanent package-assignment foundation.
 
-This app never imports or references apps.workflow -- the existing,
-completed eight-gate Handoff engine is a distinct, untouched system
-(Charter Section 0/Section 1).
+This module deliberately contains no A1-A6 execution model.  The write
+guards below protect the Increment 1 historical/configuration records from
+instance, queryset, bulk, delete, and cascade bypasses.
 """
+
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models.signals import post_delete, pre_delete
+from django.dispatch import receiver
 
 from apps.core.models import BaseModel
 
 GATE_CODES = ("A1", "A2", "A3", "A4", "A5", "A6")
 
 
-class GatePolicy(BaseModel):
-    """Stable identity for a named policy family (Charter Section 3.1).
-    The actual, versioned gate_schema lives on GatePolicyVersion -- a
-    GatePolicy row itself carries no schema."""
+class ImmutableGateHistoryError(ValidationError):
+    """A protected procurement-gates record was mutated outside its service."""
 
+
+_controlled_policy_write = ContextVar("controlled_policy_write", default=False)
+_controlled_version_write = ContextVar("controlled_version_write", default=False)
+_controlled_assignment_write = ContextVar("controlled_assignment_write", default=False)
+_related_object_deletion_depth = ContextVar("related_object_deletion_depth", default=0)
+
+
+@contextmanager
+def _allow_controlled_policy_write():
+    token = _controlled_policy_write.set(True)
+    try:
+        yield
+    finally:
+        _controlled_policy_write.reset(token)
+
+
+@contextmanager
+def _allow_controlled_version_write():
+    token = _controlled_version_write.set(True)
+    try:
+        yield
+    finally:
+        _controlled_version_write.reset(token)
+
+
+@contextmanager
+def _allow_controlled_assignment_write():
+    token = _controlled_assignment_write.set(True)
+    try:
+        yield
+    finally:
+        _controlled_assignment_write.reset(token)
+
+
+class GatePolicyQuerySet(models.QuerySet):
+    _CONTROLLED_FIELDS = {"organization", "organization_id", "is_canonical_default"}
+
+    def update(self, **kwargs):
+        deletion_null = (
+            _related_object_deletion_depth.get()
+            and set(kwargs).issubset({"organization", "organization_id"})
+            and all(value is None for value in kwargs.values())
+        )
+        if self._CONTROLLED_FIELDS.intersection(kwargs) and not deletion_null:
+            raise ImmutableGateHistoryError("Canonical policy identity is service-controlled.")
+        return super().update(**kwargs)
+
+    def bulk_update(self, objs, fields, batch_size=None):
+        if self._CONTROLLED_FIELDS.intersection(fields):
+            raise ImmutableGateHistoryError("Canonical policy identity is service-controlled.")
+        return super().bulk_update(objs, fields, batch_size=batch_size)
+
+
+class GatePolicyVersionQuerySet(models.QuerySet):
+    _PROTECTED_FIELDS = {
+        "policy", "policy_id", "version_number", "status", "gate_schema",
+        "published_at", "published_by", "published_by_id", "supersedes",
+        "supersedes_id", "withdrawal_reason", "created_by", "created_by_id",
+    }
+
+    def update(self, **kwargs):
+        deletion_null = (
+            _related_object_deletion_depth.get()
+            and set(kwargs).issubset({"published_by", "published_by_id", "created_by", "created_by_id"})
+            and all(value is None for value in kwargs.values())
+        )
+        if self._PROTECTED_FIELDS.intersection(kwargs) and not deletion_null:
+            raise ImmutableGateHistoryError("GatePolicyVersion protected fields are service-controlled.")
+        return super().update(**kwargs)
+
+    def bulk_update(self, objs, fields, batch_size=None):
+        if self._PROTECTED_FIELDS.intersection(fields):
+            raise ImmutableGateHistoryError("GatePolicyVersion protected fields are service-controlled.")
+        return super().bulk_update(objs, fields, batch_size=batch_size)
+
+    def delete(self):
+        if self.exclude(status=GatePolicyVersion.Status.DRAFT).exists():
+            raise ImmutableGateHistoryError("Published or withdrawn policy versions cannot be deleted.")
+        return super().delete()
+
+
+class PackagePolicyAssignmentQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        deletion_null = (
+            _related_object_deletion_depth.get()
+            and set(kwargs).issubset({
+                "pinned_by", "pinned_by_id", "exemption_granted_by",
+                "exemption_granted_by_id", "created_by", "created_by_id",
+            })
+            and all(value is None for value in kwargs.values())
+        )
+        if deletion_null:
+            return super().update(**kwargs)
+        raise ImmutableGateHistoryError("PackagePolicyAssignment is immutable after creation.")
+
+    def bulk_update(self, objs, fields, batch_size=None):
+        raise ImmutableGateHistoryError("PackagePolicyAssignment is immutable after creation.")
+
+    def delete(self):
+        raise ImmutableGateHistoryError("PackagePolicyAssignment cannot be deleted.")
+
+
+class GatePolicy(BaseModel):
     organization = models.ForeignKey(
         "accounts.Organization", on_delete=models.SET_NULL, null=True, blank=True,
         related_name="gate_policies",
@@ -43,13 +143,19 @@ class GatePolicy(BaseModel):
         "Settable only where organization IS NULL.",
     )
 
+    objects = GatePolicyQuerySet.as_manager()
+
     class Meta:
+        base_manager_name = "objects"
         constraints = [
             models.UniqueConstraint(fields=["organization", "code"], name="unique_gate_policy_code_per_organization"),
             models.UniqueConstraint(
-                fields=["is_canonical_default"],
-                condition=models.Q(is_canonical_default=True),
+                fields=["is_canonical_default"], condition=models.Q(is_canonical_default=True),
                 name="unique_canonical_gate_policy",
+            ),
+            models.CheckConstraint(
+                check=models.Q(is_canonical_default=False) | models.Q(organization__isnull=True),
+                name="canonical_gate_policy_must_be_platform_scoped",
             ),
         ]
         ordering = ["-created_at"]
@@ -59,19 +165,23 @@ class GatePolicy(BaseModel):
         return self.name
 
     def save(self, *args, **kwargs):
-        # Defense in depth (Charter Section 3.3 item 2): an organization-owned
-        # policy can never become canonical by any path, including direct
-        # model manipulation. services.set_canonical_default is the primary
-        # enforcement point; this guard is the backstop.
         if self.is_canonical_default and self.organization_id is not None:
             raise ValidationError("An organization-owned GatePolicy can never be canonical.")
+        if self._state.adding and self.is_canonical_default and not _controlled_policy_write.get():
+            raise ImmutableGateHistoryError("Canonical policy identity is service-controlled.")
+        if not self._state.adding and not _controlled_policy_write.get():
+            original = type(self).objects.filter(pk=self.pk).values(
+                "organization_id", "is_canonical_default"
+            ).first()
+            if original and (
+                original["organization_id"] != self.organization_id
+                or original["is_canonical_default"] != self.is_canonical_default
+            ):
+                raise ImmutableGateHistoryError("Canonical policy identity is service-controlled.")
         super().save(*args, **kwargs)
 
 
 class GatePolicyVersion(BaseModel):
-    """The actual, immutable-once-published, versioned gate_schema
-    (Charter Section 3.1/3.2)."""
-
     class Status(models.TextChoices):
         DRAFT = "draft", "Draft"
         PUBLISHED = "published", "Published"
@@ -93,7 +203,15 @@ class GatePolicyVersion(BaseModel):
     )
     withdrawal_reason = models.TextField(blank=True, default="")
 
+    objects = GatePolicyVersionQuerySet.as_manager()
+
+    _IMMUTABLE_FIELDS = (
+        "policy_id", "version_number", "status", "gate_schema", "published_at",
+        "published_by_id", "supersedes_id", "withdrawal_reason", "created_by_id",
+    )
+
     class Meta:
+        base_manager_name = "objects"
         constraints = [
             models.UniqueConstraint(fields=["policy", "version_number"], name="unique_gate_policy_version_number"),
         ]
@@ -103,32 +221,29 @@ class GatePolicyVersion(BaseModel):
         return f"{self.policy_id} v{self.version_number} ({self.status})"
 
     def save(self, *args, **kwargs):
-        # Published/withdrawn rows are immutable on gate_schema/version_number/
-        # policy (Charter Section 3.2). services.publish_policy_version and
-        # services.withdraw_policy_version are the primary enforcement
-        # points; this guard is the required backstop against any other
-        # write path, including a direct model save().
-        if self.pk is not None:
-            try:
-                original = type(self).objects.get(pk=self.pk)
-            except type(self).DoesNotExist:
-                original = None
-            if original is not None and original.status != self.Status.DRAFT:
-                for field_name in ("gate_schema", "version_number", "policy_id"):
-                    if getattr(original, field_name) != getattr(self, field_name):
-                        raise ValidationError(
-                            f"GatePolicyVersion.{field_name} cannot be changed once status is {original.status!r}."
-                        )
+        if (
+            self._state.adding
+            and self.status != self.Status.DRAFT
+            and not _controlled_version_write.get()
+        ):
+            raise ImmutableGateHistoryError(
+                "A GatePolicyVersion must enter the lifecycle as DRAFT through its service."
+            )
+        if not self._state.adding and not _controlled_version_write.get():
+            original = type(self).objects.filter(pk=self.pk).values(*self._IMMUTABLE_FIELDS).first()
+            if original and any(original[field] != getattr(self, field) for field in self._IMMUTABLE_FIELDS):
+                raise ImmutableGateHistoryError(
+                    "GatePolicyVersion may be changed only through its authorized lifecycle service."
+                )
         super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.status != self.Status.DRAFT:
+            raise ImmutableGateHistoryError("Published or withdrawn policy versions cannot be deleted.")
+        return super().delete(*args, **kwargs)
 
 
 class PackagePolicyAssignment(BaseModel):
-    """Permanent pin of one ProcurementPackage to one published
-    GatePolicyVersion for the life of its gate progression (Charter
-    Section 3.4). No re-pinning, supersession, or reassignment mechanism
-    exists in Milestone 1 -- there is deliberately no superseded_by
-    field."""
-
     package = models.ForeignKey(
         "procurement.ProcurementPackage", on_delete=models.PROTECT, related_name="policy_assignments",
     )
@@ -141,11 +256,9 @@ class PackagePolicyAssignment(BaseModel):
         help_text="NULL for system-assigned pins (e.g. the existing-package migration) -- "
         "never disguised as a real approver.",
     )
+    # Retained for migration compatibility only.  A false value never permits
+    # a replacement assignment and this field is immutable after creation.
     is_active = models.BooleanField(default=True)
-
-    # Administrative exemption (Charter Section 4.4) -- not a historical
-    # pass. Set only for closed/historical packages that are not expected
-    # to progress through A1-A6.
     gate_progression_exempt = models.BooleanField(default=False)
     exemption_reason = models.TextField(blank=True, default="")
     exemption_granted_by = models.ForeignKey(
@@ -153,13 +266,49 @@ class PackagePolicyAssignment(BaseModel):
     )
     exemption_granted_at = models.DateTimeField(null=True, blank=True)
 
+    objects = PackagePolicyAssignmentQuerySet.as_manager()
+
     class Meta:
+        base_manager_name = "objects"
         constraints = [
-            models.UniqueConstraint(
-                fields=["package"], condition=models.Q(is_active=True), name="unique_active_package_policy_assignment",
-            ),
+            models.UniqueConstraint(fields=["package"], name="unique_package_policy_assignment"),
         ]
         ordering = ["-pinned_at"]
 
     def __str__(self):
         return f"{self.package_id} -> {self.policy_version_id}"
+
+    def save(self, *args, **kwargs):
+        if self._state.adding and not _controlled_assignment_write.get():
+            raise ImmutableGateHistoryError(
+                "PackagePolicyAssignment may be created only through its assignment service."
+            )
+        if not self._state.adding and not _controlled_assignment_write.get():
+            raise ImmutableGateHistoryError("PackagePolicyAssignment is immutable after creation.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ImmutableGateHistoryError("PackagePolicyAssignment cannot be deleted.")
+
+
+@receiver(pre_delete, sender=GatePolicyVersion)
+def _protect_terminal_policy_version_delete(sender, instance, **kwargs):
+    if instance.status != GatePolicyVersion.Status.DRAFT:
+        raise ImmutableGateHistoryError("Published or withdrawn policy versions cannot be deleted.")
+
+
+@receiver(pre_delete, sender=PackagePolicyAssignment)
+def _protect_assignment_delete(sender, instance, **kwargs):
+    raise ImmutableGateHistoryError("PackagePolicyAssignment cannot be deleted.")
+
+
+@receiver(pre_delete, sender=settings.AUTH_USER_MODEL)
+@receiver(pre_delete, sender="accounts.Organization")
+def _begin_related_object_deletion(sender, instance, **kwargs):
+    _related_object_deletion_depth.set(_related_object_deletion_depth.get() + 1)
+
+
+@receiver(post_delete, sender=settings.AUTH_USER_MODEL)
+@receiver(post_delete, sender="accounts.Organization")
+def _end_related_object_deletion(sender, instance, **kwargs):
+    _related_object_deletion_depth.set(max(0, _related_object_deletion_depth.get() - 1))

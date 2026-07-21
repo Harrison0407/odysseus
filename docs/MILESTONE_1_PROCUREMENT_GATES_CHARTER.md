@@ -1,6 +1,6 @@
 # Milestone 1 — Configurable Procurement Gates A1–A6 Charter
 
-Status: **DRAFT — DOCUMENTATION ONLY. NOT INDEPENDENTLY REVALIDATED. NOT OWNER-APPROVED.**
+Status: **VERSION 6 CLOSED AND OWNER-ACCEPTED. INCREMENT 1 IMPLEMENTATION AUTHORIZED; CORRECTION PENDING CODEX RE-VERIFICATION AND HARRISON ACCEPTANCE.**
 
 Charter version: 6 (Milestone 1 Charter Correction Cycle 5, 2026-07-20)
 
@@ -4339,3 +4339,13 @@ validation (§15, §19) remain outstanding future implementation-closure
 requirements. The exact next action is to await Harrison's separate,
 explicit authorization to begin Milestone 1 (A1–A6) implementation. Do not
 begin A1–A6 implementation absent that separate authorization.
+
+**Post-acceptance implementation status update (2026-07-21).** The preceding
+paragraph records the historical state at Version 6 acceptance. Harrison
+subsequently authorized bounded Increment 1, implemented at `9b803911`.
+Codex implementation verification then reported CX-I1-001 through CX-I1-010.
+CX-I1-001 through CX-I1-009 were corrected in the bounded correction pass;
+CX-I1-010 is this status/editorial reconciliation. Increment 1 remains pending
+read-only Codex re-verification and Harrison acceptance. Increment 2 and all
+gate-execution work remain unauthorized. PostgreSQL concurrency execution
+remains pending; correction validation to date is SQLite-only.

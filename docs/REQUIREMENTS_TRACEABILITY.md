@@ -17,14 +17,16 @@ both retained for historical accuracy. Historical milestone counts below
 are retained where they describe the evidence available at that point in
 the delivery.
 
-Milestone 1 Increment 1 status (2026-07-21): **IMPLEMENTED AND
-TESTED — READY FOR INDEPENDENT FABLE REVIEW**, not yet independently
-reviewed or reconciled. **565 tests collected, 565 passed, 0 failed
-(511 prior + 54 new); migrations clean (75/75 applied)** — see
-`docs/implementation-log.md` entry 63 and ADR-049. This is the
+Milestone 1 Increment 1 status (2026-07-21): **CORRECTION IMPLEMENTED —
+PENDING READ-ONLY CODEX RE-VERIFICATION AND HARRISON ACCEPTANCE**. Codex
+verification of implementation commit `9b803911` reported CX-I1-001 through
+CX-I1-010; CX-I1-001 through CX-I1-009 are corrected and CX-I1-010 is
+reconciled. See `docs/implementation-log.md` entry 64 and ADR-050. This is the
 Procurement Gate Policy and Package Assignment Foundation only; A1–A6
 gate execution remains unimplemented and Increment 2 remains
-unauthorized.
+unauthorized. Fresh correction validation: **615 collected, 613 passed,
+2 PostgreSQL-only concurrency tests skipped; 77/77 migrations applied on
+SQLite**. PostgreSQL execution remains pending.
 
 The Controlled Transparency, Commercial Confidentiality & Authorization
 Foundation is **independently revalidated and owner accepted** as the
@@ -106,6 +108,14 @@ Increment 1 commit and Harrison's separate, explicit authorization.
 | Organization-scoped `has_capability` extension | `apps.governance.services` | — | — | `TestOrganizationScopedHasCapability` (9 tests) | Done |
 | Policy-administration authorization (incl. cross-org denial) | `apps.procurement_gates.services` | — | — | `TestPolicyAdministrationAuthorization` (4 tests) | Done |
 | §4.4 administrative gate-progression exemption | `apps.procurement_gates` | `PackagePolicyAssignment.gate_progression_exempt` | — | `TestGateProgressionExemption` (3 tests) | Done |
+| CX-I1-001 permanent assignment uniqueness/immutability | `apps.procurement_gates.models` | unconditional package uniqueness; write/delete guards | — | `TestPermanentAssignmentGuards` | Corrected — ADR-050 |
+| CX-I1-002 version lifecycle immutability | `apps.procurement_gates.models/services` | controlled lifecycle and deletion guards | — | `TestVersionLifecycleGuards` | Corrected — ADR-050 |
+| CX-I1-003 canonical database/concurrency invariants | `apps.procurement_gates.models/services` | check constraint; shared policy lock; atomic replacement | — | `TestCanonicalCorrection`; PostgreSQL concurrency test | Corrected; PostgreSQL execution pending |
+| CX-I1-004 registered decision capabilities | `validate_gate_schema` | existing capability registry | — | `TestCapabilitySchemaCorrection` | Corrected |
+| CX-I1-005/006 tenant-safe assignment and ambiguity | `assign_policy_to_package` | `ASSIGN_GATE_POLICY` | — | `TestTenantSafeAssignment` | Corrected |
+| CX-I1-007 historical migration safety | `procurement_gates.0002`–`.0004` | frozen RunPython; unconditional constraint; protected base managers | — | `test_procurement_gates_migrations.py` | Corrected |
+| CX-I1-008 dedicated exemption authority | `grant_gate_progression_exemption` | `EXEMPT_PACKAGE_FROM_PROCUREMENT_GATES` | — | `TestDedicatedExemptionCapability` | Corrected |
+| CX-I1-009 safe audit metadata | governance/procurement-gates services | identifier/code-only metadata | — | sentinel denial/success tests | Corrected |
 | A1–A6 gate execution (`GateAttempt`/`GateEvaluation`/`GateDecision`/overrides/freeze/change-control) | — | — | — | — | **Not started — separate, unauthorized increment** |
 
 ## Priority 0 capabilities (spec section 5)

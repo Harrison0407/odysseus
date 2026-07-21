@@ -155,6 +155,19 @@ following remain open limitations even after Increment 1:
   Charter described only in prose. See ADR-049 items 2 and 4 for the
   exact reasoning; neither changes any Charter-binding rule.
 
+**Increment 1 correction update.** Codex implementation verification of
+`9b803911` found CX-I1-001 through CX-I1-010. The bounded correction implements
+CX-I1-001 through CX-I1-009 and reconciles CX-I1-010; see ADR-050 and
+implementation-log entry 64. Assignment/version historical bypasses,
+cross-tenant assignment, ambiguous organization policy selection, unsafe live
+migration imports, overbroad exemption authority, and audit-metadata defects
+are corrected with adversarial tests. Increment 1 is not yet accepted: the
+same read-only Codex verification and Harrison reconciliation remain pending.
+The two real concurrency tests are PostgreSQL-only and are skipped in this
+SQLite environment (615 collected, 613 passed, 2 skipped; 77/77 migrations),
+so PostgreSQL concurrency execution remains an explicit open limitation.
+Increment 2 remains unauthorized and absent.
+
 ### Privileged-audit N+1 query characteristic (accepted, non-blocking)
 
 Independently measured during the cycle-3 revalidation, using disposable

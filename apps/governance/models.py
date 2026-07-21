@@ -127,6 +127,7 @@ ALL_CAPABILITY_CODES = [
     # Milestone 1 Increment 1 (apps.procurement_gates) -- never implied by
     # any role default (ROLE_DEFAULT_CAPABILITIES), per Charter Section 13.
     "PUBLISH_GATE_POLICY", "CREATE_PROCUREMENT_GATE_ATTEMPT",
+    "ASSIGN_GATE_POLICY", "EXEMPT_PACKAGE_FROM_PROCUREMENT_GATES",
 ]
 
 

@@ -158,6 +158,19 @@ review against the Increment 1 commit. Do not begin Increment 2 until
 that review is reconciled and Harrison explicitly authorizes the next
 increment.**
 
+**Correction update:** Codex implementation verification of Increment 1
+commit `9b803911` reported CX-I1-001 through CX-I1-010. The bounded correction
+implements CX-I1-001 through CX-I1-009 and the related CX-I1-010 editorial
+cleanup, adds `procurement_gates.0003`/`.0004`, and adds adversarial/MigrationExecutor
+coverage. Increment 1 is pending read-only Codex re-verification and Harrison
+acceptance. Correction validation: 615 collected, 613 passed, 2 PostgreSQL-
+only tests skipped on SQLite; 77/77 migrations applied. PostgreSQL concurrency
+execution remains pending. Increment 2 is still unauthorized.
+
+**Next governing activity:** rerun the same read-only Increment 1 Codex
+verification against the correction commit; review only Increment 1 and the
+correction findings. Do not begin Increment 2.
+
 Tests (as independently reproduced during the cycle-3 revalidation that
 led to acceptance, then extended by Increment 1):
 

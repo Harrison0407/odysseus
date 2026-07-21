@@ -197,6 +197,42 @@ Exact next action: **run a new, independent Fable 5 Charter revalidation
 session against the commit introducing Charter version 4. Do not begin
 A1–A6 implementation.**
 
+**Update — independent Milestone 1 Charter Version 4 Revalidation
+completed, result: MILESTONE 1 CHARTER VERSION 4 REQUIRES CORRECTION.** An
+independent revalidation of Charter version 4 (commit
+`cf01d400e1dffd6c5981ee2ae8a01ad71f3c9006`, the commit introducing
+version 4) confirmed NF-NEW-1 through NF-NEW-5 and the editorial defect
+were genuinely, independently resolved against actual repository code
+(`apps.governance.services`, `apps.governance.models.CapabilityGrant`,
+`apps.audit.models`'s generic-target pattern) — not merely against the
+Charter's own self-report — but found two new blocking findings and eight
+additional accepted findings, distinct from the six findings resolved in
+version 4 itself. A documentation-only **Milestone 1 Charter Correction
+Cycle 4** then produced Charter version 5, resolving all ten:
+
+| Finding | Disposition |
+|---|---|
+| RISKFLAG-HOLD-1 (Critical) | Accept — added `apps.procurement_gates.services.raise_gate_aware_risk_flag`/`resolve_gate_aware_risk_flag` as the sole Milestone 1 RiskFlag entry points, mirroring the `ChangeRequest` wrappers exactly, with a corrective `recompute_package_hold_state` write after the unmodified `raise_risk_flag`/`resolve_risk_flag`; removed the false claim that the unmodified foundation functions were "reachable identically" for a gate-governed package |
+| NF4-A (High) | Accept — added a binding admin-immutability policy (§16.3): every procurement-gates historical model must be excluded from Django admin or exposed only through a dedicated read-only `ModelAdmin`; a blanket writable auto-registration loop (the pattern `apps/governance/admin.py` already uses) is prohibited for these models by name |
+| DOC-COUNT-1 | Accept — corrected §20's stale "seven" scenario count; the true current count is nine (eight pre-existing plus LOCK-ORDER-1's new ninth scenario), reconciled across the Charter and `docs/SECURITY.md` |
+| LOCK-ORDER-1 | Accept — `decide_gate_aware_change` now locks `ChangeRequest` before `ProcurementPackage`, matching the foundation's own internal order; added a global lock-order table (§14.1a) covering every Charter-defined mutation |
+| NF4-C | Accept — stated the exact organization-scoped `CapabilityGrant` query, excluding hybrid grants that also carry `package` or `role_assignment` |
+| NF-V4-2 | Accept — bound `decide_gate_aware_change`'s decision-time authorization to the exact existing `CHANGE_REQUEST_APPROVAL_CAPABILITY[field_name]` mapping, no second table |
+| README-STALE | Accept — updated `README.md`'s Milestone 1 narrative through version 5 |
+| IMPL-LOG-COUNT | Accept — corrected `docs/implementation-log.md`'s "eight Markdown files" to "nine" |
+| NF-V4-5 | Accept — named `change_request_create` for required rewiring, symmetric with `change_request_decide` |
+| TRACE-1 | Accept — added the historical NF-numbering disclaimer to §21; no `NF-5`/`NF-6` finding is asserted, none found in a full repository/Git-history search |
+
+**No application code, template, test, or migration was written or
+modified during this correction cycle either.** A1–A6 remain entirely
+unimplemented. Charter version 5 has **not** been independently
+revalidated and has **not** been owner-approved. Milestone 1
+implementation remains **not authorized**.
+
+Exact next action: **run a new, independent Fable 5 Charter revalidation
+session against the commit introducing Charter version 5. Do not begin
+A1–A6 implementation.**
+
 ---
 
 ## Historical record: Foundation correction cycle 3 mechanism

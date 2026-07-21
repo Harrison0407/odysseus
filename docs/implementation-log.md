@@ -1960,8 +1960,14 @@ documented order.
     passed (0 issues); `makemigrations --check --dry-run` reported no
     changes detected; `migrate --check` passed, 72/72 migrations applied,
     0 pending — unchanged, as expected for a documentation-only cycle; the
-    final diff touches eight Markdown files only (`git diff --name-only`
-    contains no `.py`, `.html`, or `migrations/` path). The full regression
+    final diff touches nine Markdown files only (`git diff --name-only`
+    contains no `.py`, `.html`, or `migrations/` path) — **corrected from
+    this entry's original "eight," an undercount independently found and
+    verified by fresh `git diff --stat` during the Milestone 1 Charter
+    Version 4 Revalidation and fixed in the version 4→5 correction cycle
+    (IMPL-LOG-COUNT); the substantive claim (documentation-only, no
+    `.py`/`.html`/`migrations/` path touched) was and remains accurate,
+    only the file count was wrong.** The full regression
     suite was **not** rerun for this cycle, by the same design entry 58
     already established — documentation changes cannot alter Python test
     outcomes, and this cycle's own fresh evidence above independently
@@ -1976,4 +1982,151 @@ documented order.
 
     Exact next action: run a new, independent Fable 5 Charter revalidation
     session against the commit introducing Charter version 4. Do not begin
+    A1–A6 implementation.
+
+60. **Milestone 1 Charter Correction Cycle 4 — documentation-only.** Dated
+    2026-07-20. No application code, template, test, or migration was
+    touched.
+
+    The independent Milestone 1 Charter Version 4 Revalidation that
+    followed entry 59 reread Charter version 4 (commit
+    `cf01d400e1dffd6c5981ee2ae8a01ad71f3c9006`) fresh against the actual
+    repository — `apps.governance.services.raise_risk_flag`/
+    `resolve_risk_flag`/`has_capability`/`CapabilityGrant`,
+    `apps.governance.admin`'s blanket `ModelAdmin` auto-registration loop,
+    `apps.procurement.package_views.change_request_create`/
+    `change_request_decide`'s actual lock order versus
+    `approve_change_request`/`reject_change_request`'s own internal order,
+    and the full `git log --all` history for `NF-5`/`NF-6` — and returned
+    **MILESTONE 1 CHARTER VERSION 4 REQUIRES CORRECTION** with two
+    blocking findings and eight additional accepted findings:
+
+    - **RISKFLAG-HOLD-1 (Critical, blocking):** §8.4 claimed the
+      unmodified `raise_risk_flag`/`resolve_risk_flag` were "reachable
+      identically whether or not a package participates in A1–A6" —
+      verified false: `resolve_risk_flag` writes `is_on_hold` from the
+      governance-side rule alone, silently clearing a gate-native
+      `PackageHoldCause`-backed hold (e.g. an open critical-change hold
+      awaiting refreeze) when an unrelated `RiskFlag` is resolved, because
+      no gate-aware wrapper existed for `RiskFlag` the way one already did
+      for `ChangeRequest`.
+    - **NF4-A (High, blocking):** no binding admin-edit-immutability
+      policy existed for procurement-gates historical models
+      (`GateDecision`, `GateEvaluation`, `PackageFreezeRevision`,
+      `ProcurementGateOverride`'s decided fields, etc.) beyond the two
+      narrow cases (`GatePolicyVersion` post-publication, `GateAttempt`
+      deletion) version 4 already covered — `apps/governance/admin.py`'s
+      blanket, writable, default-`ModelAdmin` auto-registration loop was
+      never addressed for the rest.
+    - **DOC-COUNT-1 (Medium, accepted):** §20 completion criteria item 5
+      said "§15.1's seven named scenarios" while §15.1/§15.2/§21.1 already
+      said "eight," an uncorrected leftover from before version 4's own
+      NF-NEW-4 correction brought the list to eight.
+    - **LOCK-ORDER-1 (Medium, accepted):** `decide_gate_aware_change`
+      locked `ProcurementPackage` before `ChangeRequest`, the reverse of
+      the unmodified foundation functions' own internal order, creating a
+      latent, unacknowledged opposite-order deadlock risk.
+    - **NF4-C (Medium, accepted):** the organization-scoped `has_capability`
+      binding rule was stated in prose without the exact query shape,
+      leaving unstated whether a hybrid `package`-plus-`organization`
+      grant would incorrectly qualify.
+    - **NF-V4-2 (Medium, accepted):** `decide_gate_aware_change`'s
+      decision-time authorization was not explicitly bound to the exact
+      existing `CHANGE_REQUEST_APPROVAL_CAPABILITY[field_name]` mapping,
+      risking a second, independently-drifting capability table.
+    - **README-STALE (Medium, accepted):** `README.md` still narrated
+      "Charter version 3" as current, one full correction cycle behind the
+      other nine canonical governing documents.
+    - **IMPL-LOG-COUNT (Low, accepted):** this log's own entry 59 stated
+      "eight Markdown files" for the version 4 diff; the actual diff
+      touches nine.
+    - **NF-V4-5 (Low, accepted):** §8.2.1 named `change_request_decide` for
+      required rewiring but never named `change_request_create`, its own
+      current direct caller of `request_change`.
+    - **TRACE-1 (Low, accepted):** no governing document disclaimed that
+      `NF` identifiers are historical, non-contiguous labels.
+
+    This cycle corrected all ten in Charter version 5:
+    `apps.procurement_gates.services.raise_gate_aware_risk_flag`/
+    `resolve_gate_aware_risk_flag` are now the sole Milestone 1 RiskFlag
+    entry points, mirroring `request_gate_aware_change`/
+    `decide_gate_aware_change`'s shape exactly, with a corrective
+    `recompute_package_hold_state` write before commit and a mandatory
+    bypass-prevention architectural test (§8.3, §8.3.1, §8.4, RISKFLAG-HOLD-1).
+    A new §16.3 binding admin-immutability policy requires every
+    procurement-gates historical model to be either excluded from Django
+    admin entirely or exposed only through a dedicated read-only
+    `ModelAdmin`, prohibits blanket writable auto-registration for those
+    models by name, and distinguishes `ProcurementGateOverride`'s
+    immutable fields from its service-routed lifecycle transitions (§16.3,
+    NF4-A). `decide_gate_aware_change` now locks `ChangeRequest` before
+    `ProcurementPackage`, matching the foundation's own order; a new
+    §14.1a global lock-order table classifies every Charter-defined
+    mutation into one of two consistent patterns, and the RiskFlag
+    wrapper adopts the identical `RiskFlag`-then-`ProcurementPackage`
+    order for the same reason (§8.2.3, §14.1a, LOCK-ORDER-1). §13 now
+    states the exact organization-scoped `CapabilityGrant` query,
+    excluding hybrid `package`- or `role_assignment`-plus-`organization`
+    grants (§13, NF4-C), and explicitly binds `decide_gate_aware_change`'s
+    authorization to the existing `CHANGE_REQUEST_APPROVAL_CAPABILITY`
+    mapping with no second table (§13, NF-V4-2). §15's PostgreSQL-required
+    scenario count is corrected to **nine** (eight pre-existing plus the
+    new lock-order/deadlock-regression scenario), reconciled across §15,
+    §20, and `docs/SECURITY.md` (§15.1, §15.2, §20 item 5, NF-V4-2/DOC-COUNT-1
+    — the count was set to its true current value, not merely the "eight"
+    the finding literally named, since LOCK-ORDER-1's own correction adds
+    a ninth scenario in this same cycle). §8.2.1 now names
+    `change_request_create` for required rewiring, symmetric with
+    `change_request_decide` (§8.2.1, NF-V4-5). §21 now opens with the
+    exact historical NF-numbering disclaimer (§21, TRACE-1). §21.5 records
+    the complete disposition table for all ten findings. Two additional
+    internal contradictions were independently found and corrected during
+    this cycle while working the assigned findings, though neither was
+    itself one of the ten accepted findings: §18 test 25d contradicted
+    §8.2.1's own binding rule (it claimed *creating* a non-critical
+    `ChangeRequest` left a package off hold, when §8.2.1 requires it stay
+    on hold while `PENDING`; corrected, with the actual clearing behavior
+    moved to new test 25t), and §9.6 claimed the cache-write for
+    `PackageGateState` was performed by `compute_gate_state` itself,
+    contradicting §9.1/§11.5's purity rule for that function (corrected —
+    the write is now explicitly attributed to each mutating transaction
+    that calls `compute_gate_state`, never to `compute_gate_state` itself).
+
+    Documentation reconciled in the same commit: `README.md` (version 3→5
+    narrative brought current, README-STALE), this entry's own
+    correction (IMPL-LOG-COUNT), `DT_BEACH_CURRENT_STATE.md`,
+    `DT_BEACH_SOURCE_OF_TRUTH_INDEX.md`, `docs/architecture-decisions.md`
+    (new ADR entry), `docs/SECURITY.md` (DOC-COUNT-1's "seven"→"nine"
+    correction plus the admin-immutability/RiskFlag-orchestration/lock-order
+    additions), `docs/KNOWN_LIMITATIONS.md`,
+    `docs/REQUIREMENTS_TRACEABILITY.md`, and
+    `docs/MARKETMATCH_ARCHITECTURE_RECONCILIATION_AND_ROADMAP.md`.
+
+    Fresh evidence for this cycle: HEAD confirmed at
+    `cf01d400e1dffd6c5981ee2ae8a01ad71f3c9006` before editing; branch
+    `integration/dt-beach-supply-control-1.0.0`; upstream
+    `origin/integration/dt-beach-supply-control-1.0.0`; ahead/behind `0/0`;
+    working tree clean before editing; no `apps.procurement_gates`
+    directory or app present; `apps/governance/admin.py` confirmed to use
+    a blanket, writable, default-`ModelAdmin` auto-registration loop for
+    every model in the `governance` app (the exact pattern §16.3 now
+    prohibits for procurement-gates historical models). `manage.py check`
+    passed (0 issues); `makemigrations --check --dry-run` reported no
+    changes detected; `migrate --check` passed, 72/72 migrations applied,
+    0 pending — unchanged, as expected for a documentation-only cycle. The
+    full regression suite was **not** rerun for this cycle, by the same
+    design entry 58 already established — documentation changes cannot
+    alter Python test outcomes, and this cycle's own fresh evidence above
+    independently confirms zero application code, template, or migration
+    files changed.
+
+    **Status distinctions, precise:** Charter version 5 is *authored* and
+    *corrected against every accepted Version 4 Revalidation finding*
+    (this entry); it is **not** *independently revalidated* and **not**
+    *owner approved*. A1–A6 remain entirely *unimplemented* — nothing in
+    this entry changes that. Milestone 1 implementation is **not
+    authorized** by this entry.
+
+    Exact next action: run a new, independent Fable 5 Charter revalidation
+    session against the commit introducing Charter version 5. Do not begin
     A1–A6 implementation.

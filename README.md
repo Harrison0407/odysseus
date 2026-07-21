@@ -150,8 +150,32 @@ direct contradiction against the current, unmodified
 resolving all ten findings — again with no application code, template,
 test, or migration changed.
 
+Charter version 3 was then itself independently revalidated; the result
+was **MILESTONE 1 CHARTER VERSION 3 REQUIRES CORRECTION** — six findings,
+including three blocking (NF-NEW-1 — no mandatory gate-aware `ChangeRequest`
+decision orchestration; NF-NEW-2 — competing/incomplete package-hold
+mechanisms; NF-NEW-3 — organization-scoped bootstrap authorization
+unsupported by `has_capability`), two accepted, non-blocking findings
+(NF-NEW-4, NF-NEW-5), and one editorial line-citation defect. A
+documentation-only **Milestone 1 Charter Correction Cycle 3** produced
+Charter version 4, resolving all six findings — again with no application
+code, template, test, or migration changed.
+
+Charter version 4 was then itself independently revalidated; the result
+was **MILESTONE 1 CHARTER VERSION 4 REQUIRES CORRECTION** — ten findings,
+including two blocking (RISKFLAG-HOLD-1 — Critical: the unified
+package-hold projection was silently defeated by the unmodified
+`apps.governance.services.resolve_risk_flag`, which no gate-aware wrapper
+protected against; NF4-A — High: no admin-edit-immutability policy
+existed for procurement-gates historical models beyond the two narrow
+cases version 4 already covered) and eight accepted, non-blocking findings
+(DOC-COUNT-1, LOCK-ORDER-1, NF4-C, NF-V4-2, README-STALE, IMPL-LOG-COUNT,
+NF-V4-5, TRACE-1). A documentation-only **Milestone 1 Charter Correction
+Cycle 4** produced Charter version 5, resolving all ten findings — again
+with no application code, template, test, or migration changed.
+
 Exact next action: **run a new, independent Fable 5 Charter revalidation
-session against the commit introducing Charter version 3. Do not begin
+session against the commit introducing Charter version 5. Do not begin
 A1–A6 implementation.**
 
 Milestone 1 remains planned and approved; neither foundation acceptance nor

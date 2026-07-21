@@ -49,9 +49,18 @@ Revalidation then returned MILESTONE 1 CHARTER VERSION 3 REQUIRES
 CORRECTION with three blocking findings (NF-NEW-1, NF-NEW-2, NF-NEW-3),
 two additional accepted findings (NF-NEW-4, NF-NEW-5), and one editorial
 line-citation defect; a Milestone 1 Charter Correction Cycle 3 produced
-version 4, resolving all six, again documentation-only. The exact next
-action is a new, independent Fable 5 Charter revalidation session against
-the commit introducing version 4.
+version 4, resolving all six, again documentation-only. An independent
+Milestone 1 Charter Version 4 Revalidation then returned MILESTONE 1
+CHARTER VERSION 4 REQUIRES CORRECTION with two blocking findings
+(RISKFLAG-HOLD-1 — Critical, the unified package-hold projection was
+silently defeated by the unmodified `resolve_risk_flag`; NF4-A — High, no
+admin-edit-immutability policy existed for procurement-gates historical
+models beyond the two narrow cases version 4 already covered) and eight
+additional accepted findings (DOC-COUNT-1, LOCK-ORDER-1, NF4-C, NF-V4-2,
+README-STALE, IMPL-LOG-COUNT, NF-V4-5, TRACE-1); a Milestone 1 Charter
+Correction Cycle 4 produced version 5, resolving all ten, again
+documentation-only. The exact next action is a new, independent Fable 5
+Charter revalidation session against the commit introducing version 5.
 A1–A6 implementation remains not started and is not authorized by this
 acceptance or by the Charter's own authorship; `ProcurementPackage.Status`
 is not evidence of gate execution.

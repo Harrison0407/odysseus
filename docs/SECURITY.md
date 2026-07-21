@@ -41,9 +41,10 @@ control rules for Procurement Gates A1–A6:
   ever placing raw evidence content or confidential field values in audit
   `metadata`.
 - PostgreSQL-specific lock/race validation is required before Milestone 1
-  may be declared closed for seven named concurrency scenarios (Charter
-  §15) — SQLite evidence alone is explicitly disallowed from being
-  represented as PostgreSQL validation.
+  may be declared closed for nine named concurrency scenarios (Charter
+  §15, corrected in Charter version 5 — resolves DOC-COUNT-1) — SQLite
+  evidence alone is explicitly disallowed from being represented as
+  PostgreSQL validation.
 
 **Correction cycle update (2026-07-20):** an independent revalidation of
 Charter version 1 found, and Charter version 2 corrected, two
@@ -101,8 +102,38 @@ decision entry point (Charter §8.2.3); a new, minimal
 §13); a two-phase `reconcile_expired_overrides` service that keeps
 `compute_gate_state` purely read-only (Charter §11.5); and an explicit,
 independent `GateAttempt` non-deletion policy (Charter §3.5). All five
-remain design-only — none has been implemented, and Charter version 4 has
-not itself been independently revalidated.
+remain design-only — none has been implemented.
+
+**Correction cycle 4 update (2026-07-20):** an independent revalidation of
+Charter version 4 found that §8.4's claim that the unmodified
+`apps.governance.services.raise_risk_flag`/`resolve_risk_flag` were
+"reachable identically whether or not a package participates in A1–A6"
+was false — `resolve_risk_flag` writes `is_on_hold` from the
+governance-side rule alone, silently clearing a gate-native
+`PackageHoldCause`-backed hold (e.g. an open critical-change hold awaiting
+refreeze) when an unrelated `RiskFlag` is resolved, because no gate-aware
+wrapper existed for `RiskFlag` the way one already did for `ChangeRequest`
+(RISKFLAG-HOLD-1, Critical, blocking); and that `apps/governance/admin.py`'s
+blanket, writable, default-`ModelAdmin` auto-registration loop was never
+addressed for procurement-gates historical models this Charter calls
+immutable — `GateDecision`, `GateEvaluation`, `PackageFreezeRevision`,
+`ProcurementGateOverride`'s decided fields, etc. — beyond the two narrow
+cases (`GatePolicyVersion` post-publication, `GateAttempt` deletion)
+version 4 already covered (NF4-A, High, blocking). Charter version 5 adds
+`apps.procurement_gates.services.raise_gate_aware_risk_flag`/
+`resolve_gate_aware_risk_flag` as the sole RiskFlag entry points,
+mirroring the `ChangeRequest` wrappers exactly, with a corrective
+`recompute_package_hold_state` write before commit (Charter §8.3.1); and a
+binding admin-immutability policy requiring every procurement-gates
+historical model to be excluded from Django admin or exposed only through
+a dedicated read-only `ModelAdmin` (Charter §16.3). Eight further findings
+(DOC-COUNT-1, LOCK-ORDER-1, NF4-C, NF-V4-2, README-STALE, IMPL-LOG-COUNT,
+NF-V4-5, TRACE-1) were also resolved, including correcting
+`decide_gate_aware_change`'s lock order to match the foundation's own
+internal order (Charter §8.2.3, §14.1a) and the PostgreSQL scenario count
+correction referenced above. All remain design-only — none has been
+implemented, and Charter version 5 has not itself been independently
+revalidated.
 
 None of this has been implemented. A1–A6 do not exist in the codebase as of
 this entry; this section documents the approved design only.

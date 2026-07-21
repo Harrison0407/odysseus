@@ -118,11 +118,18 @@ MILESTONE 1 CHARTER VERSION 3 REQUIRES CORRECTION (three blocking
 findings — NF-NEW-1, NF-NEW-2, NF-NEW-3 — two additional accepted
 findings — NF-NEW-4, NF-NEW-5 — and one editorial line-citation defect).
 A documentation-only Milestone 1 Charter Correction Cycle 3 produced
-Charter version 4, resolving all six. Charter version 4 has not yet been
-independently revalidated and is not owner-approved.
+Charter version 4, resolving all six. Charter version 4 was itself
+independently revalidated (commit
+`cf01d400e1dffd6c5981ee2ae8a01ad71f3c9006`); the result was MILESTONE 1
+CHARTER VERSION 4 REQUIRES CORRECTION (two blocking findings —
+RISKFLAG-HOLD-1, NF4-A — and eight additional accepted findings —
+DOC-COUNT-1, LOCK-ORDER-1, NF4-C, NF-V4-2, README-STALE, IMPL-LOG-COUNT,
+NF-V4-5, TRACE-1). A documentation-only Milestone 1 Charter Correction
+Cycle 4 produced Charter version 5, resolving all ten. Charter version 5
+has not yet been independently revalidated and is not owner-approved.
 
 **Next governing activity: a new, independent Milestone 1 Charter
-revalidation session against the commit introducing Charter version 4.**
+revalidation session against the commit introducing Charter version 5.**
 A1–A6 implementation is not authorized and has not started.
 
 Tests (as independently reproduced during the cycle-3 revalidation that

@@ -2,6 +2,81 @@
 
 Newest first.
 
+## ADR-047 — Milestone 1 RiskFlag mutations route through a new
+gate-aware orchestration boundary; procurement-gates historical models get
+a binding admin-immutability policy; `ChangeRequest` decisions adopt the
+foundation's own lock order via a new global lock-order table; the
+organization-scoped `has_capability` query is stated exactly; the
+existing `ChangeRequest` approval-capability mapping is explicitly reused
+
+**Decision:** `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md` version 5
+adds five binding rules, all documentation-only as of this entry (no
+application code changed): (1)
+`apps.procurement_gates.services.raise_gate_aware_risk_flag`/
+`resolve_gate_aware_risk_flag` become the sole Milestone 1 entry points
+for raising or resolving a package-scoped `governance.RiskFlag` against a
+gate-governed package, mirroring the `ChangeRequest` wrappers' shape
+exactly — lock, authorize before retrieval, invoke the unmodified
+foundation function, then a corrective `recompute_package_hold_state`
+write before commit (Charter §8.3.1). (2) every procurement-gates
+historical or append/close-only model (`GatePolicyVersion` post-publication,
+`PackagePolicyAssignment`, `GateAttempt`, `GateEvaluation`, `GateDecision`,
+`GateInvalidation`, `PackageFreezeRevision`, `ProcurementGateOverride`
+post-decision, `PackageHoldCause` historical fields) must be either
+excluded from Django admin entirely or exposed only through a dedicated
+read-only `ModelAdmin`; a blanket writable auto-registration loop — the
+exact pattern `apps/governance/admin.py` already uses for the `governance`
+app — is prohibited for these models by name (Charter §16.3). (3)
+`apps.procurement_gates.services.decide_gate_aware_change` now locks
+`governance.ChangeRequest` before `ProcurementPackage`, matching
+`approve_change_request`/`reject_change_request`'s own internal order
+exactly; a new global lock-order table (Charter §14.1a) classifies every
+Charter-defined mutation into one of two named, consistently-applied
+patterns. (4) The organization-scoped `has_capability(..., organization=...)`
+binding query is now stated exactly — `organization` matches, `package IS
+NULL`, `role_assignment IS NULL` — excluding hybrid grants that carry
+both an organization and a package or role-assignment scope (Charter
+§13). (5) `decide_gate_aware_change`'s decision-time authorization is now
+explicitly bound to reuse the exact, existing
+`apps.governance.services.CHANGE_REQUEST_APPROVAL_CAPABILITY[field_name]`
+mapping, rather than an independently-defined second table (Charter §13).
+
+**Why:** the independent Milestone 1 Charter Version 4 Revalidation
+(against commit `cf01d400e1dffd6c5981ee2ae8a01ad71f3c9006`, the commit
+introducing version 4) found that (1) §8.4 claimed the unmodified
+`raise_risk_flag`/`resolve_risk_flag` were "reachable identically whether
+or not a package participates in A1–A6" — verified false:
+`resolve_risk_flag` writes `is_on_hold` from the governance-side rule
+alone, silently clearing a gate-native `PackageHoldCause`-backed hold
+(e.g. an open critical-change hold awaiting refreeze) when an unrelated
+`RiskFlag` is resolved, because no gate-aware wrapper existed for
+`RiskFlag` the way one already did for `ChangeRequest` (RISKFLAG-HOLD-1,
+Critical); (2) `apps/governance/admin.py`'s blanket, writable, default-
+`ModelAdmin` auto-registration loop was never addressed for procurement-gates
+historical models beyond the two narrow cases (`GatePolicyVersion`
+post-publication, `GateAttempt` deletion) version 4 already covered — a
+staff user with ordinary admin change permission could otherwise directly
+edit `GateDecision.outcome`/`PackageFreezeRevision.frozen_fields`/an
+override's `expires_at`, bypassing every lock, cascade, and audit
+guarantee this Charter defines (NF4-A, High); (3)
+`decide_gate_aware_change` locked `ProcurementPackage` before
+`ChangeRequest`, the reverse of the unmodified foundation functions' own
+internal order, creating a latent, unacknowledged opposite-order deadlock
+risk for any caller that ever reached the foundation functions directly
+(LOCK-ORDER-1, Medium); (4) the organization-scope binding rule was stated
+in prose without the exact query shape, leaving unstated whether a hybrid
+`package`-plus-`organization` grant would incorrectly qualify (NF4-C,
+Medium); and (5) `decide_gate_aware_change`'s authorization check was not
+explicitly bound to the existing `CHANGE_REQUEST_APPROVAL_CAPABILITY`
+mapping, risking a second, independently-drifting capability table
+(NF-V4-2, Medium). Four further, editorial/documentation-only findings
+(README-STALE, IMPL-LOG-COUNT, NF-V4-5, TRACE-1) were also resolved. None
+of these corrections reopens or contradicts ADR-044, ADR-045, or ADR-046
+above; `apps.workflow.GateOverride`, `apps.governance.services.raise_risk_flag`,
+`resolve_risk_flag`, `approve_change_request`, `reject_change_request`,
+and the existing `has_capability` call shape all remain unmodified by all
+of them.
+
 ## ADR-046 — Milestone 1 Change Request decisions route through a new
 orchestration service; package hold state is split into governance and
 gate-native sources; `has_capability` gains an organization-scope

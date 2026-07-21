@@ -70,8 +70,8 @@ This is the official next implementation milestone. This section states
 intent and priority; the binding operational design — models, policy
 versioning, migration rules, override architecture, audit taxonomy,
 authorization, concurrency, tests, and live validation — is
-`docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md` (version 4 as of
-2026-07-20, corrected via three documentation-only Charter Correction
+`docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md` (version 5 as of
+2026-07-20, corrected via four documentation-only Charter Correction
 Cycles: the first after an independent revalidation of version 1 found
 twelve findings, REVAL-001–REVAL-012, all resolved in version 2; the
 second after an independent revalidation of version 2 found ten further
@@ -80,8 +80,12 @@ REVAL-008-RESIDUAL, REVAL-009-TRACE, REVAL-011-ENFORCEMENT, NF-2, NF-3,
 NF-4, NF-7 — all resolved in version 3; the third after an independent
 revalidation of version 3 found three blocking findings (NF-NEW-1,
 NF-NEW-2, NF-NEW-3), two additional accepted findings (NF-NEW-4,
-NF-NEW-5), and one editorial defect, all resolved in version 4; version 4
-itself not yet independently revalidated). Where that Charter and this section differ on
+NF-NEW-5), and one editorial defect, all resolved in version 4; the fourth
+after an independent revalidation of version 4 found two blocking findings
+(RISKFLAG-HOLD-1, NF4-A) and eight additional accepted findings
+(DOC-COUNT-1, LOCK-ORDER-1, NF4-C, NF-V4-2, README-STALE, IMPL-LOG-COUNT,
+NF-V4-5, TRACE-1), all resolved in version 5; version 5 itself not yet
+independently revalidated). Where that Charter and this section differ on
 mechanism, the Charter governs; this section's statement of intent is
 unchanged by it.
 

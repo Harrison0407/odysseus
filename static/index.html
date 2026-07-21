@@ -342,17 +342,17 @@
         </section>
 
         <section class="calls-card" aria-labelledby="calls-upload-heading">
-          <h2 id="calls-upload-heading" data-i18n="capture.wav.heading">Voz — WAV canónico</h2>
-          <p id="calls-requirements" class="calls-requirements" data-i18n="capture.wav.description">Seleccione un archivo .wav PCM mono de 16 kHz, 16 bits con signo, de hasta 20 MiB. Este piloto no convierte otros formatos de audio.</p>
-          <label class="calls-file-label" for="calls-file-input" data-i18n="capture.wav.select">Seleccionar archivo WAV</label>
-          <input id="calls-file-input" class="calls-file-input" type="file" accept=".wav" aria-describedby="calls-requirements calls-file-details">
+          <h2 id="calls-upload-heading" data-i18n="capture.wav.heading">Voz — Archivo de audio</h2>
+          <p id="calls-requirements" class="calls-requirements" data-i18n="capture.wav.description">Seleccione un audio de hasta 200 MiB. Se aceptan formatos comunes de iPhone y otras aplicaciones, incluyendo M4A, WAV, MP3, AAC, CAF, FLAC, OGG, OPUS, WebM, MP4 y MOV. MarketMatch lo convertirá localmente antes de transcribir.</p>
+          <label class="calls-file-label" for="calls-file-input" data-i18n="capture.wav.select">Seleccionar archivo de audio</label>
+          <input id="calls-file-input" class="calls-file-input" type="file" accept=".wav,.m4a,.mp3,.aac,.caf,.flac,.ogg,.opus,.webm,.mp4,.mov,audio/*" aria-describedby="calls-requirements calls-file-details">
           <p id="calls-file-details" class="calls-file-details" hidden></p>
           <div class="calls-actions">
             <button type="button" id="calls-submit-btn" class="calls-button calls-button-primary" data-i18n="capture.transcribe" disabled>Transcribir</button>
             <button type="button" id="calls-cancel-btn" class="calls-button" data-i18n="common.cancel" hidden>Cancelar</button>
             <button type="button" id="calls-reset-btn" class="calls-button" data-i18n="capture.clear" disabled>Limpiar Capture</button>
           </div>
-          <p id="calls-status" class="calls-status" role="status" aria-live="polite" data-i18n="capture.transcription.initial">Seleccione un archivo WAV canónico para comenzar.</p>
+          <p id="calls-status" class="calls-status" role="status" aria-live="polite" data-i18n="capture.transcription.initial">Seleccione un archivo de audio para comenzar.</p>
         </section>
 
         <section id="calls-result" class="calls-card calls-result" aria-labelledby="calls-result-heading" hidden>

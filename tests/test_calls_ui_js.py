@@ -39,28 +39,31 @@ def _run_node(script: str):
     return json.loads(completed.stdout.strip())
 
 
-def test_wav_only_control_and_client_side_limits():
+def test_common_audio_control_and_client_side_limits():
     assert 'id="calls-file-input"' in INDEX
-    assert 'accept=".wav"' in INDEX
+    for extension in (".wav", ".m4a", ".mp3", ".aac", ".caf", ".flac", ".ogg", ".opus", ".webm", ".mp4", ".mov"):
+        assert extension in INDEX
     result = _run_node(
         """
-        import { MAX_CALLS_WAV_BYTES, validateCallsFile } from 'CALLS_MODULE';
+        import { MAX_CALLS_AUDIO_BYTES, sanitizeCallsFilename, validateCallsFile } from 'CALLS_MODULE';
         const check = (name, size) => validateCallsFile({ name, size });
         console.log(JSON.stringify({
           mp3: check('call.mp3', 10),
           empty: check('call.wav', 0),
-          exact: check('call.WAV', MAX_CALLS_WAV_BYTES),
-          over: check('call.wav', MAX_CALLS_WAV_BYTES + 1),
+          exact: check('call.M4A', MAX_CALLS_AUDIO_BYTES),
+          over: check('call.wav', MAX_CALLS_AUDIO_BYTES + 1),
+          sanitized: sanitizeCallsFilename('../../private/voice\\nname.m4a'),
         }));
         """
     )
-    assert result["mp3"]["code"] == "WAV_REQUIRED"
+    assert result["mp3"] == {"ok": True}
     assert result["empty"]["code"] == "EMPTY_FILE"
     assert result["exact"] == {"ok": True}
     assert result["over"]["code"] == "FILE_TOO_LARGE"
+    assert result["sanitized"] == "voicename.m4a"
 
 
-def test_request_is_raw_same_origin_wav_without_forbidden_headers():
+def test_request_is_raw_same_origin_media_without_forbidden_headers():
     result = _run_node(
         """
         import { requestCallsTranscription } from 'CALLS_MODULE';
@@ -86,10 +89,40 @@ def test_request_is_raw_same_origin_wav_without_forbidden_headers():
     assert result["url"] == "/api/marketmatch/stt/transcribe"
     assert result["method"] == "POST"
     assert result["credentials"] == "same-origin"
-    assert result["headers"] == {"content-type": "audio/wav"}
+    assert result["headers"] == {"content-type": "application/octet-stream"}
     assert result["raw"] is True
     assert result["form"] is False
     assert not ({"authorization", "x-api-key", "x-odysseus-internal-token", "x-odysseus-owner"} & result["headers"].keys())
+
+
+def test_server_media_codes_render_distinct_safe_spanish_errors():
+    result = _run_node(
+        """
+        import { requestCallsTranscription } from 'CALLS_MODULE';
+        const codes = [
+          'UNSUPPORTED_FORMAT', 'INPUT_LIMIT_EXCEEDED', 'DURATION_LIMIT_EXCEEDED',
+          'MALFORMED_AUDIO', 'NO_AUDIO_STREAM', 'CONVERSION_FAILED', 'WORKER_TIMEOUT',
+          'WORKER_FAILED', 'INPUT_DISCONNECTED', 'FFMPEG_UNAVAILABLE',
+        ];
+        const messages = {};
+        for (const code of codes) {
+          try {
+            await requestCallsTranscription({ name: 'memo.m4a', size: 10 }, {
+              fetchImpl: async () => ({
+                ok: false, status: code.includes('LIMIT') ? 413 : 422,
+                json: async () => ({ error: code, message: '/private/path must not display' }),
+              }),
+            });
+          } catch (error) { messages[code] = error.message; }
+        }
+        console.log(JSON.stringify(messages));
+        """
+    )
+    assert len(set(result.values())) >= 8
+    assert all("/private/path" not in message for message in result.values())
+    assert "200 MiB" in result["INPUT_LIMIT_EXCEEDED"]
+    assert "seis horas" in result["DURATION_LIMIT_EXCEEDED"]
+    assert "FFmpeg" in result["FFMPEG_UNAVAILABLE"]
 
 
 def test_duplicate_submit_loading_and_cancellation():
@@ -616,7 +649,7 @@ def test_recording_requires_user_action_transitions_and_reuses_raw_wav_request()
     assert result["request"]["url"] == "/api/marketmatch/stt/transcribe"
     assert result["request"]["method"] == "POST"
     assert result["request"]["credentials"] == "same-origin"
-    assert result["request"]["headers"] == {"content-type": "audio/wav"}
+    assert result["request"]["headers"] == {"content-type": "application/octet-stream"}
     assert result["request"]["rawName"].endswith(".wav")
     assert result["request"]["form"] is False
 

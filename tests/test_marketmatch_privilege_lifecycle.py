@@ -247,10 +247,11 @@ async def test_admin_stored_true_authorizes_calls(tmp_path, monkeypatch):
     receive = CountedReceive([{"type": "http.request", "body": wav_bytes, "more_body": False}])
     worker_calls = 0
 
-    async def transcriber(_wav_bytes, *, deadline):
+    async def transcriber(wav_path, *, byte_limit, duration_limit_ms, deadline):
         nonlocal worker_calls
         worker_calls += 1
-        assert deadline > 0
+        assert wav_path.is_file()
+        assert byte_limit > 44 and duration_limit_ms == 21_600_000 and deadline > 0
         return MarketMatchProcessResult(duration_ms=10, transcript_text="", segments=())
 
     request = _request(

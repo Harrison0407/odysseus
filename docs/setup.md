@@ -440,9 +440,44 @@ Key settings:
 | `ODYSSEUS_PERSONAL_UPLOAD_MAX_BYTES` | `26214400` | Personal document upload cap in bytes (25 MB). |
 | `ODYSSEUS_EMAIL_COMPOSE_UPLOAD_MAX_BYTES` | `26214400` | Email compose attachment cap in bytes (25 MB). |
 | `ODYSSEUS_STT_MAX_AUDIO_BYTES` | `26214400` | Speech-to-text audio cap in bytes (25 MB). |
+| `MARKETMATCH_CALL_AUDIO_MAX_BYTES` | `209715200` | MarketMatch Capture encoded-audio cap (exactly 200 MiB). |
+| `MARKETMATCH_AUDIO_MAX_DURATION_SECONDS` | `21600` | MarketMatch maximum decoded-audio duration (six hours). |
+| `MARKETMATCH_FFPROBE_TIMEOUT_SECONDS` | `30` | Local MarketMatch media-inspection timeout. |
+| `MARKETMATCH_FFMPEG_TIMEOUT_SECONDS` | `7200` | Local MarketMatch audio-conversion timeout. |
+| `MARKETMATCH_STT_UPLOAD_TIMEOUT_SECONDS` | `600` | MarketMatch streaming-ingress timeout. |
+| `MARKETMATCH_STT_TIMEOUT_SECONDS` | `28800` | End-to-end deadline and isolated transcription-worker deadline. |
 | `ODYSSEUS_ICS_MAX_BYTES` | `10485760` | Calendar `.ics` import cap in bytes (10 MB). |
 
 All upload-limit vars are validated (must be a positive integer) and optional; an invalid value fails fast at startup.
+
+### MarketMatch Capture audio transcription
+
+Capture accepts WAV, M4A, MP3, AAC, CAF, FLAC, OGG/Opus, WebM, and MP4/MOV
+files containing one supported audio stream. The encoded request is streamed to
+a private temporary directory and capped at exactly 209715200 bytes; it is not
+buffered in application memory. Local `ffprobe` inspects the actual container,
+codec, streams, and duration, then local `ffmpeg` converts it to the trusted
+internal mono 16 kHz signed 16-bit PCM WAV format. The strict canonical WAV
+validator runs after conversion and before the existing process-isolated local
+Whisper worker. No remote transcription, network conversion, codec download,
+or automatic model download is used.
+
+The decoded duration cap defaults to six hours. Probe, conversion, and
+transcription are bounded; timeout or cancellation terminates and reaps the
+child process. Encoded input, probe output, and canonical WAV are removed on
+every exit. Playlists, network protocols, external references, missing audio,
+multiple audio streams, attachments, malformed containers, and unsupported
+codecs are rejected. A local FFmpeg build can still omit a particular encoder
+or demuxer; only formats proven by that installation are usable.
+
+Manual smoke test:
+
+1. Confirm `ffmpeg -version` and `ffprobe -version` work locally.
+2. Sign in as a user with MarketMatch access and open Capture.
+3. Select an iPhone Voice Memo `.m4a`; verify the UI shows the file and local transcription completes.
+4. Repeat with ordinary WAV, MP3, FLAC, OGG/Opus, and an MP4 or MOV containing audio.
+5. Verify a text file renamed `.m4a`, a video-only MP4, and a file larger than 200 MiB show distinct safe errors.
+6. Select Cancelar during a long run, then verify a new transcription can start and no `marketmatch-audio-*` temporary directory remains.
 
 ### Built-in MCP servers (optional setup)
 

@@ -15,6 +15,7 @@ import math
 import multiprocessing
 from multiprocessing.connection import Connection
 import os
+from pathlib import Path
 import threading
 import time
 from typing import Callable, NoReturn
@@ -29,6 +30,11 @@ from src.marketmatch_canonical_wav import (
     CanonicalWavCode,
     CanonicalWavError,
     transcribe_canonical_wav,
+)
+from src.marketmatch_canonical_wav_file import (
+    MAX_FILE_SEGMENTS,
+    MAX_FILE_TRANSCRIPT_UTF8_BYTES,
+    transcribe_canonical_wav_file,
 )
 from src.marketmatch_i18n import normalize_transcript_language
 
@@ -340,6 +346,45 @@ def _marketmatch_stt_child(
             pass
 
 
+def _marketmatch_stt_file_child(
+    wav_path: str,
+    result_connection: Connection,
+    byte_limit: int,
+    duration_limit_ms: int,
+) -> None:
+    """Spawn target for one trusted temporary canonical-WAV pathname."""
+
+    _scrub_worker_environment()
+    try:
+        try:
+            language_metadata: dict[str, object] = {}
+
+            def _backend_with_metadata(waveform):
+                return _fixed_local_base_backend(waveform, language_metadata)
+
+            transcript = transcribe_canonical_wav_file(
+                Path(wav_path),
+                byte_limit=byte_limit,
+                duration_limit_ms=duration_limit_ms,
+                backend=_backend_with_metadata,
+                transcript_utf8_limit=MAX_FILE_TRANSCRIPT_UTF8_BYTES,
+                segment_limit=MAX_FILE_SEGMENTS,
+            )
+            message = _success_payload(transcript, language_metadata)
+        except CanonicalWavError as error:
+            message = {"error": error.code.value}
+        except Exception:
+            message = {"error": MarketMatchProcessCode.WORKER_FAILED.value}
+        result_connection.send_bytes(_encode_worker_message(message))
+    except Exception:
+        pass
+    finally:
+        try:
+            result_connection.close()
+        except Exception:
+            pass
+
+
 def _remaining(deadline: float) -> float:
     remaining = deadline - time.monotonic()
     if not math.isfinite(remaining) or remaining <= 0:
@@ -394,7 +439,13 @@ def _validate_segment(value: object, *, previous_end: int, duration_ms: int) -> 
     return start, end, text
 
 
-def _decode_parent_result(payload: bytes) -> MarketMatchProcessResult:
+def _decode_parent_result(
+    payload: bytes,
+    *,
+    duration_limit_ms: int = MAX_DURATION_MS,
+    transcript_utf8_limit: int = MAX_TRANSCRIPT_UTF8_BYTES,
+    segment_limit: int = MAX_SEGMENTS,
+) -> MarketMatchProcessResult:
     if type(payload) is not bytes or not payload or len(payload) > MAX_RESULT_JSON_BYTES:
         _fail(MarketMatchProcessCode.WORKER_PROTOCOL_ERROR)
     try:
@@ -426,9 +477,9 @@ def _decode_parent_result(payload: bytes) -> MarketMatchProcessResult:
     language_confidence = value.get("language_confidence")
     if (
         type(duration_ms) is not int
-        or not 0 < duration_ms <= MAX_DURATION_MS
+        or not 0 < duration_ms <= duration_limit_ms
         or type(supplied_segments) is not list
-        or len(supplied_segments) > MAX_SEGMENTS
+        or len(supplied_segments) > segment_limit
         or type(transcript_text) is not str
     ):
         _fail(MarketMatchProcessCode.WORKER_PROTOCOL_ERROR)
@@ -444,7 +495,7 @@ def _decode_parent_result(payload: bytes) -> MarketMatchProcessResult:
         transcript_size = len(transcript_text.encode("utf-8", errors="strict"))
     except UnicodeEncodeError:
         _fail(MarketMatchProcessCode.WORKER_PROTOCOL_ERROR)
-    if transcript_size > MAX_TRANSCRIPT_UTF8_BYTES:
+    if transcript_size > transcript_utf8_limit:
         _fail(MarketMatchProcessCode.WORKER_PROTOCOL_ERROR)
 
     segments: list[tuple[int, int, str]] = []
@@ -459,7 +510,7 @@ def _decode_parent_result(payload: bytes) -> MarketMatchProcessResult:
         )
         previous_end = segment[1]
         segment_text_size += len(segment[2].encode("utf-8", errors="strict"))
-        if segment_text_size > MAX_TRANSCRIPT_UTF8_BYTES:
+        if segment_text_size > transcript_utf8_limit:
             _fail(MarketMatchProcessCode.WORKER_PROTOCOL_ERROR)
         segments.append(segment)
         texts.append(segment[2])
@@ -571,6 +622,102 @@ async def transcribe_in_spawned_process(
                 pass
 
 
+async def transcribe_canonical_file_in_spawned_process(
+    wav_path: Path,
+    *,
+    byte_limit: int,
+    duration_limit_ms: int,
+    deadline: float,
+    _context=None,
+    _target=None,
+) -> MarketMatchProcessResult:
+    """Transcribe a generated file in a killable local worker process."""
+
+    if (
+        not isinstance(wav_path, Path)
+        or not wav_path.is_absolute()
+        or type(byte_limit) is not int
+        or byte_limit <= 44
+        or type(duration_limit_ms) is not int
+        or duration_limit_ms <= 0
+        or type(deadline) not in (int, float)
+        or not math.isfinite(float(deadline))
+    ):
+        _fail(MarketMatchProcessCode.INVALID_INPUT)
+    absolute_deadline = float(deadline)
+    if _remaining(absolute_deadline) <= PROCESS_CLEANUP_RESERVE_SECONDS:
+        _fail(MarketMatchProcessCode.WORKER_TIMEOUT)
+    work_deadline = absolute_deadline - PROCESS_CLEANUP_RESERVE_SECONDS
+    context = _context or multiprocessing.get_context("spawn")
+    target = _target or _marketmatch_stt_file_child
+    result_receive, result_send = context.Pipe(duplex=False)
+    args = (
+        (os.fspath(wav_path), result_send, byte_limit, duration_limit_ms)
+        if _target is None
+        else (os.fspath(wav_path), result_send)
+    )
+    process = context.Process(target=target, args=args, daemon=True)
+    registered = False
+    first_payload: bytes | None = None
+    result_eof = False
+    try:
+        process.start()
+        registered = True
+        _register_process(process)
+        result_send.close()
+        while True:
+            _remaining(work_deadline)
+            if not result_eof and result_receive.poll(0):
+                try:
+                    received = await _await_blocking(
+                        lambda: result_receive.recv_bytes(MAX_RESULT_JSON_BYTES), work_deadline
+                    )
+                except EOFError:
+                    result_eof = True
+                    continue
+                except OSError:
+                    _fail(MarketMatchProcessCode.WORKER_PROTOCOL_ERROR)
+                if first_payload is not None or type(received) is not bytes:
+                    _fail(MarketMatchProcessCode.WORKER_PROTOCOL_ERROR)
+                first_payload = received
+                continue
+            process.join(0)
+            if not process.is_alive():
+                if not result_eof and result_receive.poll(0):
+                    continue
+                break
+            await asyncio.sleep(min(PROCESS_POLL_INTERVAL_SECONDS, _remaining(work_deadline)))
+        process.join()
+        if process.exitcode != 0 or first_payload is None:
+            _fail(MarketMatchProcessCode.WORKER_FAILED)
+        return _decode_parent_result(
+            first_payload,
+            duration_limit_ms=duration_limit_ms,
+            transcript_utf8_limit=MAX_FILE_TRANSCRIPT_UTF8_BYTES,
+            segment_limit=MAX_FILE_SEGMENTS,
+        )
+    except asyncio.CancelledError:
+        raise
+    except MarketMatchProcessError:
+        raise
+    except Exception:
+        _fail(MarketMatchProcessCode.WORKER_FAILED)
+    finally:
+        for connection in (result_receive, result_send):
+            try:
+                connection.close()
+            except Exception:
+                pass
+        if registered:
+            _terminate_and_reap(process)
+            _unregister_process(process)
+        else:
+            try:
+                process.close()
+            except Exception:
+                pass
+
+
 __all__ = (
     "FASTER_WHISPER_BASE_REVISION",
     "MAX_RESULT_JSON_BYTES",
@@ -582,5 +729,6 @@ __all__ = (
     "release_admission",
     "shutdown_active_workers",
     "transcribe_in_spawned_process",
+    "transcribe_canonical_file_in_spawned_process",
     "try_acquire_admission",
 )

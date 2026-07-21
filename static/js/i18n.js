@@ -25,7 +25,12 @@ export function normalizeLocale(value) {
 }
 
 export function normalizeTranscriptLanguage(value) {
-  return normalizeLocale(value) || 'und';
+  if (typeof value !== 'string') return 'und';
+  const key = value.trim().toLowerCase();
+  if (['zh', 'zh-cn', 'zh-sg', 'zh-hans', 'zh-hans-cn', 'cmn', 'cmn-hans'].includes(key)) return 'zh';
+  if (['es', 'es-es', 'es-do'].includes(key)) return 'es';
+  if (['en', 'en-us', 'en-gb'].includes(key)) return 'en';
+  return 'und';
 }
 
 export function resolveLocale({
@@ -63,7 +68,8 @@ export function t(key, params = {}, locale = activeLocale) {
 }
 
 export function languageLabel(code, locale = activeLocale) {
-  const canonical = code === 'und' ? 'und' : (normalizeLocale(code) || 'und');
+  const canonical = code === 'zh' ? 'zh-Hans'
+    : (code === 'zh-Hant' ? 'zh-Hant' : (code === 'und' ? 'und' : (normalizeLocale(code) || 'und')));
   return t(`language.${canonical}`, {}, locale);
 }
 
@@ -200,17 +206,20 @@ export async function saveLocalePreference(locale = activeLocale, { fetchImpl = 
 }
 
 export function resolveAnalysisLanguage(selection, transcriptLanguage, segmentLanguages = []) {
-  const explicit = normalizeLocale(selection);
+  const explicit = selection === 'zh-Hant' ? 'zh-Hant' : normalizeLocale(selection);
   if (selection !== 'auto') return explicit;
-  const globalLanguage = normalizeLocale(transcriptLanguage);
+  const normalizedTranscript = normalizeTranscriptLanguage(transcriptLanguage);
+  const globalLanguage = normalizedTranscript === 'zh' ? 'zh-Hans'
+    : (normalizedTranscript === 'und' ? null : normalizedTranscript);
   if (globalLanguage) return globalLanguage;
-  const supported = segmentLanguages.map(normalizeLocale).filter(Boolean);
+  const supported = segmentLanguages.map(normalizeTranscriptLanguage).filter((item) => item !== 'und')
+    .map((item) => item === 'zh' ? 'zh-Hans' : item);
   if (supported.length) {
     const counts = supported.reduce((acc, item) => ({ ...acc, [item]: (acc[item] || 0) + 1 }), {});
     const ordered = Object.entries(counts).sort((a, b) => b[1] - a[1]);
     if (ordered.length === 1 || ordered[0][1] > ordered[1][1]) return ordered[0][0];
   }
-  return normalizeLocale(activeLocale) || DEFAULT_LOCALE;
+  return DEFAULT_LOCALE;
 }
 
 export function bindLocaleControls(doc = globalThis.document) {

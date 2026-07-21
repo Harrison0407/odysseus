@@ -319,6 +319,20 @@
           <ul id="calls-history-list" class="calls-history-list" aria-label="Captures guardados" data-i18n-aria-label="capture.history.aria" hidden></ul>
         </section>
 
+        <section class="calls-card" aria-labelledby="calls-transcription-language-heading">
+          <h2 id="calls-transcription-language-heading" data-i18n="capture.transcription.language.heading">Idioma de transcripción</h2>
+          <label class="calls-field" for="calls-transcription-language">
+            <span data-i18n="capture.transcription.language.label">Idioma hablado en el audio</span>
+            <select id="calls-transcription-language">
+              <option value="auto" data-i18n="transcription.language.auto">Automático</option>
+              <option value="es" data-i18n="language.option.es">Español</option>
+              <option value="en" data-i18n="language.option.en">English</option>
+              <option value="zh" data-i18n="language.option.zh">中文 / Mandarin</option>
+            </select>
+          </label>
+          <p class="calls-requirements" data-i18n="capture.transcription.language.help">Se aplica al archivo o la grabación y no depende del idioma de la interfaz.</p>
+        </section>
+
         <section class="calls-card calls-recording-card" aria-labelledby="calls-recording-heading">
           <h2 id="calls-recording-heading" data-i18n="capture.voice.microphone.heading">Voz — Micrófono</h2>
           <p id="calls-recording-requirements" class="calls-requirements" data-i18n="capture.voice.microphone.description">Grabe en este navegador y revise el WAV PCM mono de 16 kHz generado antes de transcribir. El acceso al micrófono comienza solo al elegir Iniciar grabación.</p>
@@ -377,9 +391,10 @@
               <span data-i18n="capture.analysis.language.label">Idioma del análisis</span>
               <select id="calls-analysis-language">
                 <option value="auto" data-i18n="analysis.language.auto">Automático — idioma del transcript</option>
-                <option value="es">Español</option>
-                <option value="en">English</option>
-                <option value="zh-Hans">简体中文</option>
+                <option value="es" data-i18n="language.option.es">Español</option>
+                <option value="en" data-i18n="language.option.en">English</option>
+                <option value="zh-Hans" data-i18n="language.option.zh_hans">简体中文</option>
+                <option value="zh-Hant" data-i18n="language.option.zh_hant">繁體中文</option>
               </select>
             </label>
             <p id="calls-analysis-language-resolved" class="calls-file-details"></p>

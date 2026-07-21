@@ -76,6 +76,7 @@ class MarketMatchRouteCode(str, Enum):
     INPUT_DISCONNECTED = "INPUT_DISCONNECTED"
     INPUT_READ_FAILED = "INPUT_READ_FAILED"
     INPUT_READ_TIMEOUT = "INPUT_READ_TIMEOUT"
+    INVALID_TRANSCRIPTION_LANGUAGE = "INVALID_TRANSCRIPTION_LANGUAGE"
 
 
 class MarketMatchRouteError(Exception):
@@ -105,6 +106,7 @@ _ERROR_RESPONSES: dict[str, tuple[int, str]] = {
     MarketMatchRouteCode.INPUT_DISCONNECTED.value: (400, "Audio input was interrupted."),
     MarketMatchRouteCode.INPUT_READ_FAILED.value: (400, "Audio input could not be read."),
     MarketMatchRouteCode.INPUT_READ_TIMEOUT.value: (408, "Audio input timed out."),
+    MarketMatchRouteCode.INVALID_TRANSCRIPTION_LANGUAGE.value: (422, "Transcription language is invalid."),
     CanonicalWavCode.INVALID_INPUT.value: (400, "Audio input is invalid."),
     CanonicalWavCode.INPUT_LIMIT_EXCEEDED.value: (413, "Decoded audio exceeds the configured limit."),
     CanonicalWavCode.INVALID_WAV.value: (422, "Audio input is not a canonical WAV."),
@@ -239,6 +241,15 @@ def _validated_ingress_headers(request: Request) -> int | None:
     return content_length
 
 
+def _requested_transcription_language(request: Request) -> str | None:
+    values = request.headers.getlist("x-marketmatch-transcription-language")
+    if not values:
+        return None
+    if len(values) != 1 or values[0] not in {"auto", "es", "en", "zh"}:
+        _fail(MarketMatchRouteCode.INVALID_TRANSCRIPTION_LANGUAGE)
+    return None if values[0] == "auto" else values[0]
+
+
 async def _stream_raw_audio(
     request: Request,
     *,
@@ -314,6 +325,7 @@ def setup_marketmatch_stt_routes(
         admission_lease: object | None = None
         try:
             _require_marketmatch_cookie_user(request)
+            requested_language = _requested_transcription_language(request)
             admission_lease = try_acquire_admission()
             if admission_lease is None:
                 _fail(MarketMatchRouteCode.TRANSCRIPTION_BUSY)
@@ -329,12 +341,14 @@ def setup_marketmatch_stt_routes(
                     )
                     canonical_path = await prepare_canonical_audio(encoded_path, workdir)
                     duration_limit_ms = int(MARKETMATCH_AUDIO_MAX_DURATION_SECONDS * 1_000)
-                    result = await transcriber(
-                        canonical_path,
-                        byte_limit=canonical_wav_max_bytes(MARKETMATCH_AUDIO_MAX_DURATION_SECONDS),
-                        duration_limit_ms=duration_limit_ms,
-                        deadline=deadline,
-                    )
+                    transcriber_kwargs = {
+                        "byte_limit": canonical_wav_max_bytes(MARKETMATCH_AUDIO_MAX_DURATION_SECONDS),
+                        "duration_limit_ms": duration_limit_ms,
+                        "deadline": deadline,
+                    }
+                    if requested_language is not None:
+                        transcriber_kwargs["requested_language"] = requested_language
+                    result = await transcriber(canonical_path, **transcriber_kwargs)
             finally:
                 cleanup_private_workdir(workspace)
             return _success_response(result)

@@ -279,7 +279,7 @@ async def test_genuine_worker_language_metadata_survives_route_response():
             duration_ms=10,
             transcript_text="那個窗戶",
             segments=((0, 10, "那個窗戶"),),
-            language="zh-Hans",
+            language="zh",
             language_confidence=0.84,
         )
 
@@ -292,8 +292,25 @@ async def test_genuine_worker_language_metadata_survives_route_response():
         + "那個窗戶".encode()
         + b'"}],"transcript_text":"'
         + "那個窗戶".encode()
-        + b'","language":"zh-Hans","language_confidence":0.84}'
+        + b'","language":"zh","language_confidence":0.84}'
     )
+
+
+async def test_requested_mandarin_header_reaches_transcriber_without_ui_locale():
+    observed = []
+
+    async def transcriber(wav_path, *, byte_limit, duration_limit_ms, deadline, requested_language):
+        observed.append(requested_language)
+        return await _ok_transcriber(
+            wav_path, byte_limit=byte_limit, duration_limit_ms=duration_limit_ms, deadline=deadline
+        )
+
+    request = _request(
+        CountedReceive(), headers={"x-marketmatch-transcription-language": "zh"}
+    )
+    response = await _endpoint(transcriber)(request)
+    assert response.status_code == 200
+    assert observed == ["zh"]
 
 
 async def test_localhost_bypass_without_cookie_identity_never_receives_body(monkeypatch):

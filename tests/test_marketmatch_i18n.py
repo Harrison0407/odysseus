@@ -74,7 +74,7 @@ def test_canonical_locale_set_aliases_and_stt_boundary():
     for value, expected in aliases.items():
         assert normalize_locale(value) == expected
     assert normalize_locale("zh-TW") is None
-    assert normalize_transcript_language("zh-CN") == "zh-Hans"
+    assert normalize_transcript_language("zh-CN") == "zh"
     assert normalize_transcript_language("fr") == "und"
     assert normalize_transcript_language(None) == "und"
 

@@ -43,8 +43,14 @@ def normalize_transcript_language(value: object) -> str:
 
     if type(value) is not str:
         return UNDETERMINED_LANGUAGE
-    normalized = normalize_locale(value)
-    return normalized or UNDETERMINED_LANGUAGE
+    key = value.strip().lower()
+    if key in {"zh", "zh-cn", "zh-sg", "zh-hans", "zh-hans-cn", "cmn", "cmn-hans"}:
+        return "zh"
+    if key in {"es", "es-es", "es-do"}:
+        return "es"
+    if key in {"en", "en-us", "en-gb"}:
+        return "en"
+    return UNDETERMINED_LANGUAGE
 
 
 def configured_default_locale() -> tuple[str, str]:

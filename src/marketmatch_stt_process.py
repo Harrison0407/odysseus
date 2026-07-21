@@ -185,7 +185,11 @@ def _fail(code: MarketMatchProcessCode | CanonicalWavCode) -> NoReturn:
     raise MarketMatchProcessError(code) from None
 
 
-def _fixed_local_base_backend(waveform, language_metadata: dict | None = None):
+def _fixed_local_base_backend(
+    waveform,
+    language_metadata: dict | None = None,
+    requested_language: str | None = None,
+):
     """Return exact tuples from the provisioned local faster-whisper base model."""
 
     from faster_whisper import WhisperModel
@@ -198,7 +202,10 @@ def _fixed_local_base_backend(waveform, language_metadata: dict | None = None):
         local_files_only=True,
         revision=FASTER_WHISPER_BASE_REVISION,
     )
-    segments, info = model.transcribe(waveform)
+    if requested_language is None:
+        segments, info = model.transcribe(waveform)
+    else:
+        segments, info = model.transcribe(waveform, language=requested_language)
     if type(language_metadata) is dict:
         language_metadata["language"] = normalize_transcript_language(
             getattr(info, "language", None)
@@ -290,6 +297,7 @@ def _marketmatch_stt_child(
     input_connection: Connection,
     result_connection: Connection,
     result_protocol_version: int = 1,
+    requested_language: str | None = None,
 ) -> None:
     """Spawn target. Receive one WAV message and send one bounded JSON message."""
 
@@ -312,7 +320,9 @@ def _marketmatch_stt_child(
             language_metadata: dict[str, object] = {}
 
             def _backend_with_metadata(waveform):
-                return _fixed_local_base_backend(waveform, language_metadata)
+                if requested_language is None:
+                    return _fixed_local_base_backend(waveform, language_metadata)
+                return _fixed_local_base_backend(waveform, language_metadata, requested_language)
 
             transcript = transcribe_canonical_wav(
                 wav_bytes,
@@ -351,6 +361,7 @@ def _marketmatch_stt_file_child(
     result_connection: Connection,
     byte_limit: int,
     duration_limit_ms: int,
+    requested_language: str | None = None,
 ) -> None:
     """Spawn target for one trusted temporary canonical-WAV pathname."""
 
@@ -360,7 +371,9 @@ def _marketmatch_stt_file_child(
             language_metadata: dict[str, object] = {}
 
             def _backend_with_metadata(waveform):
-                return _fixed_local_base_backend(waveform, language_metadata)
+                if requested_language is None:
+                    return _fixed_local_base_backend(waveform, language_metadata)
+                return _fixed_local_base_backend(waveform, language_metadata, requested_language)
 
             transcript = transcribe_canonical_wav_file(
                 Path(wav_path),
@@ -529,12 +542,15 @@ async def transcribe_in_spawned_process(
     wav_bytes: bytes,
     *,
     deadline: float,
+    requested_language: str | None = None,
     _context=None,
     _target=None,
 ) -> MarketMatchProcessResult:
     """Run one byte-bounded transcription child under an absolute deadline."""
 
     if type(wav_bytes) is not bytes or not wav_bytes or len(wav_bytes) > MAX_WAV_BYTES:
+        _fail(MarketMatchProcessCode.INVALID_INPUT)
+    if requested_language not in {None, "es", "en", "zh"}:
         _fail(MarketMatchProcessCode.INVALID_INPUT)
     if type(deadline) not in (int, float) or not math.isfinite(float(deadline)):
         _fail(MarketMatchProcessCode.INVALID_INPUT)
@@ -548,9 +564,9 @@ async def transcribe_in_spawned_process(
     input_receive, input_send = context.Pipe(duplex=False)
     result_receive, result_send = context.Pipe(duplex=False)
     target_args = (
-        (input_receive, result_send, 2)
-        if _target is None
-        else (input_receive, result_send)
+        ((input_receive, result_send, 2) if requested_language is None
+         else (input_receive, result_send, 2, requested_language))
+        if _target is None else (input_receive, result_send)
     )
     process = context.Process(target=target, args=target_args, daemon=True)
     registered = False
@@ -628,6 +644,7 @@ async def transcribe_canonical_file_in_spawned_process(
     byte_limit: int,
     duration_limit_ms: int,
     deadline: float,
+    requested_language: str | None = None,
     _context=None,
     _target=None,
 ) -> MarketMatchProcessResult:
@@ -642,6 +659,7 @@ async def transcribe_canonical_file_in_spawned_process(
         or duration_limit_ms <= 0
         or type(deadline) not in (int, float)
         or not math.isfinite(float(deadline))
+        or requested_language not in {None, "es", "en", "zh"}
     ):
         _fail(MarketMatchProcessCode.INVALID_INPUT)
     absolute_deadline = float(deadline)
@@ -652,9 +670,10 @@ async def transcribe_canonical_file_in_spawned_process(
     target = _target or _marketmatch_stt_file_child
     result_receive, result_send = context.Pipe(duplex=False)
     args = (
-        (os.fspath(wav_path), result_send, byte_limit, duration_limit_ms)
-        if _target is None
-        else (os.fspath(wav_path), result_send)
+        ((os.fspath(wav_path), result_send, byte_limit, duration_limit_ms)
+         if requested_language is None else
+         (os.fspath(wav_path), result_send, byte_limit, duration_limit_ms, requested_language))
+        if _target is None else (os.fspath(wav_path), result_send)
     )
     process = context.Process(target=target, args=args, daemon=True)
     registered = False

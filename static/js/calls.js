@@ -33,7 +33,6 @@ const MAX_CALLS_HISTORY_ITEMS = 20;
 export const MAX_CALLS_WAV_BYTES = 20 * 1024 * 1024;
 export const MAX_CALLS_AUDIO_BYTES = 200 * 1024 * 1024;
 export const CALLS_WAV_SAMPLE_RATE = 16000;
-export const MAX_CALLS_ANALYSIS_TRANSCRIPT_CHARS = 12000;
 export const MAX_CAPTURE_PHOTO_BYTES = 20 * 1024 * 1024;
 export const MAX_CAPTURE_VIDEO_BYTES = 100 * 1024 * 1024;
 export const MAX_CAPTURE_CAPTION_CHARS = 500;
@@ -549,7 +548,7 @@ function _validateSuccessPayload(value) {
       throw new CallsUiError('MALFORMED_RESPONSE', GENERIC_FAILURE);
     }
     const normalized = segment.language === undefined ? null : segment.language;
-    if (normalized !== null && !['es', 'en', 'zh-Hans', 'und'].includes(normalized)) {
+    if (normalized !== null && !['es', 'en', 'zh', 'und'].includes(normalized)) {
       throw new CallsUiError('MALFORMED_RESPONSE', GENERIC_FAILURE);
     }
     return {
@@ -563,7 +562,7 @@ function _validateSuccessPayload(value) {
     throw new CallsUiError('MALFORMED_RESPONSE', GENERIC_FAILURE);
   }
   const language = value.language === undefined ? 'und' : value.language;
-  if (!['es', 'en', 'zh-Hans', 'und'].includes(language)) {
+  if (!['es', 'en', 'zh', 'und'].includes(language)) {
     throw new CallsUiError('MALFORMED_RESPONSE', GENERIC_FAILURE);
   }
   const confidence = value.language_confidence;
@@ -580,15 +579,24 @@ function _validateSuccessPayload(value) {
   };
 }
 
-export async function requestCallsTranscription(file, { fetchImpl = globalThis.fetch, signal } = {}) {
+export async function requestCallsTranscription(
+  file,
+  { sourceLanguage = 'auto', fetchImpl = globalThis.fetch, signal } = {},
+) {
   const validation = validateCallsFile(file);
   if (!validation.ok) throw new CallsUiError(validation.code, validation.message);
+  if (!['auto', 'es', 'en', 'zh'].includes(sourceLanguage)) {
+    throw new CallsUiError('TRANSCRIPTION_LANGUAGE_INVALID', GENERIC_FAILURE);
+  }
   let response;
   try {
     response = await fetchImpl(ENDPOINT, {
       method: 'POST',
       credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/octet-stream' },
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'X-MarketMatch-Transcription-Language': sourceLanguage,
+      },
       body: file,
       signal,
     });
@@ -687,19 +695,19 @@ function _analysisTextCharacters(value) {
 
 export async function requestCallsAnalysis(
   transcript,
-  { outputLanguage = 'es', fetchImpl = globalThis.fetch, signal } = {},
+  {
+    outputLanguage = 'auto', transcriptLanguage = 'und', fetchImpl = globalThis.fetch, signal,
+  } = {},
 ) {
   if (typeof transcript !== 'string' || !transcript.trim()) {
     throw new CallsUiError('ANALYSIS_EMPTY', 'capture.status.analysis_empty');
   }
-  if (_analysisTextCharacters(transcript) > MAX_CALLS_ANALYSIS_TRANSCRIPT_CHARS) {
-    throw new CallsUiError(
-      'ANALYSIS_TOO_LONG',
-      'capture.status.analysis_too_long',
-    );
+  const canonicalOutputLanguage = outputLanguage === 'auto' || outputLanguage === 'zh-Hant'
+    ? outputLanguage : normalizeLocale(outputLanguage);
+  if (!canonicalOutputLanguage || !['auto', 'es', 'en', 'zh-Hans', 'zh-Hant'].includes(canonicalOutputLanguage)) {
+    throw new CallsUiError('ANALYSIS_LANGUAGE_INVALID', ANALYSIS_FAILURE);
   }
-  const canonicalOutputLanguage = normalizeLocale(outputLanguage);
-  if (!canonicalOutputLanguage) {
+  if (!['und', 'es', 'en', 'zh'].includes(transcriptLanguage)) {
     throw new CallsUiError('ANALYSIS_LANGUAGE_INVALID', ANALYSIS_FAILURE);
   }
   let response;
@@ -708,7 +716,11 @@ export async function requestCallsAnalysis(
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transcript, output_language: canonicalOutputLanguage }),
+      body: JSON.stringify({
+        transcript,
+        output_language: canonicalOutputLanguage,
+        transcript_language: transcriptLanguage,
+      }),
       signal,
     });
   } catch (error) {
@@ -964,6 +976,7 @@ export function createCallsController({
   let timelineSequence = 1;
   let timeline = [{ id: 'capture-event-1', code: 'CAPTURE_STARTED', params: {}, at: captureCreatedAt }];
   let historyDocuments = [];
+  let transcriptionLanguage = 'auto';
   let analysisLanguage = 'auto';
   let resolvedAnalysisOutputLanguage = getLocale();
   let cameraMode = null;
@@ -1764,6 +1777,7 @@ export function createCallsController({
     addTimelineEvent('CAPTURE_TRANSCRIPTION_STARTED');
     try {
       const next = await requestCallsTranscription(selectedFile, {
+        sourceLanguage: transcriptionLanguage,
         fetchImpl,
         signal: controller.signal,
       });
@@ -1866,16 +1880,6 @@ export function createCallsController({
       callView('setAnalysisStatus', t('capture.status.analysis_empty'), 'error');
       return false;
     }
-    if (_analysisTextCharacters(transcript) > MAX_CALLS_ANALYSIS_TRANSCRIPT_CHARS) {
-      callView('beginAnalysisAttempt');
-      callView(
-        'setAnalysisStatus',
-        t('capture.status.analysis_too_long'),
-        'error',
-      );
-      callView('setAnalysisBusy', false);
-      return false;
-    }
     analysisActive = true;
     analysis = null;
     syncResolvedAnalysisLanguage();
@@ -1883,10 +1887,26 @@ export function createCallsController({
     analysisController = createAbortController();
     callView('beginAnalysisAttempt');
     callView('setAnalysisBusy', true);
-    callView('setAnalysisStatus', t('capture.status.analysis_generating'), 'loading');
+    const cjkCount = (transcript.match(/[\u3400-\u9fff]/gu) || []).length;
+    const estimatedBlockSize = cjkCount * 2 >= transcript.length ? 1800 : 9000;
+    const estimatedBlocks = Math.max(1, Math.min(512, Math.ceil(transcript.length / estimatedBlockSize)));
+    let progressBlock = 1;
+    const renderProgress = () => callView(
+      'setAnalysisStatus',
+      estimatedBlocks > 1
+        ? t('capture.status.analysis_progress', { current: progressBlock, total: estimatedBlocks })
+        : t('capture.status.analysis_generating'),
+      'loading',
+    );
+    renderProgress();
+    const progressTimer = estimatedBlocks > 1 ? setIntervalFn(() => {
+      progressBlock = Math.min(estimatedBlocks, progressBlock + 1);
+      renderProgress();
+    }, 1500) : null;
     try {
       const next = await requestCallsAnalysis(transcript, {
-        outputLanguage: resolvedAnalysisOutputLanguage,
+        outputLanguage: analysisLanguage,
+        transcriptLanguage: result.language,
         fetchImpl,
         signal: analysisController.signal,
       });
@@ -1906,6 +1926,7 @@ export function createCallsController({
       }
       return false;
     } finally {
+      if (progressTimer !== null) clearIntervalFn(progressTimer);
       if (run === analysisGeneration) {
         analysisActive = false;
         analysisController = null;
@@ -1927,7 +1948,7 @@ export function createCallsController({
   }
 
   function setAnalysisLanguage(value) {
-    if (value !== 'auto' && !normalizeLocale(value)) return false;
+    if (!['auto', 'es', 'en', 'zh-Hans', 'zh-Hant'].includes(value)) return false;
     if (analysisActive) clearAnalysisState();
     analysisLanguage = value;
     analysis = null;
@@ -1935,6 +1956,13 @@ export function createCallsController({
     syncResolvedAnalysisLanguage();
     callView('setAnalysisLanguage', analysisLanguage);
     callView('showAnalysisReady', Boolean(result && result.transcript_text));
+    return true;
+  }
+
+  function setTranscriptionLanguage(value) {
+    if (!['auto', 'es', 'en', 'zh'].includes(value) || active) return false;
+    transcriptionLanguage = value;
+    callView('setTranscriptionLanguage', value);
     return true;
   }
 
@@ -2101,6 +2129,7 @@ export function createCallsController({
     copyTranscript,
     generateAnalysis,
     setAnalysisLanguage,
+    setTranscriptionLanguage,
     onLocaleChanged,
     copyAnalysis,
     addCaptureMedia,
@@ -2144,6 +2173,7 @@ function _domView(doc) {
   const transcript = byId('calls-transcript');
   const summary = byId('calls-result-summary');
   const transcriptLanguage = byId('calls-transcript-language');
+  const transcriptionLanguageInput = byId('calls-transcription-language');
   const empty = byId('calls-empty-result');
   const segmentsWrap = byId('calls-segments-wrap');
   const segmentsList = byId('calls-segments');
@@ -2237,6 +2267,7 @@ function _domView(doc) {
     analysisRegenerate.disabled = operationBusy || !analysisReady;
     analysisCopy.disabled = operationBusy || !analysisComplete;
     analysisLanguageInput.disabled = transcriptionBusy || saveBusy || captureBusy();
+    transcriptionLanguageInput.disabled = operationBusy;
     cameraPhotoCapture.hidden = cameraUiMode !== 'photo';
     cameraPhotoCapture.disabled = cameraUiState !== 'ready';
     cameraVideoStart.hidden = cameraUiMode !== 'video' || cameraUiState !== 'ready';
@@ -2579,6 +2610,9 @@ function _domView(doc) {
     setAnalysisLanguage(value) {
       analysisLanguageInput.value = value;
     },
+    setTranscriptionLanguage(value) {
+      transcriptionLanguageInput.value = value;
+    },
     setResolvedAnalysisLanguage(value) {
       setElementText(analysisLanguageResolved, t('capture.analysis.resolved_language', {
         language: languageLabel(value),
@@ -2781,6 +2815,7 @@ export function init(doc = globalThis.document, { openDocument } = {}) {
   const saveTitle = doc.getElementById('calls-save-title');
   const captureType = doc.getElementById('calls-capture-type');
   const captureNotes = doc.getElementById('calls-capture-notes');
+  const transcriptionLanguage = doc.getElementById('calls-transcription-language');
   const analysisLanguage = doc.getElementById('calls-analysis-language');
   const photoInput = doc.getElementById('calls-photo-input');
   const photoCameraButton = doc.getElementById('calls-photo-camera-btn');
@@ -2835,6 +2870,9 @@ export function init(doc = globalThis.document, { openDocument } = {}) {
   });
   analysisLanguage.addEventListener('change', () => {
     controller.setAnalysisLanguage(analysisLanguage.value);
+  });
+  transcriptionLanguage.addEventListener('change', () => {
+    controller.setTranscriptionLanguage(transcriptionLanguage.value);
   });
   doc.getElementById('calls-submit-btn').addEventListener('click', () => controller.submit());
   doc.getElementById('calls-cancel-btn').addEventListener('click', () => controller.cancel());

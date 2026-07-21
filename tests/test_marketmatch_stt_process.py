@@ -532,7 +532,29 @@ def test_fixed_backend_exposes_genuine_global_language_metadata(monkeypatch, raw
     metadata = {}
     result = tuple(process_module._fixed_local_base_backend(np.zeros(16_000), metadata))
     assert result == ((0.0, 1.0, "原文"),)
-    assert metadata == {"language": "zh-Hans", "language_confidence": 0.875}
+    assert metadata == {"language": "zh", "language_confidence": 0.875}
+
+
+def test_requested_mandarin_reaches_existing_local_whisper_boundary(monkeypatch):
+    observed = []
+
+    class Model:
+        def __init__(self, model, **kwargs):
+            assert model == "base"
+            assert kwargs["local_files_only"] is True
+
+        def transcribe(self, waveform, **kwargs):
+            observed.append(kwargs)
+            segment = types.SimpleNamespace(start=0, end=0.25, text="决定")
+            info = types.SimpleNamespace(language="zh", language_probability=0.9)
+            return [segment], info
+
+    monkeypatch.setitem(os.sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=Model))
+    result = tuple(process_module._fixed_local_base_backend(
+        np.zeros(4_000), {}, requested_language="zh"
+    ))
+    assert result == ((0.0, 0.25, "决定"),)
+    assert observed == [{"language": "zh"}]
 
 
 def test_parent_accepts_language_metadata_without_segment_language_invention():

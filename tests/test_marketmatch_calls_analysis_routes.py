@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 from types import SimpleNamespace
 
 import httpx
@@ -107,6 +108,23 @@ def _response_json(response):
     return json.loads(response.body)
 
 
+def test_only_exact_equivalent_final_items_are_deduplicated_in_order():
+    result = route_module.AnalysisResponse.model_validate({
+        "summary": "Summary",
+        "decisions": ["Use WA-10.", "Use WA-10.", "Use WA-10!"],
+        "action_items": [
+            {"task": "Send it.", "owner": "Ana", "due_date": "Friday"},
+            {"task": "Send it.", "owner": "Ana", "due_date": "Friday"},
+            {"task": "Send it.", "owner": "Bo", "due_date": "Friday"},
+        ],
+        "open_questions": ["When?", "When?", "Where?"],
+    })
+    deduplicated = route_module.deduplicate_exact_items(result)
+    assert deduplicated.decisions == ["Use WA-10.", "Use WA-10!"]
+    assert [item.owner for item in deduplicated.action_items] == ["Ana", "Bo"]
+    assert deduplicated.open_questions == ["When?", "Where?"]
+
+
 @pytest.fixture(autouse=True)
 def _auth_enabled(monkeypatch):
     monkeypatch.setenv("AUTH_ENABLED", "true")
@@ -147,11 +165,12 @@ async def test_authorized_request_invokes_local_model_once_with_safe_options():
     assert args[0].startswith("http://127.0.0.1:")
     assert args[1] == "local-model"
     assert "meeting text" not in args[0]
-    assert args[2][1] == {"role": "user", "content": "Transcript:\nmeeting text"}
+    assert args[2][1]["role"] == "user"
+    assert "<transcript-source>\n  meeting text  \n</transcript-source>" in args[2][1]["content"]
     assert kwargs["max_retries"] == 1
     assert kwargs["use_cache"] is False
     assert kwargs["temperature"] == 0.0
-    assert kwargs["timeout"] == 120
+    assert kwargs["timeout"] == 90
     assert kwargs["max_tokens"] == 2048
     assert "session_id" not in kwargs
     assert "Write every human-readable JSON value in English" in args[2][0]["content"]
@@ -188,7 +207,10 @@ def test_analysis_prompt_has_conservative_classification_rules_and_examples():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("language,name", [("es", "Spanish"), ("en", "English"), ("zh-Hans", "Simplified Chinese")])
+@pytest.mark.parametrize("language,name", [
+    ("es", "Spanish"), ("en", "English"),
+    ("zh-Hans", "Simplified Chinese"), ("zh-Hant", "Traditional Chinese"),
+])
 async def test_output_language_is_whitelisted_and_prompt_only(language, name):
     calls = []
 
@@ -208,7 +230,7 @@ async def test_output_language_is_whitelisted_and_prompt_only(language, name):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("language", ["auto", "fr", "zh-CN", "", 123, None])
+@pytest.mark.parametrize("language", ["fr", "zh-CN", "", 123, None])
 async def test_invalid_output_language_is_rejected_before_inference(language):
     called = False
 
@@ -244,6 +266,42 @@ async def test_strict_schema_accepts_unicode_values_in_each_supported_output_lan
         "action_items": [],
         "open_questions": [],
     }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("transcript", "requested", "expected_prompt"),
+    [
+        ("团队决定采用方案。李明周五发送图纸。还有哪些问题？", "auto", "Simplified Chinese"),
+        ("团队决定采用方案。", "es", "Spanish"),
+        ("团队决定采用方案。", "en", "English"),
+        ("El equipo decidió el plan.", "zh-Hans", "Simplified Chinese"),
+        ("The team decided the plan.", "zh-Hant", "Traditional Chinese"),
+    ],
+)
+async def test_auto_and_all_explicit_output_languages(transcript, requested, expected_prompt):
+    prompts = []
+
+    async def invoke(*args, **kwargs):
+        prompts.append(args[2][0]["content"])
+        return json.dumps({
+            "summary": "摘要", "decisions": ["决定采用方案"],
+            "action_items": [{"task": "发送图纸", "owner": "李明", "due_date": "周五"}],
+            "open_questions": ["还有哪些问题？"],
+        }, ensure_ascii=False)
+
+    response = await _endpoint(invoker=invoke)(
+        _request({"transcript": transcript, "output_language": requested})[0]
+    )
+    assert response.status_code == 200
+    assert f"in {expected_prompt}" in prompts[0]
+    rendered = _response_json(response)
+    assert rendered["summary"] == "摘要"
+    assert rendered["decisions"] == ["决定采用方案"]
+    assert rendered["action_items"] == [
+        {"task": "发送图纸", "owner": "李明", "due_date": "周五"}
+    ]
+    assert rendered["open_questions"] == ["还有哪些问题？"]
 
 
 @pytest.mark.asyncio
@@ -299,6 +357,61 @@ async def test_oversized_transcript_rejected_before_resolution_or_inference():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("length", [12_001, 100_000, 500_000])
+async def test_long_transcript_boundaries_are_accepted_and_hierarchically_processed(length):
+    calls = []
+
+    async def invoke(*args, **kwargs):
+        calls.append((args, kwargs))
+        return _valid_result(decisions=[], action_items=[], open_questions=[])
+
+    transcript = ("Fictional meeting sentence. " * ((length // 28) + 1))[:length]
+    response = await _endpoint(invoker=invoke)(
+        _request({"transcript": transcript, "output_language": "en"})[0]
+    )
+    assert response.status_code == 200
+    assert calls
+    mapped = [call for call in calls if "SOURCE OFFSETS" in call[0][2][1]["content"]]
+    assert mapped
+    ranges = [
+        tuple(map(int, re.search(r"SOURCE OFFSETS \[(\d+),(\d+)\)", call[0][2][1]["content"]).groups()))
+        for call in mapped
+    ]
+    assert ranges[0][0] == 0
+    assert ranges[-1][1] == length
+    assert all(left[1] == right[0] for left, right in zip(ranges, ranges[1:]))
+
+
+@pytest.mark.asyncio
+async def test_configured_limit_and_one_million_hard_ceiling_are_enforced(monkeypatch):
+    invoked = 0
+
+    async def invoke(*args, **kwargs):
+        nonlocal invoked
+        invoked += 1
+        return _valid_result()
+
+    monkeypatch.setenv("MARKETMATCH_ANALYSIS_MAX_TRANSCRIPT_CHARS", "20000")
+    response = await _endpoint(invoker=invoke)(
+        _request({"transcript": "x" * 20_001, "output_language": "en"})[0]
+    )
+    assert response.status_code == 413
+    monkeypatch.setenv("MARKETMATCH_ANALYSIS_MAX_TRANSCRIPT_CHARS", "2000000")
+    assert route_module.configured_max_transcript_chars() == 1_000_000
+    response = await _endpoint(invoker=invoke)(
+        _request({"transcript": "x" * 1_000_000, "output_language": "en"})[0]
+    )
+    assert response.status_code == 200
+    accepted_invocations = invoked
+    assert accepted_invocations > 0
+    response = await _endpoint(invoker=invoke)(
+        _request({"transcript": "x" * 1_000_001, "output_language": "en"})[0]
+    )
+    assert response.status_code == 413
+    assert invoked == accepted_invocations
+
+
+@pytest.mark.asyncio
 async def test_oversized_declared_body_rejected_before_body_consumption():
     request, receive = _request(headers={"content-length": str(route_module.MAX_REQUEST_BYTES + 1)})
     response = await _endpoint()(request)
@@ -351,7 +464,7 @@ async def test_runtime_failure_is_safe_and_has_no_fallback():
 
     request, _ = _request()
     response = await _endpoint(invoker=invoke)(request)
-    assert calls == 1
+    assert calls == 2
     assert response.status_code == 503
     assert _response_json(response) == {
         "error": "ANALYSIS_FAILED",

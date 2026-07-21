@@ -89,7 +89,10 @@ def test_request_is_raw_same_origin_media_without_forbidden_headers():
     assert result["url"] == "/api/marketmatch/stt/transcribe"
     assert result["method"] == "POST"
     assert result["credentials"] == "same-origin"
-    assert result["headers"] == {"content-type": "application/octet-stream"}
+    assert result["headers"] == {
+        "content-type": "application/octet-stream",
+        "x-marketmatch-transcription-language": "auto",
+    }
     assert result["raw"] is True
     assert result["form"] is False
     assert not ({"authorization", "x-api-key", "x-odysseus-internal-token", "x-odysseus-owner"} & result["headers"].keys())
@@ -266,7 +269,7 @@ def test_repeated_transcription_state_is_ordered_validated_and_stale_safe():
         pending[5].resolve(response(success('legacy success')));
         const thirdResult = await third;
         const fourth = controller.submit();
-        pending[6].resolve(response(success('zh success', 'zh-Hans', null)));
+        pending[6].resolve(response(success('zh success', 'zh', null)));
         const fourthResult = await fourth;
 
         // A structurally invalid 200 is a failure and never earns completed.
@@ -357,7 +360,7 @@ def test_transcription_contract_accepts_legacy_and_additive_language_metadata():
           { duration_ms: 1000, segments: [{ start_ms: 0, end_ms: 1000, text: 'legacy' }], transcript_text: 'legacy' },
           { duration_ms: 1000, segments: [{ start_ms: 0, end_ms: 1000, text: 'hola' }], transcript_text: 'hola', language: 'es', language_confidence: 0.91, additive: 'allowed' },
           { duration_ms: 1000, segments: [{ start_ms: 0, end_ms: 1000, text: 'hello' }], transcript_text: 'hello', language: 'en', language_confidence: null },
-          { duration_ms: 1000, segments: [{ start_ms: 0, end_ms: 1000, text: '你好' }], transcript_text: '你好', language: 'zh-Hans' },
+          { duration_ms: 1000, segments: [{ start_ms: 0, end_ms: 1000, text: '你好' }], transcript_text: '你好', language: 'zh' },
           { duration_ms: 1000, segments: [], transcript_text: '', language: 'und', language_confidence: null },
         ];
         const accepted = [];
@@ -367,7 +370,7 @@ def test_transcription_contract_accepts_legacy_and_additive_language_metadata():
         console.log(JSON.stringify(accepted));
         """
     )
-    assert [item["language"] for item in result] == ["und", "es", "en", "zh-Hans", "und"]
+    assert [item["language"] for item in result] == ["und", "es", "en", "zh", "und"]
     assert result[1]["language_confidence"] == 0.91
     assert result[2]["language_confidence"] is None
     assert [item["transcript_text"] for item in result] == ["legacy", "hola", "hello", "你好", ""]
@@ -649,7 +652,10 @@ def test_recording_requires_user_action_transitions_and_reuses_raw_wav_request()
     assert result["request"]["url"] == "/api/marketmatch/stt/transcribe"
     assert result["request"]["method"] == "POST"
     assert result["request"]["credentials"] == "same-origin"
-    assert result["request"]["headers"] == {"content-type": "application/octet-stream"}
+    assert result["request"]["headers"] == {
+        "content-type": "application/octet-stream",
+        "x-marketmatch-transcription-language": "auto",
+    }
     assert result["request"]["rawName"].endswith(".wav")
     assert result["request"]["form"] is False
 
@@ -1389,13 +1395,13 @@ def test_auto_analysis_language_tracks_current_transcript_without_stale_state():
         const spanish = await apply('hola', 'es');
         const english = await apply('hello', 'en');
         const analyzed = await controller.generateAnalysis();
-        const chinese = await apply('你好', 'zh-Hans');
+        const chinese = await apply('你好', 'zh');
         const unknown = await apply('unknown', 'und');
 
         const currentEnglish = await apply('current english', 'en');
         controller.setAnalysisLanguage('es');
         const explicitBeforeTranscript = resolved.at(-1);
-        const explicitAfterChinese = await apply('later chinese', 'zh-Hans');
+        const explicitAfterChinese = await apply('later chinese', 'zh');
         setTemporaryLocale('en');
         controller.onLocaleChanged();
         const explicitAfterLocale = resolved.at(-1);
@@ -1419,7 +1425,7 @@ def test_auto_analysis_language_tracks_current_transcript_without_stale_state():
     assert result["english"] == {"ok": True, "resolved": "en"}
     assert result["analyzed"] is True
     assert result["analysisBodies"] == [
-        {"transcript": "hello", "output_language": "en"},
+        {"transcript": "hello", "output_language": "auto", "transcript_language": "en"},
     ]
     assert result["chinese"] == {"ok": True, "resolved": "zh-Hans"}
     assert result["unknown"] == {"ok": True, "resolved": "es"}
@@ -1430,14 +1436,13 @@ def test_auto_analysis_language_tracks_current_transcript_without_stale_state():
     assert result["autoAfterExplicit"] == "zh-Hans"
     assert result["autoEnglish"] == {"ok": True, "resolved": "en"}
     assert result["autoSpanish"] == {"ok": True, "resolved": "es"}
-    assert result["afterClear"] == "en"
+    assert result["afterClear"] == "es"
 
 
 def test_analysis_request_is_exact_bounded_same_origin_json_and_strictly_validated():
     result = _run_node(
         """
         import {
-          MAX_CALLS_ANALYSIS_TRANSCRIPT_CHARS,
           formatCallsAnalysisText,
           requestCallsAnalysis,
         } from 'CALLS_MODULE';
@@ -1456,15 +1461,9 @@ def test_analysis_request_is_exact_bounded_same_origin_json_and_strictly_validat
           return { ok: true, status: 200, json: async () => valid };
         };
         const analysis = await requestCallsAnalysis(transcript, { fetchImpl });
-        let oversized;
-        try {
-          await requestCallsAnalysis('x'.repeat(MAX_CALLS_ANALYSIS_TRANSCRIPT_CHARS + 1), { fetchImpl });
-        } catch (error) {
-          oversized = { code: error.code, message: error.message };
-        }
         const firstCaptured = captured;
         let unicodeBoundaryCalls = 0;
-        await requestCallsAnalysis('😀'.repeat(MAX_CALLS_ANALYSIS_TRANSCRIPT_CHARS), {
+        await requestCallsAnalysis('😀'.repeat(12001), {
           fetchImpl: async () => {
             unicodeBoundaryCalls += 1;
             return { ok: true, status: 200, json: async () => valid };
@@ -1485,7 +1484,6 @@ def test_analysis_request_is_exact_bounded_same_origin_json_and_strictly_validat
           optionKeys: Object.keys(firstCaptured.options).sort(),
           analysis,
           copied: formatCallsAnalysisText(analysis),
-          oversized,
         }));
         """
     )
@@ -1496,15 +1494,53 @@ def test_analysis_request_is_exact_bounded_same_origin_json_and_strictly_validat
     assert result["method"] == "POST"
     assert result["credentials"] == "same-origin"
     assert result["headers"] == {"content-type": "application/json"}
-    assert result["body"] == {"transcript": "Complete transcript only", "output_language": "es"}
-    assert result["bodyKeys"] == ["output_language", "transcript"]
+    assert result["body"] == {
+        "transcript": "Complete transcript only",
+        "output_language": "auto",
+        "transcript_language": "und",
+    }
+    assert result["bodyKeys"] == ["output_language", "transcript", "transcript_language"]
     assert not ({"authorization", "x-api-key", "x-odysseus-internal-token", "x-odysseus-owner"} & result["headers"].keys())
-    assert result["oversized"]["code"] == "ANALYSIS_TOO_LONG"
     assert "Resumen\n<b>Summary stays text</b>" in result["copied"]
     assert "Decisiones\nNinguno identificado." in result["copied"]
     assert "Responsable: No indicado." in result["copied"]
     assert "Fecha límite: No indicado." in result["copied"]
     assert "Preguntas abiertas\nNinguno identificado." in result["copied"]
+
+
+def test_ui_locale_does_not_force_transcription_or_analysis_language_choices():
+    result = _run_node(
+        """
+        import { requestCallsTranscription, requestCallsAnalysis } from 'CALLS_MODULE';
+        import { setTemporaryLocale } from 'I18N_MODULE';
+        const file = { name: 'fictional.wav', size: 46 };
+        const sttHeaders = [];
+        const analysisBodies = [];
+        const sttPayload = { duration_ms: 1, segments: [], transcript_text: '', language: 'und', language_confidence: null };
+        const analysisPayload = { summary: 'ok', decisions: [], action_items: [], open_questions: [] };
+        const sttFetch = async (_url, options) => {
+          sttHeaders.push(options.headers);
+          return { ok: true, status: 200, json: async () => sttPayload };
+        };
+        const analysisFetch = async (_url, options) => {
+          analysisBodies.push(JSON.parse(options.body));
+          return { ok: true, status: 200, json: async () => analysisPayload };
+        };
+        setTemporaryLocale('es');
+        await requestCallsTranscription(file, { fetchImpl: sttFetch });
+        setTemporaryLocale('en');
+        await requestCallsTranscription(file, { sourceLanguage: 'zh', fetchImpl: sttFetch });
+        for (const outputLanguage of ['auto', 'es', 'en', 'zh-Hans', 'zh-Hant']) {
+          await requestCallsAnalysis('中文 English', { outputLanguage, transcriptLanguage: 'zh', fetchImpl: analysisFetch });
+        }
+        console.log(JSON.stringify({ sttHeaders, analysisBodies }));
+        """
+    )
+    assert [headers["X-MarketMatch-Transcription-Language"] for headers in result["sttHeaders"]] == ["auto", "zh"]
+    assert [body["output_language"] for body in result["analysisBodies"]] == [
+        "auto", "es", "en", "zh-Hans", "zh-Hant",
+    ]
+    assert all(body["transcript_language"] == "zh" for body in result["analysisBodies"])
 
 
 def test_analysis_safe_errors_and_malformed_responses_never_expose_backend_details():
@@ -1974,7 +2010,7 @@ def test_capture_media_dom_privacy_timeline_hooks_and_analysis_boundary():
     assert "readAsDataURL" not in SOURCE
     assert "console.log" not in SOURCE
     assert "console.error" not in SOURCE
-    assert "JSON.stringify({ transcript, output_language: canonicalOutputLanguage })" in SOURCE
+    assert "transcript_language: transcriptLanguage" in SOURCE
     assert 'id="calls-photo-camera-input"' not in INDEX
     assert 'id="calls-video-camera-input"' not in INDEX
 

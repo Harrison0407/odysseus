@@ -423,7 +423,8 @@ def test_timeline_uses_stable_codes_and_no_browser_persistence_or_remote_transla
     assert "translate.googleapis" not in CALLS
     assert "navigator.language" not in i18n_source
     assert "output_language" in CALLS
-    assert "photos" not in re.search(r"JSON\.stringify\(\{ transcript, output_language: canonicalOutputLanguage \}\)", CALLS).group(0)
+    request_body = re.search(r"JSON\.stringify\(\{\s*transcript,\s*output_language: canonicalOutputLanguage,\s*transcript_language: transcriptLanguage,\s*\}\)", CALLS).group(0)
+    assert "photos" not in request_body
 
 
 def test_capture_dynamic_errors_and_timeline_messages_are_catalog_driven():

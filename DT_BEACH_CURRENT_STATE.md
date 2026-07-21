@@ -1,6 +1,6 @@
 # DT Beach Supply Control — Current State
 
-Last updated: 2026-07-20
+Last updated: 2026-07-21
 
 ## Foundation status: CLOSED AND OWNER-ACCEPTED
 
@@ -342,15 +342,23 @@ dedicated `EXEMPT_PACKAGE_FROM_PROCUREMENT_GATES`; and identifier-only audit
 metadata. Additive migrations `procurement_gates.0003` and `.0004` enforce
 database invariants and route the Django base managers through the protected
 querysets. The
-corrected Increment 1 remains pending read-only Codex re-verification and
-Harrison acceptance. Fresh correction validation collected 615 tests: 613
-passed and the 2 real PostgreSQL concurrency tests were skipped on SQLite;
-77/77 migrations are applied. PostgreSQL concurrency execution remains pending
-and is not claimed. Increment 2 remains unauthorized.
+correction commit and final accepted Increment 1 baseline are
+`220be7aa030b656fb960151c92166594ba539a26`.
 
-Exact next action: **run the same read-only Increment 1 Codex verification
-against the correction commit. Review only Increment 1 and the correction
-findings. Do not begin Increment 2.**
+**Owner acceptance — Increment 1 closed (2026-07-21).** Codex re-verification
+returned **MILESTONE 1 IMPLEMENTATION INCREMENT 1 CODEX RE-VERIFIED — READY
+FOR HARRISON RECONCILIATION**, finding no remaining Critical, High, or
+blocking Medium Increment 1 defect. Harrison explicitly accepted MarketMatch
+Milestone 1 Implementation Increment 1 — Procurement Gate Policy and Package
+Assignment Foundation at `220be7aa030b656fb960151c92166594ba539a26`.
+Acceptance evidence is 613 passed, 2 PostgreSQL-only concurrency tests skipped
+on SQLite, 77/77 migrations applied, 0 pending migrations, and a clean working
+tree. Real PostgreSQL concurrency execution remains pending and is not claimed
+as validated. Increment 1 is closed and owner-accepted. Increment 2 remains
+unauthorized and requires a separate explicit owner decision.
+
+Exact next action: **await Harrison's separate explicit authorization for
+Increment 2.**
 
 ---
 

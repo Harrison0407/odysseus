@@ -17,16 +17,20 @@ both retained for historical accuracy. Historical milestone counts below
 are retained where they describe the evidence available at that point in
 the delivery.
 
-Milestone 1 Increment 1 status (2026-07-21): **CORRECTION IMPLEMENTED —
-PENDING READ-ONLY CODEX RE-VERIFICATION AND HARRISON ACCEPTANCE**. Codex
-verification of implementation commit `9b803911` reported CX-I1-001 through
-CX-I1-010; CX-I1-001 through CX-I1-009 are corrected and CX-I1-010 is
-reconciled. See `docs/implementation-log.md` entry 64 and ADR-050. This is the
-Procurement Gate Policy and Package Assignment Foundation only; A1–A6
-gate execution remains unimplemented and Increment 2 remains
-unauthorized. Fresh correction validation: **615 collected, 613 passed,
-2 PostgreSQL-only concurrency tests skipped; 77/77 migrations applied on
-SQLite**. PostgreSQL execution remains pending.
+Milestone 1 Increment 1 status (2026-07-21): **CLOSED AND OWNER-ACCEPTED;
+INCREMENT 2 NOT AUTHORIZED**. Codex verification of implementation commit
+`9b803911` reported CX-I1-001 through CX-I1-010; CX-I1-001 through CX-I1-009
+were corrected and CX-I1-010 reconciled at correction/final accepted commit
+`220be7aa030b656fb960151c92166594ba539a26`. Read-only Codex re-verification
+returned **MILESTONE 1 IMPLEMENTATION INCREMENT 1 CODEX RE-VERIFIED — READY
+FOR HARRISON RECONCILIATION** with no remaining Critical, High, or blocking
+Medium Increment 1 defect, and Harrison explicitly accepted Increment 1 at
+that commit. See `docs/implementation-log.md` entries 64–65 and ADR-050.
+Accepted evidence: **615 collected, 613 passed, 2 PostgreSQL-only concurrency
+tests skipped; 77/77 migrations applied, 0 pending, on SQLite**. PostgreSQL
+concurrency execution remains pending and is not claimed as validated. A1–A6
+gate execution remains unimplemented; Increment 2 requires a separate explicit
+owner decision.
 
 The Controlled Transparency, Commercial Confidentiality & Authorization
 Foundation is **independently revalidated and owner accepted** as the

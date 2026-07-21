@@ -138,10 +138,8 @@ following remain open limitations even after Increment 1:
   machine and must not be represented as A1–A6 gate execution.
 - **Increment 2 (and every later increment) is not authorized** by
   Increment 1's implementation or by the Charter's own acceptance.
-  Increment 1's own exact next action is an independent, increment-only
-  Fable review of the resulting commit; Increment 2 must not begin until
-  that review is reconciled and Harrison separately, explicitly
-  authorizes it.
+  Increment 1 is now closed and owner-accepted; Increment 2 must not begin
+  unless Harrison separately and explicitly authorizes it.
 - **PostgreSQL concurrency validation (Charter §15) was not run this
   cycle.** Increment 1's `select_for_update()` locks (package-row lock on
   pinning; policy-version-row lock on publish/withdraw) are implemented
@@ -161,12 +159,18 @@ CX-I1-001 through CX-I1-009 and reconciles CX-I1-010; see ADR-050 and
 implementation-log entry 64. Assignment/version historical bypasses,
 cross-tenant assignment, ambiguous organization policy selection, unsafe live
 migration imports, overbroad exemption authority, and audit-metadata defects
-are corrected with adversarial tests. Increment 1 is not yet accepted: the
-same read-only Codex verification and Harrison reconciliation remain pending.
-The two real concurrency tests are PostgreSQL-only and are skipped in this
-SQLite environment (615 collected, 613 passed, 2 skipped; 77/77 migrations),
-so PostgreSQL concurrency execution remains an explicit open limitation.
-Increment 2 remains unauthorized and absent.
+are corrected with adversarial tests. The correction commit and final accepted
+baseline are `220be7aa030b656fb960151c92166594ba539a26`. Read-only Codex
+re-verification returned **MILESTONE 1 IMPLEMENTATION INCREMENT 1 CODEX
+RE-VERIFIED — READY FOR HARRISON RECONCILIATION** with no remaining Critical,
+High, or blocking Medium Increment 1 defect. Harrison explicitly accepted
+Increment 1 at that commit on 2026-07-21. The two real concurrency tests are
+PostgreSQL-only and were skipped in the SQLite environment (615 collected, 613
+passed, 2 skipped; 77/77 migrations, 0 pending), so PostgreSQL concurrency
+execution remains an explicit open limitation and is not claimed as validated.
+Increment 1 is closed and owner-accepted. Increment 2 remains unauthorized and
+absent; exact next action: await Harrison's separate explicit authorization
+for Increment 2.
 
 ### Privileged-audit N+1 query characteristic (accepted, non-blocking)
 

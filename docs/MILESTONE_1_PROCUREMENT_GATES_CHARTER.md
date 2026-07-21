@@ -1,6 +1,6 @@
 # Milestone 1 — Configurable Procurement Gates A1–A6 Charter
 
-Status: **VERSION 6 CLOSED AND OWNER-ACCEPTED. INCREMENT 1 IMPLEMENTATION AUTHORIZED; CORRECTION PENDING CODEX RE-VERIFICATION AND HARRISON ACCEPTANCE.**
+Status: **VERSION 6 CLOSED AND OWNER-ACCEPTED. INCREMENT 1 CLOSED AND OWNER-ACCEPTED. INCREMENT 2 NOT AUTHORIZED.**
 
 Charter version: 6 (Milestone 1 Charter Correction Cycle 5, 2026-07-20)
 
@@ -38,8 +38,9 @@ CORRECTION**, with four blocking findings (CR-CREATE-AUTH-GAP,
 HOLD-CAUSE-CLOSURE-1, NF-V4-2-INCOMPLETE-MAPPING, LOCK-ORDER-1-1) and five
 additional, closely-related non-blocking cleanup items (NF4-A-1,
 PGSTATE-ADMIN-1, CHTR-010-COUNT-2, HOLD-WORDING-1, NF-1-SUMMARY-1) — nine
-items in total, all listed in §21.6. Version 6 has **not** itself been
-independently revalidated.
+items in total, all listed in §21.6. At that point in the correction-cycle
+chronology, Version 6 had **not yet** itself been independently revalidated;
+§21.7 records the subsequent clean revalidation and owner acceptance.
 
 Supersedes: the 26-line acceptance-criteria summary in
 `docs/MARKETMATCH_ARCHITECTURE_RECONCILIATION_AND_ROADMAP.md` §3 "Milestone 1
@@ -4345,7 +4346,16 @@ paragraph records the historical state at Version 6 acceptance. Harrison
 subsequently authorized bounded Increment 1, implemented at `9b803911`.
 Codex implementation verification then reported CX-I1-001 through CX-I1-010.
 CX-I1-001 through CX-I1-009 were corrected in the bounded correction pass;
-CX-I1-010 is this status/editorial reconciliation. Increment 1 remains pending
-read-only Codex re-verification and Harrison acceptance. Increment 2 and all
-gate-execution work remain unauthorized. PostgreSQL concurrency execution
-remains pending; correction validation to date is SQLite-only.
+CX-I1-010 is the related status/editorial reconciliation. The correction
+commit and final accepted Increment 1 baseline are
+`220be7aa030b656fb960151c92166594ba539a26`. Codex re-verification returned
+**MILESTONE 1 IMPLEMENTATION INCREMENT 1 CODEX RE-VERIFIED — READY FOR
+HARRISON RECONCILIATION** with no remaining Critical, High, or blocking Medium
+Increment 1 defect. Harrison explicitly accepted Increment 1 at that commit on
+2026-07-21. Acceptance evidence is 613 passed, 2 PostgreSQL-only concurrency
+tests skipped on SQLite, 77/77 migrations applied, 0 pending migrations, and a
+clean tree. Increment 1 is closed and owner-accepted. Real PostgreSQL
+concurrency execution remains pending and is not claimed as validated.
+Increment 2 and all gate-execution work remain unauthorized and require a
+separate explicit owner decision. The exact next action is to await Harrison's
+separate explicit authorization for Increment 2.

@@ -1,6 +1,6 @@
 # DT Beach Supply Control — Source of Truth Index
 
-Last updated: 2026-07-19
+Last updated: 2026-07-21
 
 ## Purpose
 
@@ -162,14 +162,19 @@ increment.**
 commit `9b803911` reported CX-I1-001 through CX-I1-010. The bounded correction
 implements CX-I1-001 through CX-I1-009 and the related CX-I1-010 editorial
 cleanup, adds `procurement_gates.0003`/`.0004`, and adds adversarial/MigrationExecutor
-coverage. Increment 1 is pending read-only Codex re-verification and Harrison
-acceptance. Correction validation: 615 collected, 613 passed, 2 PostgreSQL-
-only tests skipped on SQLite; 77/77 migrations applied. PostgreSQL concurrency
-execution remains pending. Increment 2 is still unauthorized.
+coverage. The correction commit and final accepted baseline are
+`220be7aa030b656fb960151c92166594ba539a26`. Codex re-verification returned
+**MILESTONE 1 IMPLEMENTATION INCREMENT 1 CODEX RE-VERIFIED — READY FOR
+HARRISON RECONCILIATION** with no remaining Critical, High, or blocking Medium
+Increment 1 defect. On 2026-07-21 Harrison explicitly accepted Increment 1 at
+that commit. Acceptance evidence: 615 collected, 613 passed, 2 PostgreSQL-only
+tests skipped on SQLite; 77/77 migrations applied, 0 pending, clean tree.
+PostgreSQL concurrency execution remains pending and is not claimed as
+validated. Increment 1 is closed and owner-accepted. Increment 2 remains
+unauthorized and requires a separate explicit owner decision.
 
-**Next governing activity:** rerun the same read-only Increment 1 Codex
-verification against the correction commit; review only Increment 1 and the
-correction findings. Do not begin Increment 2.
+**Next governing activity:** await Harrison's separate explicit authorization
+for Increment 2.
 
 Tests (as independently reproduced during the cycle-3 revalidation that
 led to acceptance, then extended by Increment 1):

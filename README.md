@@ -44,11 +44,17 @@ guarded across instance/queryset/bulk/delete paths; canonical availability
 uses a shared policy lock and atomic replacement; assignment and exemption
 use dedicated package-scoped capabilities; organization-policy ambiguity
 fails closed; audit metadata is identifier-safe; and the original RunPython
-migration is frozen against live-code drift. Increment 1 remains pending
-read-only Codex re-verification and Harrison acceptance. Increment 2 remains
-unauthorized. Fresh correction validation: 615 tests collected, 613 passed,
-2 PostgreSQL-only concurrency tests skipped; 77/77 migrations applied on
-SQLite. PostgreSQL concurrency execution remains pending.
+migration is frozen against live-code drift. The correction commit and final
+accepted baseline are `220be7aa030b656fb960151c92166594ba539a26`.
+Codex re-verification returned **MILESTONE 1 IMPLEMENTATION INCREMENT 1 CODEX
+RE-VERIFIED — READY FOR HARRISON RECONCILIATION** with no remaining Critical,
+High, or blocking Medium Increment 1 defect. Harrison explicitly accepted
+Increment 1 on 2026-07-21. Acceptance evidence: 615 tests collected, 613
+passed, 2 PostgreSQL-only concurrency tests skipped on SQLite, and 77/77
+migrations applied with 0 pending. Increment 1 is closed and owner-accepted.
+PostgreSQL concurrency execution remains pending and is not claimed as
+validated. Increment 2 remains unauthorized and requires a separate explicit
+owner decision.
 
 ## What's implemented
 
@@ -237,9 +243,8 @@ behavior). That increment is now implemented, migrated, and tested
 (565/565 tests passing) — see `docs/implementation-log.md` entry 63 and
 ADR-049.
 
-Exact next action: **run the same read-only Increment 1 Codex verification
-against the correction commit, reviewing only Increment 1 and CX-I1-001
-through CX-I1-010. Do not begin Increment 2.**
+Exact next action: **await Harrison's separate explicit authorization for
+Increment 2.**
 
 ## Production deployment
 

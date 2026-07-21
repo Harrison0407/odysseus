@@ -18,8 +18,14 @@ open operational and security validations.
 
 ## Milestone 1 Increment 1 security implementation (2026-07-21)
 
-**Correction status:** Codex verification findings CX-I1-001 through
-CX-I1-009 are implemented in the bounded correction recorded by ADR-050.
+**Closed and owner-accepted:** Codex verification findings CX-I1-001 through
+CX-I1-009 are implemented in the bounded correction recorded by ADR-050. The
+correction commit and final accepted baseline are
+`220be7aa030b656fb960151c92166594ba539a26`. Read-only Codex re-verification
+returned **MILESTONE 1 IMPLEMENTATION INCREMENT 1 CODEX RE-VERIFIED — READY
+FOR HARRISON RECONCILIATION** with no remaining Critical, High, or blocking
+Medium Increment 1 defect, and Harrison explicitly accepted Increment 1 at
+that commit on 2026-07-21.
 `ASSIGN_GATE_POLICY` and `EXEMPT_PACKAGE_FROM_PROCUREMENT_GATES` are dedicated
 package-scoped capabilities with no role-default implication. Assignment
 authorizes the locked persisted package before retrieving policy
@@ -29,8 +35,10 @@ history is protected across instance, queryset, bulk, and delete paths;
 canonical ownership has a database check and canonical withdrawal/replacement
 uses the shared policy lock. Denial and exemption audit metadata contains safe
 identifiers/codes only. PostgreSQL concurrency execution remains pending; the
-current validation is SQLite-only (615 collected, 613 passed, 2 PostgreSQL-
-only tests skipped; 77/77 migrations).
+accepted validation is SQLite-only (615 collected, 613 passed, 2 PostgreSQL-
+only tests skipped; 77/77 migrations, 0 pending). This acceptance does not
+claim PostgreSQL validation. Increment 2 remains unauthorized and requires a
+separate explicit owner decision.
 
 `apps.procurement_gates`'s policy-configuration/package-pinning layer
 (`GatePolicy`, `GatePolicyVersion`, `PackagePolicyAssignment`) is

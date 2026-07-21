@@ -174,9 +174,30 @@ NF-V4-5, TRACE-1). A documentation-only **Milestone 1 Charter Correction
 Cycle 4** produced Charter version 5, resolving all ten findings — again
 with no application code, template, test, or migration changed.
 
-Exact next action: **run a new, independent Fable 5 Charter revalidation
-session against the commit introducing Charter version 5. Do not begin
-A1–A6 implementation.**
+Charter version 5 was then itself independently revalidated; the result
+was **MILESTONE 1 CHARTER VERSION 5 REQUIRES CORRECTION** — nine findings,
+including four blocking (CR-CREATE-AUTH-GAP — Critical: no capability code
+was ever named for `ChangeRequest`-creation authorization, and the Charter
+falsely credited the unmodified `apps.governance.services.request_change`
+with performing a capability check it does not perform; HOLD-CAUSE-CLOSURE-1
+— Critical: no named refreeze service existed and no rule defined which
+open `PackageHoldCause` rows a given refreeze may close; NF-V4-2-INCOMPLETE-MAPPING
+— Critical: the Charter described the decision-time capability lookup with
+bracket notation that does not match the actual repository code's
+`.get(field_name, "APPROVE_ROLE_CHANGE")` fallback access; LOCK-ORDER-1-1
+— Critical: `reconcile_expired_overrides`' expiry-reconciliation lock
+order was inconsistent with human override approval/rejection/revocation's
+own binding order) and five accepted, non-blocking cleanup items (NF4-A-1,
+PGSTATE-ADMIN-1, CHTR-010-COUNT-2, HOLD-WORDING-1, NF-1-SUMMARY-1). A
+documentation-only **Milestone 1 Charter Correction Cycle 5** produced
+Charter version 6, resolving all nine findings — again with no application
+code, template, test, or migration changed.
+
+Exact next action: **run one delta-only independent revalidation of
+Charter version 6 against the commit introducing it — reviewing only the
+version 5→version 6 diff, the four blocking findings, the five listed
+cleanup items, repository cleanliness, and status accuracy, not a new,
+full architecture audit. Do not begin A1–A6 implementation.**
 
 Milestone 1 remains planned and approved; neither foundation acceptance nor
 this Charter's own authorship authorizes A1–A6 implementation, which begins

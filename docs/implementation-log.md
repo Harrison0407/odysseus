@@ -2130,3 +2130,142 @@ documented order.
     Exact next action: run a new, independent Fable 5 Charter revalidation
     session against the commit introducing Charter version 5. Do not begin
     A1–A6 implementation.
+
+61. **Milestone 1 Charter Correction Cycle 5 — documentation-only.** Dated
+    2026-07-20. No application code, template, test, or migration was
+    touched.
+
+    The independent Milestone 1 Charter Version 5 Revalidation that
+    followed entry 60 reread Charter version 5 (commit
+    `ebcabdc582dd8ffea3ebdfce68dc55c4ee59c526`) fresh against the actual
+    repository — `apps.governance.services.request_change` (verified to
+    perform no capability check of any kind, only a `package.is_frozen`
+    precondition), `approve_change_request`/`reject_change_request`'s
+    actual `CHANGE_REQUEST_APPROVAL_CAPABILITY.get(field_name,
+    "APPROVE_ROLE_CHANGE")` dictionary access, and
+    `apps.procurement.package_views.change_request_create`/
+    `change_request_decide` — and returned **MILESTONE 1 CHARTER
+    VERSION 5 REQUIRES CORRECTION** with four blocking findings and five
+    additional accepted cleanup items:
+
+    - **CR-CREATE-AUTH-GAP (Critical, blocking):** §8.2.1 step 3 named no
+      actual capability code for `ChangeRequest`-creation authorization,
+      and §13's authorization table falsely credited the unmodified
+      `request_change` with performing "the same capability check" —
+      verified false against that function in its entirety.
+    - **HOLD-CAUSE-CLOSURE-1 (Critical, blocking):** no Charter version
+      ever named the service function that performs a refreeze, and §8.4
+      never defined which specific open `PackageHoldCause` rows a given
+      refreeze may close, risking over- or under-closure.
+    - **NF-V4-2-INCOMPLETE-MAPPING (Critical, blocking):** §13's
+      authorization-table row and required test 25u described
+      `decide_gate_aware_change`'s capability lookup using bracket
+      notation, `CHANGE_REQUEST_APPROVAL_CAPABILITY[field_name]`; the
+      actual repository code uses
+      `.get(field_name, "APPROVE_ROLE_CHANGE")` — bracket notation would
+      raise `KeyError` for the five currently-unmapped
+      `FROZEN_FIELD_CODES` entries the fallback exists to handle.
+    - **LOCK-ORDER-1-1 (Critical, blocking):** `reconcile_expired_overrides`
+      Phase 2 locked `ProcurementPackage` only (Pattern B), the reverse
+      of, and inconsistent with, §14.1a's own binding order for every
+      other operation whose primary existing row is a
+      `ProcurementGateOverride` (human approval/rejection/revocation,
+      Pattern A) — the same class of un-reconciled deadlock risk
+      LOCK-ORDER-1 already fixed once for `decide_gate_aware_change`.
+    - **NF4-A-1 (Medium, accepted):** §16.3's required-tests paragraph
+      named only `has_change_permission()==False`/
+      `has_delete_permission()==False`, omitting `has_add_permission()==False`
+      and an admin add-view `POST` rejection test, despite §16.3's own
+      binding policy already requiring all three permission methods.
+    - **PGSTATE-ADMIN-1 (Medium, accepted):** §16.3's binding historical-model
+      list did not state whether `PackageGateState` — a rebuildable
+      cache, not a historical record — was subject to the admin
+      declaration requirement or exempt from it.
+    - **CHTR-010-COUNT-2 (Low, accepted):** §21.1's own CHTR-010
+      disposition row still said "eight" named PostgreSQL scenarios after
+      version 5's own DOC-COUNT-1 correction had already updated
+      §15.1/§15.2/§20 item 5/`docs/SECURITY.md` to "nine."
+    - **HOLD-WORDING-1 (Low, accepted):** §8.1 step 1 described
+      `is_on_hold = True` as "written exclusively by this path," contradicting
+      §8.4's unified, always-recomputed projection rule.
+    - **NF-1-SUMMARY-1 (Low, accepted):** §21.3's historical NF-1
+      disposition row described the resulting mechanism as recomputation
+      "from all open `PackageHoldCause` rows" alone, omitting the
+      governance-side half of §8.4's actual `OR` rule.
+
+    This cycle corrected all nine in Charter version 6: a new
+    `REQUEST_PACKAGE_CHANGE` capability code is now the sole,
+    package-scoped authorization check for `ChangeRequest` creation,
+    evaluated before any protected value is retrieved against a package
+    loaded from its own persisted identity (§8.2.1, §13,
+    CR-CREATE-AUTH-GAP). A new §7.3 names
+    `apps.procurement_gates.services.complete_package_refreeze` as the
+    sole refreeze entry point, with a ten-step locked transaction that
+    closes only the exact open `PackageHoldCause` rows a refreeze's own
+    `source_change_requests` satisfies; §8.4 gained a deterministic
+    `PackageHoldCause` identity rule — `(package, cause_type, reference)`,
+    a partial unique constraint on open rows, idempotent creation and
+    closure, and immutable closed history (§7.3, §8.4,
+    HOLD-CAUSE-CLOSURE-1). §13's authorization table and test 25u are
+    corrected to the exact `.get(field_name, "APPROVE_ROLE_CHANGE")`
+    semantics, with mapped-versus-fallback codes now explicitly
+    documented (§13, NF-V4-2-INCOMPLETE-MAPPING). `reconcile_expired_overrides`
+    Phase 2 now locks the candidate `ProcurementGateOverride` before
+    `ProcurementPackage`, matching human decision/revocation exactly; a
+    new numbered override-mutation transaction specification in §11.3
+    makes the shared order explicit; the previously-unsupported "never
+    deadlocks" claim for this race is removed and replaced by the
+    corrected order plus explicit tests (§11.3, §11.5, §14.1a,
+    LOCK-ORDER-1-1). §16.3's required tests gained test 47g-1
+    (`has_add_permission`/add-view-POST rejection, NF4-A-1) and an
+    explicit `PackageGateState` admin exemption statement
+    (PGSTATE-ADMIN-1). §21.1's CHTR-010 row is corrected to "nine"
+    (CHTR-010-COUNT-2). §8.1 step 1's stale "written exclusively" wording
+    is removed (HOLD-WORDING-1). §21.3's NF-1 row is corrected to state
+    both hold-source categories (NF-1-SUMMARY-1). §21.6 records the
+    complete disposition table for all nine findings.
+
+    Documentation reconciled in the same commit: `README.md` (version
+    5→6 narrative added), this entry's own addition, `DT_BEACH_CURRENT_STATE.md`,
+    `DT_BEACH_SOURCE_OF_TRUTH_INDEX.md`, `docs/SECURITY.md` (correction
+    cycle 5 update paragraph), `docs/KNOWN_LIMITATIONS.md`.
+    `docs/architecture-decisions.md` and
+    `docs/REQUIREMENTS_TRACEABILITY.md` were reviewed; no substantive
+    changes were required beyond what version 5's own entries already
+    captured at the level of detail those documents maintain.
+    `docs/MARKETMATCH_ARCHITECTURE_RECONCILIATION_AND_ROADMAP.md` was
+    reviewed; it names Milestone 1 only at the roadmap/intent level (§3)
+    and required no edit.
+
+    Fresh evidence for this cycle: HEAD confirmed at
+    `ebcabdc582dd8ffea3ebdfce68dc55c4ee59c526` before editing; branch
+    `integration/dt-beach-supply-control-1.0.0`; upstream
+    `origin/integration/dt-beach-supply-control-1.0.0`; ahead/behind `0/0`;
+    working tree clean before editing; 72/72 migrations applied, 0
+    pending; no `apps.procurement_gates` directory or app present;
+    `apps/governance/services.py` confirmed to define
+    `CHANGE_REQUEST_APPROVAL_CAPABILITY` with exactly six explicit keys
+    (`visibility_mode`, `seller_of_record`, `exporter_of_record`,
+    `china_procurement_operator`, `production_factory`,
+    `production_site`) and `.get(field_name, "APPROVE_ROLE_CHANGE")`
+    access in `approve_change_request`/`reject_change_request`; confirmed
+    `request_change` performs no capability check. `manage.py check`
+    passed (0 issues); `makemigrations --check --dry-run` reported no
+    changes detected; `migrate --check` passed, 72/72 migrations applied,
+    0 pending — unchanged, as expected for a documentation-only cycle. The
+    full regression suite was **not** rerun for this cycle, for the same
+    reason entry 58 already established.
+
+    **Status distinctions, precise:** Charter version 6 is *authored* and
+    *corrected against every accepted Version 5 Revalidation finding*
+    (this entry); it is **not** *independently revalidated* and **not**
+    *owner approved*. A1–A6 remain entirely *unimplemented* — nothing in
+    this entry changes that. Milestone 1 implementation is **not
+    authorized** by this entry. PostgreSQL and live validation (§15, §19)
+    remain outstanding.
+
+    Exact next action: run one delta-only independent revalidation of
+    Charter version 6 against the commit introducing it — reviewing only
+    the version 5→version 6 diff, the four blocking findings, the five
+    listed cleanup items, repository cleanliness, and status accuracy, not
+    a new, full architecture audit. Do not begin A1–A6 implementation.

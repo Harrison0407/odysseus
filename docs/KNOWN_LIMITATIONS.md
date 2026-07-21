@@ -106,10 +106,18 @@ returned MILESTONE 1 CHARTER VERSION 4 REQUIRES CORRECTION (two blocking
 findings — RISKFLAG-HOLD-1, NF4-A — and eight additional accepted
 findings); a **Milestone 1 Charter Correction Cycle 4** produced Charter
 version 5, resolving all ten — again with no application code, template,
-test, or migration changed. The exact next action is **a new, independent
-Fable 5 Charter revalidation session** against the commit introducing
-version 5. A1–A6 — Configurable Procurement Gates — remains approved and
-planned but is **not authorized**
+test, or migration changed. Version 5 was itself independently
+revalidated and returned MILESTONE 1 CHARTER VERSION 5 REQUIRES
+CORRECTION (four blocking findings — CR-CREATE-AUTH-GAP,
+HOLD-CAUSE-CLOSURE-1, NF-V4-2-INCOMPLETE-MAPPING, LOCK-ORDER-1-1 — and
+five additional accepted cleanup items); a **Milestone 1 Charter
+Correction Cycle 5** produced Charter version 6, resolving all nine —
+again with no application code, template, test, or migration changed. The
+exact next action is **one delta-only independent revalidation** against
+the commit introducing version 6, reviewing only the version 5→version 6
+diff, the four blocking findings, the five listed cleanup items,
+repository cleanliness, and status accuracy. A1–A6 — Configurable
+Procurement Gates — remains approved and planned but is **not authorized**
 by this acceptance or by the Charter's own authorship; implementation has
 not started. The existing `ProcurementPackage.Status` is a separate state
 machine and must not be represented as A1–A6 gate

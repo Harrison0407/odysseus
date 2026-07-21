@@ -2,6 +2,73 @@
 
 Newest first.
 
+## ADR-048 — `ChangeRequest` creation gets a new, named capability code
+enforced before the unmodified foundation is invoked; refreeze gets a
+single, named service with deterministic hold-cause identity; the
+`ChangeRequest` decision-capability mapping is corrected to its actual
+`.get(...)`-with-fallback shape; expired-override reconciliation adopts
+the foundation's own lock order
+
+**Decision:** `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md` version 6
+adds four binding corrections, all documentation-only as of this entry (no
+application code changed): (1) a new capability code,
+`REQUEST_PACKAGE_CHANGE`, is the sole, package-scoped authorization check
+`apps.procurement_gates.services.request_gate_aware_change` performs
+before creating a `governance.ChangeRequest`, evaluated before any
+protected value is retrieved and against a package loaded from its own
+persisted primary key, never caller-supplied data (Charter §8.2.1, §13).
+(2) `apps.procurement_gates.services.complete_package_refreeze` is named
+as the sole Milestone 1 refreeze entry point: a ten-step locked
+transaction that creates the new `PackageFreezeRevision` and closes only
+the exact open `PackageHoldCause` rows matching its own
+`source_change_requests`, leaving every unrelated hold cause untouched;
+`PackageHoldCause` gains a deterministic identity rule —
+`(package, cause_type, reference)`, one open row per triple enforced by a
+partial unique constraint, idempotent creation and closure, and immutable
+closed history (Charter §7.3, §8.4). (3) `decide_gate_aware_change`'s
+decision-time authorization is now described using the actual dictionary
+access pattern, `CHANGE_REQUEST_APPROVAL_CAPABILITY.get(field_name,
+"APPROVE_ROLE_CHANGE")`, with every mapped and fallback-only
+`FROZEN_FIELD_CODES` entry explicitly enumerated (Charter §13). (4)
+`apps.procurement_gates.services.reconcile_expired_overrides`'s Phase 2
+now locks the candidate `ProcurementGateOverride` before
+`ProcurementPackage`, matching human override approval/rejection/revocation's
+own binding order exactly; a new numbered override-mutation transaction
+specification (Charter §11.3) states this shared order explicitly.
+
+**Why:** the independent Milestone 1 Charter Version 5 Revalidation
+(against commit `ebcabdc582dd8ffea3ebdfce68dc55c4ee59c526`, the commit
+introducing version 5) found that (1) §8.2.1 step 3 named no actual
+capability code for `ChangeRequest`-creation authorization, and §13's
+authorization table falsely credited the unmodified
+`apps.governance.services.request_change` with performing "the same
+capability check" — verified false against that function in its
+entirety, which checks only `package.is_frozen` (CR-CREATE-AUTH-GAP,
+Critical); (2) no Charter version ever named the service function that
+performs a refreeze, and §8.4 never defined which specific open
+`PackageHoldCause` rows a given refreeze may close, risking either
+clearing an unrelated hold or a duplicate refreeze reopening already-done
+closure work (HOLD-CAUSE-CLOSURE-1, Critical); (3) §13's authorization
+table and required test 25u described the decision-capability lookup
+using bracket notation, `CHANGE_REQUEST_APPROVAL_CAPABILITY[field_name]`,
+which does not match the actual repository code and would raise
+`KeyError` for the five currently-unmapped `FROZEN_FIELD_CODES` entries
+the real `.get(...)` fallback exists to handle
+(NF-V4-2-INCOMPLETE-MAPPING, Critical); and (4)
+`reconcile_expired_overrides` Phase 2 locked `ProcurementPackage` only,
+the reverse of, and inconsistent with, the global lock-order table's own
+binding order for every other operation whose primary existing row is a
+`ProcurementGateOverride` — an un-reconciled, opposite-order deadlock risk
+of the same class ADR-047's LOCK-ORDER-1 correction already fixed once
+for `decide_gate_aware_change` (LOCK-ORDER-1-1, Critical). Five further,
+narrower findings (NF4-A-1, PGSTATE-ADMIN-1, CHTR-010-COUNT-2,
+HOLD-WORDING-1, NF-1-SUMMARY-1) were also resolved. None of these
+corrections reopens or contradicts ADR-044 through ADR-047 above;
+`apps.workflow.GateOverride`, `apps.governance.services.request_change`,
+`approve_change_request`, `reject_change_request`, `raise_risk_flag`,
+`resolve_risk_flag`, and the existing `has_capability` call shape all
+remain unmodified by all of them.
+
 ## ADR-047 — Milestone 1 RiskFlag mutations route through a new
 gate-aware orchestration boundary; procurement-gates historical models get
 a binding admin-immutability policy; `ChangeRequest` decisions adopt the

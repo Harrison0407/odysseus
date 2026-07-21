@@ -42,7 +42,10 @@ control rules for Procurement Gates A1–A6:
   `metadata`.
 - PostgreSQL-specific lock/race validation is required before Milestone 1
   may be declared closed for nine named concurrency scenarios (Charter
-  §15, corrected in Charter version 5 — resolves DOC-COUNT-1) — SQLite
+  §15, corrected in Charter version 5 — resolves DOC-COUNT-1; the ninth
+  scenario's scope was extended in Charter version 6 to also cover
+  `reconcile_expired_overrides`' corrected lock order — resolves
+  LOCK-ORDER-1-1) — SQLite
   evidence alone is explicitly disallowed from being represented as
   PostgreSQL validation.
 
@@ -132,8 +135,39 @@ NF-V4-5, TRACE-1) were also resolved, including correcting
 `decide_gate_aware_change`'s lock order to match the foundation's own
 internal order (Charter §8.2.3, §14.1a) and the PostgreSQL scenario count
 correction referenced above. All remain design-only — none has been
-implemented, and Charter version 5 has not itself been independently
-revalidated.
+implemented.
+
+**Correction cycle 5 update (2026-07-20):** an independent revalidation of
+Charter version 5 found that no capability code was ever named for
+`ChangeRequest`-creation authorization, and that the Charter falsely
+credited the unmodified `apps.governance.services.request_change` with
+performing a capability check it does not perform — verified against that
+function in its entirety, it checks only `package.is_frozen`
+(CR-CREATE-AUTH-GAP, Critical, blocking); that no service function was
+ever named for performing a refreeze, and no rule defined which open
+`PackageHoldCause` rows a given refreeze may close, risking either
+clearing an unrelated hold or a duplicate refreeze reopening already-done
+closure work (HOLD-CAUSE-CLOSURE-1, Critical, blocking); that the
+decision-time capability lookup was described with bracket notation that
+does not match the actual repository code's
+`CHANGE_REQUEST_APPROVAL_CAPABILITY.get(field_name, "APPROVE_ROLE_CHANGE")`
+fallback access (NF-V4-2-INCOMPLETE-MAPPING, Critical, blocking); and that
+`reconcile_expired_overrides`' expiry-reconciliation lock order was
+inconsistent with human override approval/rejection/revocation's own
+binding order, an un-reconciled deadlock risk of the same class already
+fixed once for `decide_gate_aware_change` (LOCK-ORDER-1-1, Critical,
+blocking). Charter version 6 adds a new `REQUEST_PACKAGE_CHANGE`
+capability code as the sole `ChangeRequest`-creation authorization check
+(Charter §8.2.1, §13); a named `apps.procurement_gates.services.complete_package_refreeze`
+service with deterministic `PackageHoldCause` identity and idempotent
+closure (Charter §7.3, §8.4); the corrected `.get(...)`-with-fallback
+capability-mapping description (Charter §13); and the corrected
+`ProcurementGateOverride`-first lock order for expiry reconciliation,
+matching human decision/revocation exactly (Charter §11.3, §11.5,
+§14.1a). Five further cleanup items (NF4-A-1, PGSTATE-ADMIN-1,
+CHTR-010-COUNT-2, HOLD-WORDING-1, NF-1-SUMMARY-1) were also resolved. All
+remain design-only — none has been implemented, and Charter version 6 has
+not itself been independently revalidated.
 
 None of this has been implemented. A1–A6 do not exist in the codebase as of
 this entry; this section documents the approved design only.

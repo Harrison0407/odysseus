@@ -233,6 +233,40 @@ Exact next action: **run a new, independent Fable 5 Charter revalidation
 session against the commit introducing Charter version 5. Do not begin
 A1–A6 implementation.**
 
+**Update — independent Milestone 1 Charter Version 5 Revalidation
+completed, result: MILESTONE 1 CHARTER VERSION 5 REQUIRES CORRECTION.** An
+independent revalidation of Charter version 5 (commit
+`ebcabdc582dd8ffea3ebdfce68dc55c4ee59c526`, the commit introducing
+version 5) found four new blocking findings and five additional,
+closely-related non-blocking cleanup items, distinct from the ten findings
+resolved in version 5 itself. A documentation-only **Milestone 1 Charter
+Correction Cycle 5** then produced Charter version 6, resolving all nine:
+
+| Finding | Disposition |
+|---|---|
+| CR-CREATE-AUTH-GAP (Critical) | Accept — defined a new capability code, `REQUEST_PACKAGE_CHANGE`, as the sole, package-scoped authorization check for `ChangeRequest` creation, evaluated before any protected value is retrieved against a package loaded from its own persisted identity; corrected the false claim that the unmodified `apps.governance.services.request_change` performs a capability check — verified, it performs none |
+| HOLD-CAUSE-CLOSURE-1 (Critical) | Accept — added `apps.procurement_gates.services.complete_package_refreeze` (§7.3) as the sole refreeze entry point, closing only the exact open `PackageHoldCause` rows a refreeze's own `source_change_requests` satisfies; defined deterministic `PackageHoldCause` identity (`package`, `cause_type`, `reference`), a partial uniqueness constraint on open rows, and idempotent closure |
+| NF-V4-2-INCOMPLETE-MAPPING (Critical) | Accept — corrected the decision-capability lookup from bracket notation to the actual `CHANGE_REQUEST_APPROVAL_CAPABILITY.get(field_name, "APPROVE_ROLE_CHANGE")` semantics; documented which frozen-field codes are explicitly mapped and which resolve only through the shared fallback |
+| LOCK-ORDER-1-1 (Critical) | Accept — `reconcile_expired_overrides` Phase 2 now locks the candidate `ProcurementGateOverride` before `ProcurementPackage`, matching human override approval/rejection/revocation's own binding order; removed the unsupported "never deadlocks" claim for this race |
+| NF4-A-1 | Accept — added the missing `has_add_permission()==False` test and admin add-view `POST` rejection test to §16.3's required-tests list |
+| PGSTATE-ADMIN-1 | Accept — explicitly exempted `PackageGateState` (a rebuildable cache) from §16.3's historical-model admin-declaration requirement, while keeping its mutations exclusively service-controlled |
+| CHTR-010-COUNT-2 | Accept — corrected §21.1's own CHTR-010 disposition row from "eight" to "nine" named PostgreSQL scenarios, a count version 5's DOC-COUNT-1 fix had updated everywhere else but missed in this one historical row |
+| HOLD-WORDING-1 | Accept — removed §8.1 step 1's stale "written exclusively" claim about `is_on_hold`, which contradicted §8.4's unified, always-recomputed projection rule |
+| NF-1-SUMMARY-1 | Accept — corrected §21.3's historical NF-1 summary to state the unified hold projection covers both governance-side and gate-native sources, not `PackageHoldCause` rows alone |
+
+**No application code, template, test, or migration was written or
+modified during this correction cycle either.** A1–A6 remain entirely
+unimplemented. Charter version 6 has **not** been independently
+revalidated and has **not** been owner-approved. Milestone 1
+implementation remains **not authorized**. PostgreSQL and live validation
+remain outstanding.
+
+Exact next action: **run one delta-only independent revalidation of
+Charter version 6 against the commit introducing it — the version
+5→version 6 diff, the four blocking findings, the five listed cleanup
+items, repository cleanliness, and status accuracy only, not a new, full
+architecture audit. Do not begin A1–A6 implementation.**
+
 ---
 
 ## Historical record: Foundation correction cycle 3 mechanism

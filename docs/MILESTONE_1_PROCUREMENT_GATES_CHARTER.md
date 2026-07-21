@@ -2,7 +2,7 @@
 
 Status: **DRAFT — DOCUMENTATION ONLY. NOT INDEPENDENTLY REVALIDATED. NOT OWNER-APPROVED.**
 
-Charter version: 5 (Milestone 1 Charter Correction Cycle 4, 2026-07-20)
+Charter version: 6 (Milestone 1 Charter Correction Cycle 5, 2026-07-20)
 
 Produced by: Milestone 1 Charter Definition and Reconciliation cycle,
 2026-07-20 (version 1), corrected by the Milestone 1 Charter Correction
@@ -20,7 +20,7 @@ Version 3 Revalidation performed against commit
 `f59237b6ba0c18e210c54f01cd79e98ea40e1709` — NF-NEW-1, NF-NEW-2, and
 NF-NEW-3 (blocking), NF-NEW-4 and NF-NEW-5 (accepted, non-blocking), and
 one editorial correction to brittle `request_change`-family line
-citations (§21.4), and corrected again by the Milestone 1 Charter
+citations (§21.4), corrected again by the Milestone 1 Charter
 Correction Cycle 4, 2026-07-20 (version 5), resolving every finding of
 the independent Milestone 1 Charter Version 4 Revalidation performed
 against commit `cf01d400e1dffd6c5981ee2ae8a01ad71f3c9006` — that
@@ -28,8 +28,18 @@ revalidation returned **MILESTONE 1 CHARTER VERSION 4 REQUIRES
 CORRECTION**, with two blocking findings (RISKFLAG-HOLD-1 — Critical;
 NF4-A — High) and eight additional accepted findings (DOC-COUNT-1,
 LOCK-ORDER-1, NF4-C, NF-V4-2, README-STALE, IMPL-LOG-COUNT, NF-V4-5,
-TRACE-1) — ten items in total, all listed in §21.5. Version 5 has **not**
-itself been independently revalidated.
+TRACE-1) — ten items in total, all listed in §21.5, and corrected again
+by the Milestone 1 Charter Correction Cycle 5, 2026-07-20 (version 6),
+resolving every finding of the independent Milestone 1 Charter Version 5
+Revalidation performed against commit
+`ebcabdc582dd8ffea3ebdfce68dc55c4ee59c526` (the commit introducing version
+5) — that revalidation returned **MILESTONE 1 CHARTER VERSION 5 REQUIRES
+CORRECTION**, with four blocking findings (CR-CREATE-AUTH-GAP,
+HOLD-CAUSE-CLOSURE-1, NF-V4-2-INCOMPLETE-MAPPING, LOCK-ORDER-1-1) and five
+additional, closely-related non-blocking cleanup items (NF4-A-1,
+PGSTATE-ADMIN-1, CHTR-010-COUNT-2, HOLD-WORDING-1, NF-1-SUMMARY-1) — nine
+items in total, all listed in §21.6. Version 6 has **not** itself been
+independently revalidated.
 
 Supersedes: the 26-line acceptance-criteria summary in
 `docs/MARKETMATCH_ARCHITECTURE_RECONCILIATION_AND_ROADMAP.md` §3 "Milestone 1
@@ -46,11 +56,15 @@ Revalidation (NF-1, REVAL-004-RESIDUAL, REVAL-005-RESIDUAL,
 REVAL-008-RESIDUAL, REVAL-009-TRACE, REVAL-011-ENFORCEMENT, NF-2, NF-3,
 NF-4, NF-7), every finding of the independent Milestone 1 Charter Version 3
 Revalidation (NF-NEW-1 through NF-NEW-5 and the `request_change`-family
-line-citation editorial defect), and, as of version 5, every finding of
+line-citation editorial defect), every finding of
 the independent Milestone 1 Charter Version 4 Revalidation
 (RISKFLAG-HOLD-1, NF4-A, DOC-COUNT-1, LOCK-ORDER-1, NF4-C, NF-V4-2,
-README-STALE, IMPL-LOG-COUNT, NF-V4-5, TRACE-1 — see §21 for the complete
-disposition tables). It does not implement anything. No
+README-STALE, IMPL-LOG-COUNT, NF-V4-5, TRACE-1), and, as of version 6,
+every finding of the independent Milestone 1 Charter Version 5
+Revalidation (CR-CREATE-AUTH-GAP, HOLD-CAUSE-CLOSURE-1,
+NF-V4-2-INCOMPLETE-MAPPING, LOCK-ORDER-1-1, NF4-A-1, PGSTATE-ADMIN-1,
+CHTR-010-COUNT-2, HOLD-WORDING-1, NF-1-SUMMARY-1 — see §21 for the
+complete disposition tables). It does not implement anything. No
 application code, template, test, or migration was written or modified to
 produce it. A1–A6 remain unimplemented after this document is committed.
 Implementation of this Charter requires a separate, subsequent, explicit
@@ -830,6 +844,89 @@ Resolves CHTR-005.
   transaction as revision creation/hold-clearing; they are not independently
   writable by any other path.
 
+### 7.3 Refreeze completion service (binding, resolves HOLD-CAUSE-CLOSURE-1)
+
+**Version 5 gap, stated plainly.** §8.1 step 6 named a refreeze as "created
+when an authorized actor performs it, per §7," without ever naming the one
+service function that performs it, and §8.4's unified hold projection
+never stated exactly which open `PackageHoldCause` rows a given refreeze
+is permitted to close — leaving open the risk that a refreeze naively
+closes every open cause on the package (including an unrelated
+`PREDECESSOR_OVERRIDE_LAPSE` cause it never addressed) or, conversely,
+that a duplicate refreeze attempt reopens or duplicates closure work
+already done. Version 6 names the one function and its exact procedure.
+
+**`apps.procurement_gates.services.complete_package_refreeze`** is the
+**sole** Milestone 1 entry point for performing a refreeze (a
+`PackageFreezeRevision` with `revision_number >= 2`, §7.1) in response to
+one or more approved critical `ChangeRequest`s. It executes, in order,
+inside one `transaction.atomic()`:
+
+1. Lock the `ProcurementPackage` row with `select_for_update()` — this is
+   a package-wide, no-single-caller-identified-child-row operation
+   (Pattern B, §14.1a).
+2. **Validate and authorize the refreeze before retrieving any protected
+   value** — the acting user must hold the initial-freeze/refreeze
+   capability declared in §13's authorization table
+   (`APPROVE_TECHNICAL_SPEC` for the initial freeze; a refreeze
+   additionally requires the triggering `ChangeRequest`(s)' own approval
+   capability, §13, unchanged by this correction), and the package must
+   actually be eligible for refreeze (a `CURRENT` `PackageFreezeRevision`
+   already exists, i.e. this is revision 2+, never revision 1 — revision 1
+   is created by the separate, unmodified initial-freeze path, §7.1). A
+   denial is recorded via `log_denied_attempt`/`PRIVILEGED_ACCESS_DENIED`
+   (§10) before any frozen field value, `ChangeRequest` content, or hold
+   cause is read.
+3. Create the new, immutable `PackageFreezeRevision` per §7.1/§7.2:
+   `revision_number = previous + 1`, `predecessor` = the previous
+   `CURRENT` row, `source_change_requests` populated with every approved
+   critical `ChangeRequest` this specific refreeze is satisfying, and the
+   previous `CURRENT` row's `status` flipped to `SUPERSEDED` — all in this
+   same transaction, never a separate one.
+4. **Identify the exact open `CRITICAL_CHANGE_REQUEST` `PackageHoldCause`
+   rows satisfied by this refreeze** — exactly those rows whose `reference`
+   is one of the `ChangeRequest`s named in `source_change_requests` at step
+   3, and no others. A `PackageHoldCause` opened by a critical
+   `ChangeRequest` not included in this refreeze's `source_change_requests`
+   is never matched here, even if it is the same `cause_type`.
+5. **Close only those matching rows** — set `closed_at` to this
+   transaction's time on each row identified in step 4; every other open
+   `PackageHoldCause` row for this package (a different, not-yet-satisfied
+   `CRITICAL_CHANGE_REQUEST` cause, or any `PREDECESSOR_OVERRIDE_LAPSE`
+   cause) is left untouched by this step.
+6. **Preserve every unrelated governance or gate-native hold** — this
+   refreeze never inspects, clears, or otherwise touches any
+   `has_unresolved_governance_holds` source (a still-`PENDING`
+   `ChangeRequest`, an unresolved `RiskFlag`) or any `PackageHoldCause`
+   whose `reference` is not one of this refreeze's own
+   `source_change_requests`. A refreeze **must not** clear a
+   `PREDECESSOR_OVERRIDE_LAPSE` cause or any other unrelated hold cause —
+   only §9.5's own downstream-invalidation-lapse-resolution path, or a
+   fresh override under current terms, ever closes that cause type.
+7. Recompute `package.is_on_hold` through
+   `apps.procurement_gates.services.recompute_package_hold_state` (§8.4) —
+   the same unified projection every other Charter-defined mutation uses,
+   never a direct flag write; the package remains on hold if any other
+   governance or gate-native cause (including a `PackageHoldCause` this
+   refreeze correctly left open) still applies.
+8. Append confidentiality-safe audit events: `PACKAGE_REFREEZE_CREATED`
+   (§10) referencing the new revision and every `ChangeRequest` id it
+   satisfies (never their free-text `reason`/`proposed_new_value`), plus
+   one event per `PackageHoldCause` closed, identifying only the cause's
+   stable identifiers.
+9. Refresh the `PackageGateState` projection for this package through the
+   existing, pure `compute_gate_state` pattern (§9.6) — computed fresh,
+   then written as an explicit, separate write inside this same
+   already-locked transaction, never left to eventual consistency.
+10. Commit only if every step above succeeds; any failure rolls back the
+    new `PackageFreezeRevision`, the `PackageHoldCause` closures, the hold
+    recomputation, and the `PackageGateState` refresh together — there is
+    no partially-applied refreeze.
+
+**Deterministic `PackageHoldCause` identity (binding, resolves
+HOLD-CAUSE-CLOSURE-1).** See §8.4 for the exact identity, uniqueness, and
+idempotency rules this step 4/5 matching and closure rely on.
+
 ---
 
 ## 8. Post-A2 critical changes
@@ -854,9 +951,18 @@ An approved critical post-A2 `governance.ChangeRequest` (status transition
 `transaction.atomic()` block with `select_for_update()` on the
 `ProcurementPackage` row:
 
-1. `ProcurementPackage.is_on_hold = True` (already-existing field, now
-   written exclusively by this path for critical-change holds — it may
-   still be independently set by a `RiskFlag`-driven hold, see §8.3).
+1. `ProcurementPackage.is_on_hold = True` (already-existing field). **Wording
+   correction (resolves HOLD-WORDING-1):** this is never the sole or
+   "exclusive" writer of `is_on_hold` — as §8.4 states, `is_on_hold` is
+   always a cached projection recomputed by
+   `recompute_package_hold_state`'s unified `OR` over every governance and
+   gate-native cause. The `CRITICAL_CHANGE_REQUEST` `PackageHoldCause` that
+   keeps the package on hold through this cascade was already opened at
+   this `ChangeRequest`'s **creation** time (§8.2.1 step 7), not by this
+   step; this step records the fact that the package remains on hold
+   through the cascade — a fact `recompute_package_hold_state`
+   independently re-derives, per §8.2.3 step 11, not a fact this step
+   writes on its own.
 2. The package's current `A2` gate result (its latest non-invalidated
    `GateDecision` for `A2`, §9) is marked `INVALIDATED` via a new
    `GateInvalidation` row (§9.4) referencing this `ChangeRequest` as the
@@ -898,7 +1004,9 @@ An approved critical post-A2 `governance.ChangeRequest` (status transition
    happens only when the refreeze is actually performed (step 6), which is
    a separate, later, explicit action, not automatic.
 6. A new `PackageFreezeRevision` (refreeze) is created when an authorized
-   actor performs it, per §7, referencing this `ChangeRequest` in
+   actor performs it, exclusively through
+   `apps.procurement_gates.services.complete_package_refreeze` (§7.3,
+   resolves HOLD-CAUSE-CLOSURE-1), referencing this `ChangeRequest` in
    `source_change_requests`.
 7. The package remains `is_on_hold = True` until: the refreeze in step 6
    has occurred, **and** every other currently-open hold cause for this
@@ -978,18 +1086,65 @@ additional caller found, before implementation is considered complete —
 the architectural test required below is the durable enforcement
 mechanism; this sentence is the one-time discovery step.
 
+**Creation authorization (binding, resolves CR-CREATE-AUTH-GAP).** Version 5
+described step 3 below only as "resolved through `RoleAssignment`/
+`CapabilityGrant` exactly as `has_capability` already requires," without
+naming an actual capability code, and §13's authorization table
+additionally, and falsely, described this as "the same capability check
+`apps.governance.services.request_change` already performs." Both claims
+are corrected here. Verified against `apps.governance.services.request_change`
+in its entirety: that function performs **no** capability check of any
+kind — it checks only `package.is_frozen` before creating the
+`ChangeRequest` row and unconditionally setting `is_on_hold = True`. Prior
+to this correction, therefore, no Charter version ever named a real,
+enforced authorization check for `ChangeRequest` creation; §8.2.1 step 3's
+prose gestured at one without naming a capability code, and §13's table
+incorrectly credited the unmodified foundation function with performing
+it. Milestone 1 defines the one, actual, enforced check here for the first
+time:
+
+**New capability code — `REQUEST_PACKAGE_CHANGE` (binding).** Added to the
+existing `CapabilityGrant` capability-code registry, following the same
+precedent as `CREATE_PROCUREMENT_GATE_ATTEMPT` and `PUBLISH_GATE_POLICY`
+(§13). It authorizes creation of a `ChangeRequest` against a persisted,
+gate-governed `ProcurementPackage`, and authorizes nothing else — it is
+distinct from `CREATE_PROCUREMENT_GATE_ATTEMPT`, from every
+`CHANGE_REQUEST_APPROVAL_CAPABILITY`-mapped decision capability (§13,
+resolves NF-V4-2), and from `AUTHORIZE_EXCEPTION`. It is never implied by
+any role default (`ROLE_DEFAULT_CAPABILITIES`). It is granted only through
+the existing package-scoped `RoleAssignment`/`CapabilityGrant`
+architecture — `has_capability(actor, REQUEST_PACKAGE_CHANGE,
+package=package)` (§13) — never at organization scope (unlike the narrow,
+named `A1`-bootstrap exception, §13, which does not apply here because a
+`ChangeRequest` is never created before a package has an established
+`RoleAssignment`). Organization membership, role name, and superuser
+status alone are insufficient, exactly as §13's restated platform-wide
+rules already require.
+
 The function performs, in order:
 
 1. Enter `transaction.atomic()`.
-2. Lock the `ProcurementPackage` row with `select_for_update()` — this is
-   the same serialization boundary already used by every other
-   Charter-defined mutation (§14.1).
-3. **Authorize the actor before retrieving any protected value** —
-   resolved through `RoleAssignment`/`CapabilityGrant` exactly as
-   `apps.governance.services.has_capability` already requires (§13); a
-   denial is recorded via `log_denied_attempt`/`PRIVILEGED_ACCESS_DENIED`
-   (§10) and the function returns before touching `field_name`,
-   `frozen_current_value`, or `proposed_new_value`.
+2. **Load the target `ProcurementPackage` from its own persisted identity
+   (primary key), never from trusted caller-supplied data beyond that
+   identifier** — no field of the package (its organization, its current
+   frozen state, its policy assignment) is taken from anything the caller
+   asserts; every value used for authorization or classification below is
+   re-read from the locked, persisted row itself. Lock that row with
+   `select_for_update()` — this is the same serialization boundary already
+   used by every other Charter-defined mutation (§14.1).
+3. **Authorize the actor before retrieving any protected value** — the
+   actor must hold `REQUEST_PACKAGE_CHANGE`, resolved through
+   `RoleAssignment`/`CapabilityGrant` package-scoped to the locked package
+   from step 2, exactly as `apps.governance.services.has_capability`
+   already requires (§13) — organization membership, role name, and
+   superuser status alone are insufficient. A denial is recorded via
+   `log_denied_attempt`/`PRIVILEGED_ACCESS_DENIED` (§10), naming
+   `REQUEST_PACKAGE_CHANGE` as the missing capability, and the function
+   returns before touching `field_name`, `frozen_current_value`, or
+   `proposed_new_value`. **`apps.governance.services.request_change`
+   remains, and is invoked only after, this wrapper's own authorization
+   check completes (step 6 below) — it is never invoked first, and it
+   performs no authorization check of its own, as corrected above.**
 4. Validate `field_name` against `apps.procurement_gates.constants.FROZEN_FIELD_CODES`
    (§8.2.2); an unrecognized code is rejected outright, before a
    `ChangeRequest` row is created.
@@ -1594,6 +1749,48 @@ governance sources above already report on their own. A non-critical
 `ChangeRequest` (§8.2.1) never opens a `PackageHoldCause`; an unresolved
 `RiskFlag` never opens a `PackageHoldCause`.
 
+**Deterministic `PackageHoldCause` identity (binding, resolves
+HOLD-CAUSE-CLOSURE-1).** A `PackageHoldCause`'s identity is the tuple
+`(package, cause_type, reference)` — never `package`/`cause_type` alone,
+since a package may accumulate more than one open cause of the same
+`cause_type` (§8.4's "multiple concurrent critical Change Requests" note
+below), and never `reference` alone, since the same referenced row can
+never cause holds on more than one package.
+
+- **One open row per `(package, cause_type, reference)`.** At most one
+  `PackageHoldCause` with `closed_at IS NULL` may exist for a given
+  `(package, cause_type, reference)` triple at any time. This is enforced
+  by a partial `UniqueConstraint` on `(package, cause_type, reference)`
+  filtered to `closed_at IS NULL` — the same conditional-uniqueness
+  pattern already used for the canonical-default policy (§3.3) and the
+  single-open-`GateAttempt`-per-gate rule (§9.2), not a new mechanism.
+- **Duplicate create-or-preserve calls are idempotent.** Any Charter-defined
+  step that would open a `PackageHoldCause` for an `(package, cause_type,
+  reference)` triple that already has an open row (e.g. a retried request,
+  or two Charter steps that could both plausibly want to open the same
+  cause) returns or preserves that existing open row rather than creating
+  a second one — the partial unique constraint above is the backstop
+  (§14.2), never a race condition silently producing two open rows for the
+  same triple.
+- **Closure is idempotent.** Closing a `PackageHoldCause` that is already
+  closed (`closed_at` already set) is a no-op — it does not update
+  `closed_at` a second time, does not re-append a closure audit event, and
+  does not error. `complete_package_refreeze` (§7.3 step 5) and every
+  other Charter-defined closure path rely on this: a duplicate refreeze
+  attempt naming the same `source_change_requests`, or a retried closure
+  call, matches the same already-closed row and performs no further
+  mutation against it.
+- **Historical closed causes are never reopened or deleted.** Once
+  `closed_at` is set, a `PackageHoldCause` row is immutable history,
+  identical in spirit to `GateInvalidation`/`GateDecision` (§9.4, §16.3) —
+  no service function edits `closed_at` back to `NULL`, and no admin or
+  migration path deletes a closed row. A subsequent, genuinely new cause
+  for the same `(package, cause_type, reference)` triple (which can only
+  arise if the underlying referenced row itself supports being
+  re-triggered, e.g. a `ProcurementGateOverride` lapsing a second time
+  under a fresh override) opens a **new** row with a fresh `opened_at`,
+  never reuses or edits the old, closed one.
+
 **Unified projection (binding).** `ProcurementPackage.is_on_hold` is a
 **cached projection, never an independent source of truth.** Its final,
 committed value for any package participating in A1–A6 is derived by a
@@ -2078,6 +2275,36 @@ defined, reusing the *lifecycle pattern* `GateOverride` established
   step 4, resolves REVAL-004) — and is otherwise always attributed to the
   human actor who performed it; no other code path may set
   `revoked_by = NULL`.
+- **Numbered override mutation transaction specification (binding,
+  resolves LOCK-ORDER-1-1).** Approval, rejection, and revocation of an
+  existing `ProcurementGateOverride` each execute this same, single
+  numbered sequence, differing only in step 5's specific mutation:
+  1. Enter `transaction.atomic()`.
+  2. Lock the target `ProcurementGateOverride` with `select_for_update()`
+     by its own safe primary-key identifier (Pattern A, §14.1a) — the
+     child row, locked first.
+  3. Derive the package identity exclusively from this locked override's
+     own `package_id` — never from caller-supplied data.
+  4. Lock the `ProcurementPackage` (identified in step 3) with
+     `select_for_update()`.
+  5. Revalidate current lifecycle state under both locks (still pending
+     for a decision; still active and undecided for a revocation); apply
+     the approval, rejection, or revocation itself, including separation
+     of duties (approval/rejection) and the system-attribution rule
+     (revocation).
+  6. Perform any required cascade (attempt closure on approval, downstream
+     invalidation on revocation of a predecessor-satisfying override,
+     §9.5), hold-cause creation/preservation, and audit events, all under
+     the same locks.
+  7. Recompute the package's unified hold state via
+     `recompute_package_hold_state` (§8.4) and refresh `PackageGateState`
+     (§9.6) in the same transaction.
+  8. Commit atomically.
+
+  This is the identical order and shape `reconcile_expired_overrides`'
+  Phase 2 (§11.5) now uses for expiry — the same one binding order applies
+  whether the override's terminal state is reached by human decision,
+  human revocation, or system-detected expiry.
 - **Attempt closure on approval (resolves REVAL-008):** approving an
   override sets `closed_at` on the underlying `GateAttempt` (§9.2), exactly
   as a `GateDecision` would. Neither expiry nor revocation reopens that
@@ -2136,38 +2363,77 @@ separate, two-phase service that performs the actual expiry mutation:
   majority of calls (an override that is not near expiry) pay no locking
   cost at all.
 
-**Phase 2 — locked reconciliation (only when Phase 1 finds a candidate):**
+**Phase 2 — locked reconciliation (only when Phase 1 finds a candidate,
+binding lock order corrected — resolves LOCK-ORDER-1-1):**
+
+**Version 5 problem, stated plainly.** Version 5's Phase 2 locked
+`ProcurementPackage` first and only re-queried the candidate override
+afterward, without its own `select_for_update()` — the reverse of, and
+inconsistent with, the order §14.1a's own table already required for
+every other operation whose primary existing row is a
+`ProcurementGateOverride` (human approval, rejection, and revocation, all
+Pattern A: `ProcurementGateOverride` → `ProcurementPackage`). This left
+Phase 2 unserialized against a concurrent human decision/revocation racing
+the same override row, and created exactly the un-reconciled,
+opposite-order deadlock risk §14.1a's rule exists to prevent — the same
+class of gap LOCK-ORDER-1 already identified and corrected for
+`decide_gate_aware_change` in version 5. Version 6 adopts the identical,
+binding order for every operation whose primary existing row is a
+`ProcurementGateOverride`: **`ProcurementGateOverride` locked first,
+`ProcurementPackage` locked second, always** — human approval, rejection,
+revocation, and expiry reconciliation alike.
 
 1. Enter `transaction.atomic()`.
-2. Lock the `ProcurementPackage` row with `select_for_update()` — the same
-   serialization boundary as every other Charter-defined mutation.
-3. Re-query and revalidate the candidate override under this lock (it may
-   have already been revoked, or already reconciled by a concurrent
-   caller, since Phase 1's unlocked read).
-4. If another transaction already reconciled this override (its
-   `expired_audit_recorded`/equivalent guard is already set, or it is
-   already `revoked_at`-revoked), do nothing further for it — this
-   reconciliation is a no-op, not a duplicate mutation.
-5. Otherwise, mark the override expired through its defined immutable
+2. **Re-query and lock the candidate `ProcurementGateOverride` with
+   `select_for_update()`** — the child row, locked first, by its own safe
+   primary-key identifier (Pattern A, §14.1a); it may have already been
+   revoked, decided, or already reconciled by a concurrent caller since
+   Phase 1's unlocked read.
+3. **Derive the package identity exclusively from this locked, persisted
+   override's own `package_id`** — never from any caller-supplied or
+   Phase-1-cached package identifier, mirroring §8.2.3 step 3's identical
+   rule for `ChangeRequest`.
+4. Lock the `ProcurementPackage` (identified in step 3) with
+   `select_for_update()`.
+5. **Revalidate expiry and current lifecycle state under both locks** — if
+   the locked override is no longer `OVERRIDDEN` (already revoked, already
+   expired-and-reconciled, or its `expires_at` no longer qualifies as
+   past), this is a no-op: **no-op if another transaction already
+   decided, revoked, or expired it** — do nothing further for this
+   override, never a duplicate mutation.
+6. Otherwise, mark the override expired through its defined immutable
    lifecycle (never reopening or editing `requested_by`/`before_state`;
    only setting the expiry-observation guard, exactly as a revocation only
    ever adds `revoked_at`/`revoked_by`, §11.3).
-6. Execute the downstream invalidation cascade (§9.5) for any gate that
-   relied on this override's `OVERRIDDEN` state satisfying its
-   predecessor check.
-7. Create or preserve the gate-native `PackageHoldCause` this lapse
-   requires (§9.5 step 5, §8.4).
-8. Append confidentiality-safe audit events (`GATE_OVERRIDE_EXPIRED`, plus
-   one `GATE_DOWNSTREAM_INVALIDATED` per downstream gate invalidated, §10)
-   — referencing only the override's identifier, never any confidential
-   evidence or `ChangeRequest` free text, consistent with §8.1 step 4's
-   and §9.5 step 3's confidentiality rule.
-9. Recompute the package's effective hold state via
-   `apps.procurement_gates.services.recompute_package_hold_state` (§8.4).
-10. Commit. Only after this transaction commits does `compute_gate_state`'s
-    next read reflect the post-expiry state; until then, a concurrent
-    reader still correctly sees the override's pre-expiry, `OVERRIDDEN`
-    state (the read is pure and does not itself force reconciliation).
+7. Perform, in this same transaction and under both locks: the downstream
+   invalidation cascade (§9.5) for any gate that relied on this override's
+   `OVERRIDDEN` state satisfying its predecessor check; creation or
+   preservation of the gate-native `PackageHoldCause` this lapse requires
+   (§9.5 step 5, §8.4, §8.4's deterministic-identity rule); confidentiality-safe
+   audit events (`GATE_OVERRIDE_EXPIRED`, plus one `GATE_DOWNSTREAM_INVALIDATED`
+   per downstream gate invalidated, §10) referencing only the override's
+   identifier, never any confidential evidence or `ChangeRequest` free
+   text, consistent with §8.1 step 4's and §9.5 step 3's confidentiality
+   rule; unified hold recomputation via
+   `apps.procurement_gates.services.recompute_package_hold_state` (§8.4);
+   and a `PackageGateState` cache refresh through the same locked
+   transaction (§9.6), matching §14.1a's "no independent lock" rule for
+   that cache.
+8. Commit atomically. Only after this transaction commits does
+   `compute_gate_state`'s next read reflect the post-expiry state; until
+   then, a concurrent reader still correctly sees the override's
+   pre-expiry, `OVERRIDDEN` state (the read is pure and does not itself
+   force reconciliation).
+
+**Human approval, rejection, revocation, and expiry reconciliation now use
+the identical lock order (binding).** No Milestone 1 code path may lock a
+`ProcurementGateOverride` and its `ProcurementPackage` in any order other
+than override-first, package-second — this Phase 2 correction closes the
+one operation in §14.1a's table (the "Expired-override reconciliation,
+Phase 2" row) that previously, and inconsistently, used the package-only
+Pattern B despite acting on an existing, caller/system-identified
+`ProcurementGateOverride` row. §14.1a's table is corrected accordingly
+(below).
 
 **Mandatory invocation points (binding).** Every public service that (a)
 serializes current gate state for display, (b) evaluates a gate (creates
@@ -2474,6 +2740,26 @@ policy shipped by the Milestone 1 data migration (§4.2),
 `gate_schema[gate_code].attempt_creation_capability` (§3.1, §3.2) is
 `CREATE_PROCUREMENT_GATE_ATTEMPT` for all six gates, `A1` through `A6`.
 
+**New capability code (binding, resolves CR-CREATE-AUTH-GAP):**
+`REQUEST_PACKAGE_CHANGE` is added to the existing `CapabilityGrant`
+capability-code registry, following the same precedent as
+`CREATE_PROCUREMENT_GATE_ATTEMPT` and `PUBLISH_GATE_POLICY`. It authorizes
+creation of a `governance.ChangeRequest` against a persisted, gate-governed
+`ProcurementPackage` through `request_gate_aware_change` (§8.2.1) and
+nothing else. It is never implied by any role default
+(`ROLE_DEFAULT_CAPABILITIES`) and is a distinct capability from
+`CREATE_PROCUREMENT_GATE_ATTEMPT`, from every
+`CHANGE_REQUEST_APPROVAL_CAPABILITY`-mapped decision capability (the row
+immediately below), and from `AUTHORIZE_EXCEPTION` — requesting a change,
+deciding a change, and requesting a gate override are three separate
+authorization questions, never conflated. It is granted only at package
+scope, via `CapabilityGrant.role_assignment`/`CapabilityGrant.package`
+once a `RoleAssignment` exists for the package — never at organization
+scope, unlike the narrow, named `A1`-bootstrap exception above, because a
+`ChangeRequest` can only ever be requested against an already-frozen
+package (`request_change`'s own `package.is_frozen` precondition), by
+which point package-scoped roles necessarily already exist.
+
 | Path | Capability required | Notes |
 |---|---|---|
 | View gate summary/detail (authorized projection) | package-scoped active role assignment, no elevated capability beyond it | Unauthorized viewer gets denial before any projection is computed. |
@@ -2486,8 +2772,8 @@ policy shipped by the Milestone 1 data migration (§4.2),
 | Approve `ProcurementGateOverride` | A distinct capability from the requester's own grant (§11.3) | |
 | Revoke `ProcurementGateOverride` | Same capability as approval | |
 | Create/approve `PackageFreezeRevision` | `APPROVE_TECHNICAL_SPEC` (existing code) for the initial freeze; refreeze additionally requires the triggering `ChangeRequest`'s own approval capability | |
-| Create `governance.ChangeRequest` against a gate-governed, frozen package | Resolved entirely inside `apps.procurement_gates.services.request_gate_aware_change` (§8.2.1) — the same capability check `apps.governance.services.request_change` already performs, evaluated before any protected value is retrieved | This is the sole Milestone 1 creation entry point (§8.2.1); it is not a new authorization rule, only a named, single enforcement location. |
-| Decide (approve or reject) a `governance.ChangeRequest` against a gate-governed package (binding, resolves NF-V4-2) | Resolved entirely inside `apps.procurement_gates.services.decide_gate_aware_change` (§8.2.3 step 5) using the **exact existing** `apps.governance.services.CHANGE_REQUEST_APPROVAL_CAPABILITY[field_name]` mapping — the identical dict `approve_change_request`/`reject_change_request` already consult internally; `decide_gate_aware_change` never defines, duplicates, or maintains a second, independently-editable capability mapping for this decision | Scope is the locked, persisted `ChangeRequest` and the `ProcurementPackage` derived from its own `package_id` (§8.2.3 step 3) — never a caller-supplied package identifier. Authorization occurs before any protected `ChangeRequest` field is retrieved (§8.2.3 step 5). Reusing the one existing mapping means the wrapper's authorization decision and the wrapped foundation function's own, independent authorization check can never silently drift apart — if they were ever to disagree, it could only be a bug in the reused mapping itself, never a second table diverging from the first. |
+| Create `governance.ChangeRequest` against a gate-governed, persisted `ProcurementPackage` (binding, corrected — resolves CR-CREATE-AUTH-GAP) | Resolved entirely inside `apps.procurement_gates.services.request_gate_aware_change` (§8.2.1), the sole Milestone 1 creation entry point, via the new `REQUEST_PACKAGE_CHANGE` capability, package-scoped: `has_capability(actor, REQUEST_PACKAGE_CHANGE, package=package)`. **Corrected claim:** the unmodified `apps.governance.services.request_change` performs **no** capability check of its own — verified against that function in its entirety, it checks only `package.is_frozen` — so this wrapper's check is the sole enforcement point, not a restatement of an existing one. `request_change` is invoked only after this check completes. | Scope is the package loaded from its own persisted primary key (§8.2.1 step 2), never from caller-supplied data. Authorization occurs before any protected `ChangeRequest` value (`field_name`, `frozen_current_value`, `proposed_new_value`) is retrieved (§8.2.1 step 3). Organization membership, role name, and superuser status alone are insufficient (§13's restated rules below). |
+| Decide (approve or reject) a `governance.ChangeRequest` against a gate-governed package (binding, resolves NF-V4-2 and, as of version 6, NF-V4-2-INCOMPLETE-MAPPING) | Resolved entirely inside `apps.procurement_gates.services.decide_gate_aware_change` (§8.2.3 step 5) using the **exact existing lookup semantics** of `apps.governance.services.CHANGE_REQUEST_APPROVAL_CAPABILITY.get(field_name, "APPROVE_ROLE_CHANGE")` — the identical `.get(...)` call, with the identical fallback, that `approve_change_request`/`reject_change_request` already perform internally (verified against those functions in their entirety; version 5's bracket-notation description, `CHANGE_REQUEST_APPROVAL_CAPABILITY[field_name]`, does not match the actual dictionary access and is corrected here). `decide_gate_aware_change` reuses this exact dict and this exact fallback — it never defines, duplicates, or maintains a second, independently-editable capability mapping, and it never substitutes a different default for an unmapped code. `field_name` is validated against `FROZEN_FIELD_CODES` (§8.2.2) before this lookup runs, though the lookup itself — mapped or fallback — requires no branch on that validation's result. | Scope is the locked, persisted `ChangeRequest` and the `ProcurementPackage` derived from its own `package_id` (§8.2.3 step 3) — never a caller-supplied package identifier. Authorization occurs before any protected `ChangeRequest` field is retrieved (§8.2.3 step 5). **Explicitly mapped codes (present as dictionary keys):** `visibility_mode` → `APPROVE_VISIBILITY_CHANGE`; `seller_of_record`, `exporter_of_record`, `china_procurement_operator`, `production_factory`, `production_site` → `APPROVE_ROLE_CHANGE`. **Fallback-only codes (absent as keys, resolved through `.get`'s default, currently also `APPROVE_ROLE_CHANGE`):** `incoterm`, `currency`, `payment_terms`, `approved_specification_revision`, `evidence_policy_reference` — every remaining registered `FROZEN_FIELD_CODES` entry. An alias or a translated display label of any code (§17) never selects a capability — only the stored, canonical code is ever passed to this lookup. Reusing the one existing dict and its one existing default means the wrapper's authorization decision and the wrapped foundation function's own, independent authorization check can never silently drift apart — if they were ever to disagree, it could only be a bug in the reused mapping itself, never a second table diverging from the first. |
 
 **Binding rules restated for this domain specifically (already true
 platform-wide, restated because the review flagged them as easy to get
@@ -2584,7 +2870,7 @@ order other than the one listed for it:
 | `ProcurementGateOverride` approve/reject/revoke (existing row) | A | `ProcurementGateOverride` → `ProcurementPackage` | §11 |
 | `GateAttempt` creation (`A1`–`A6`) | B | `ProcurementPackage` only (no separate `GateAttempt` lock — none exists yet, §9.2 step 2) | §9.2 |
 | `GateDecision` creation (closes an existing `GateAttempt`) | A | `GateAttempt` → `ProcurementPackage` | §9.4 |
-| Expired-override reconciliation, Phase 2 (`reconcile_expired_overrides`) | B | `ProcurementPackage` only (system-triggered cascade over potentially several overrides/downstream gates, not one caller-identified row) | §11.5 |
+| Expired-override reconciliation, Phase 2 (`reconcile_expired_overrides`) | A (corrected in version 6, resolves LOCK-ORDER-1-1 — was Pattern B in version 5) | `ProcurementGateOverride` → `ProcurementPackage` | §11.5 |
 | Gate-state projection cache write (`PackageGateState`, if maintained) | N/A | No lock of its own — written, if at all, only as part of whichever Pattern A/B transaction above already holds the package lock; never independently locked or written outside one of those transactions (§9.6, corrected — see §9.5/§11.5 consistency note) | §9.6 |
 
 No Milestone 1 code path may lock a package-scoped child row and the
@@ -2598,7 +2884,8 @@ already-held re-lock inside its wrapper's outer lock, never as a
 separately-contending transaction.
 
 Required PostgreSQL deadlock-regression tests (§18, §15.1, new tests
-31j–31n, resolves LOCK-ORDER-1): concurrent `approve`/`reject` calls on
+31j–31n, resolves LOCK-ORDER-1; 31o–31t, resolves LOCK-ORDER-1-1):
+concurrent `approve`/`reject` calls on
 the same `ChangeRequest` via `decide_gate_aware_change` never deadlock
 against each other; a retained direct call to `approve_change_request`/
 `reject_change_request` (a legacy, non-gate-aware caller, exercised only
@@ -2610,11 +2897,19 @@ architectural bypass test is in force — cannot occur at all in production
 code, and the test documents which guarantee actually holds; `RiskFlag`
 resolution via `resolve_gate_aware_risk_flag` racing a concurrent
 gate-native `PackageHoldCause` creation (§8.1's cascade) never deadlocks;
-override expiry (`reconcile_expired_overrides`) racing a concurrent human
-override revocation on the same override never deadlocks and produces
-exactly one outcome (mirrors test 31c–31g); and a deadlock victim's
+and a deadlock victim's
 transaction rolls back cleanly with no partial mutation, and a retry
-succeeds deterministically (§14.3).
+succeeds deterministically (§14.3). **Correction (resolves
+LOCK-ORDER-1-1): version 5 additionally asserted, unconditionally, that
+override expiry (`reconcile_expired_overrides`) racing a concurrent human
+override revocation "never deadlocks" — this was not actually supported
+by version 5's own Phase 2 lock order (package-only, no explicit override
+lock), which was inconsistent with human revocation's override-first
+order and did not, in fact, guarantee the absence of a deadlock; the
+claim is removed here and replaced by §11.5's corrected, binding
+`ProcurementGateOverride`-first order plus the explicit test list
+immediately below (§18 tests 31o–31t), which is the only claim this
+Charter now makes about that race.**
 
 ### 14.2 Duplicate-submission detection
 
@@ -2690,12 +2985,15 @@ not be claimed as validated on SQLite evidence alone:
   override, and a reconciling call racing a concurrent decision/attempt
   creation on a downstream gate.
 - **Global lock-order/deadlock regression across every gate-aware wrapper
-  (added, resolves LOCK-ORDER-1)** — the §14.1a lock-order table's
+  (added, resolves LOCK-ORDER-1; extended in version 6, resolves
+  LOCK-ORDER-1-1)** — the §14.1a lock-order table's
   Pattern A operations (`decide_gate_aware_change`, `resolve_gate_aware_risk_flag`,
-  `ProcurementGateOverride` decision/revocation, `GateDecision` creation)
-  verified under genuine concurrent contention against each other and
-  against any retained direct call to the foundation functions they wrap,
-  per §18 tests 31j–31n.
+  `ProcurementGateOverride` decision/revocation, `GateDecision` creation,
+  and, as of version 6, `reconcile_expired_overrides` Phase 2 — corrected
+  from Pattern B to Pattern A, §11.5) verified under genuine concurrent
+  contention against each other and against any retained direct call to
+  the foundation functions they wrap, per §18 tests 31j–31n and, for the
+  Phase 2 correction specifically, 31o–31t.
 
 ### 15.2 Closure gate
 
@@ -2814,6 +3112,28 @@ Milestone 1-compliant and must not ship:
    view only, never an editable form); no `list_editable`; no custom admin
    action that mutates a model instance.
 
+**`PackageGateState` is explicitly exempt from this list (binding,
+resolves PGSTATE-ADMIN-1).** `PackageGateState` (§9.6) is a rebuildable
+cache, not a historical or append-only record — `rebuild_gate_state`
+(§9.1) can regenerate every row from `GateAttempt`/`GateEvaluation`/
+`GateDecision`/`GateInvalidation`/`ProcurementGateOverride` history alone,
+using nothing but repeated, pure `compute_gate_state` calls, and losing
+every `PackageGateState` row loses no information. It therefore does not
+require treatment 1 or 2 above, and is not subject to §16.3's
+admin-immutability declaration requirement. This exemption is narrow and
+does not relax service control: `PackageGateState` mutations remain
+**exclusively** written by the same locked, already-open transactions that
+already hold the relevant `ProcurementPackage` lock for their own purposes
+(§9.6, §14.1a's "no independent lock" rule) — no admin add/change/delete
+path is authorized to write `PackageGateState` directly, whether or not
+the model is registered in Django admin, because doing so would write a
+value `compute_gate_state` did not itself just compute and could silently
+diverge from the rebuildable truth. If `apps.procurement_gates.admin`
+registers `PackageGateState` at all (e.g. for read-only operational
+visibility into the cache), it uses the same read-only `ModelAdmin`
+shape as treatment 2, even though the model itself is not on the binding
+list above.
+
 **A blanket auto-registration loop using a writable default `ModelAdmin`
 — the exact pattern `apps/governance/admin.py` uses today — is
 prohibited for every procurement-gates historical model listed above.**
@@ -2888,11 +3208,19 @@ symmetric edit prohibition: `GateAttempt` receives the same treatment-1-or-2
 admin declaration as every other model in this section, closing the
 edit-bypass gap §3.5 alone did not address.
 
-Required tests (§18, new tests 47g–47n, resolves NF4-A): for each listed
+Required tests (§18, new tests 47g–47n, resolves NF4-A; 47g-1, resolves
+NF4-A-1): for each listed
 model, either it does not appear in `django.contrib.admin.site._registry`
 at all, or its registered `ModelAdmin` reports
-`has_change_permission()==False` and `has_delete_permission()==False` for
-every user including a superuser; a direct `POST` to that model's admin
+`has_add_permission()==False`, `has_change_permission()==False`, and
+`has_delete_permission()==False` for
+every user including a superuser (**test 47g-1, resolves NF4-A-1 —
+version 5's test list named only `has_change_permission`/
+`has_delete_permission`, omitting `has_add_permission` despite the
+binding policy above requiring all three**); a direct `POST` to that
+model's admin **add** view is rejected (403/404, not a created row) for
+every listed model that is registered (**resolves NF4-A-1**), and a direct
+`POST` to that model's admin
 change view (for a model that *is* registered) is rejected (403/404, not a
 saved mutation); no bulk admin action modifying or deleting a listed model
 is available in the admin action list; a staff user with ordinary Django
@@ -2902,12 +3230,16 @@ through any admin-exposed path; any admin-exposed operational action for
 the same domain service used outside admin, never a parallel mutation; the
 admin list/detail projection for a listed model never exposes a raw
 protected `reason`/`notes` field to a staff user lacking the corresponding
-classification authorization (§6.2, §13); and a static/architectural test
+classification authorization (§6.2, §13); a static/architectural test
 enumerates every model in `apps.procurement_gates.models` and fails if any
 historical model from the binding list above is registered with Django's
 default, unrestricted `ModelAdmin` (i.e. proves no blanket
 auto-registration loop accidentally creates a writable admin for a listed
-model).
+model); and `PackageGateState` is proven rebuildable from history alone
+(`rebuild_gate_state` output matches the live cache after arbitrary
+mutation, resolves PGSTATE-ADMIN-1, cross-referenced with §9.6's identical
+test) and, if registered in admin at all, exposes no add/change/delete
+path regardless of its exemption from the binding historical-model list.
 
 ---
 
@@ -3031,6 +3363,46 @@ organization, but every row must be traceable to at least one test.
     invalidation (not deleted).
 22. Refreeze creates revision 2+, correctly referencing the triggering
     `ChangeRequest` and predecessor revision.
+
+**Refreeze completion and hold-cause closure (resolves
+HOLD-CAUSE-CLOSURE-1, §7.3)**
+22a. `complete_package_refreeze` closes exactly the open
+     `CRITICAL_CHANGE_REQUEST` `PackageHoldCause` rows whose `reference` is
+     one of the refreeze's own `source_change_requests` — exact matching,
+     no over- or under-closure.
+22b. A refreeze leaves every unrelated hold cause untouched: an open
+     `PREDECESSOR_OVERRIDE_LAPSE` cause, a `CRITICAL_CHANGE_REQUEST` cause
+     for a different, not-yet-satisfied `ChangeRequest`, a still-`PENDING`
+     `ChangeRequest`, and an unresolved `RiskFlag` all survive a refreeze
+     that does not name them, and the package's final `is_on_hold`
+     correctly reflects whichever of these remain (resolves the
+     "must not clear predecessor-override-lapse" requirement).
+22c. A refreeze whose `source_change_requests` names more than one
+     approved critical `ChangeRequest` closes every matching
+     `PackageHoldCause` for all of them in the same transaction, and none
+     for any critical `ChangeRequest` not named.
+22d. A duplicate `complete_package_refreeze` call (e.g. a retried request
+     naming the same `source_change_requests` after a network timeout)
+     performs no further mutation once the first call has already closed
+     the matching causes and created the revision — idempotent closure,
+     no duplicate `PackageFreezeRevision`, no duplicate closure audit
+     event.
+22e. A failure partway through `complete_package_refreeze` (e.g. after the
+     new `PackageFreezeRevision` is created but before every matching
+     `PackageHoldCause` is closed) rolls back the entire transaction — no
+     partial state where a refreeze revision exists but its hold causes
+     remain open, or vice versa.
+22f. Closing an already-closed `PackageHoldCause` (idempotent closure) is a
+     no-op: `closed_at` is not overwritten, no duplicate closure audit
+     event is appended, and no error is raised.
+22g. After a refreeze commits, `package.is_on_hold` reflects the full,
+     freshly recomputed unified projection (§8.4) — never a stale value
+     computed before the refreeze's own `PackageHoldCause` closures.
+22h. Every `PACKAGE_REFREEZE_CREATED` and `PackageHoldCause`-closure audit
+     event references only safe identifiers (revision number,
+     `ChangeRequest` ids, cause ids) — never a `ChangeRequest`'s own
+     free-text `reason`/`proposed_new_value` (safe auditing).
+
 23. Multiple concurrent Change Requests each open independent hold causes;
     hold clears only when all are resolved (§8.4).
 24. A Risk Flag plus a Change Request both holding a package requires both
@@ -3143,6 +3515,46 @@ organization, but every row must be traceable to at least one test.
      as non-critical; a translation/display label of a registry code never
      alters the stored code itself.
 
+**Change Request creation authorization (resolves CR-CREATE-AUTH-GAP)**
+25v. `request_gate_aware_change` succeeds for an actor holding an active,
+     package-scoped `CapabilityGrant`/`RoleAssignment`-derived
+     `REQUEST_PACKAGE_CHANGE` grant scoped to the **correct** target
+     package (correct package grant).
+25w. `request_gate_aware_change` denies an actor whose `REQUEST_PACKAGE_CHANGE`
+     grant is scoped to a **different** package than the one named in the
+     request, never silently substituting or widening scope (wrong
+     package).
+25x. `request_gate_aware_change` denies an actor with organization
+     membership and no `REQUEST_PACKAGE_CHANGE` grant of any kind (no
+     grant).
+25y. `request_gate_aware_change` denies an actor whose `REQUEST_PACKAGE_CHANGE`
+     grant exists but is inactive (`is_active=False`) or has lapsed past
+     its own expiry (inactive grant).
+25z. `request_gate_aware_change` denies an actor holding
+     `REQUEST_PACKAGE_CHANGE` only at organization scope (no package-scoped
+     `RoleAssignment`/`CapabilityGrant` for the target package) — the
+     organization-scoped path is reserved exclusively for the `A1`
+     attempt-creation bootstrap (§13) and is never a substitute for this
+     capability's required package scope (unscoped grant).
+25aa. A static/architectural test proves the package used for step 3's
+     authorization check is the same, single locked row loaded in step 2
+     from the package's own persisted primary key — no code path retrieves
+     `field_name`, `frozen_current_value`, or `proposed_new_value` before
+     that authorization check completes (authorization-before-retrieval).
+25ab. A denial at step 3 is durably recorded via
+     `PRIVILEGED_ACCESS_DENIED`, naming `REQUEST_PACKAGE_CHANGE` as the
+     missing capability and the target package, before any protected
+     `ChangeRequest` value is read or logged anywhere, including in the
+     denial's own audit metadata (safe denial auditing).
+25ac. The static/architectural test already required by 25c (no Milestone
+     1 path calls `apps.governance.services.request_change` directly) is
+     extended to additionally prove no Milestone 1 path invokes
+     `request_gate_aware_change`'s own internal `request_change` call
+     without having first passed this section's `REQUEST_PACKAGE_CHANGE`
+     check — i.e. no test fixture or production path reaches the
+     foundation function through any route that bypasses this wrapper's
+     authorization step (direct-call bypass prevention).
+
 **Change Request decision entry point (resolves NF-NEW-1)**
 25i. Critical approval via `decide_gate_aware_change` triggers the full
      cascade: `A2`/`A3`–`A6` invalidation, active-override revocation, a
@@ -3187,9 +3599,23 @@ organization, but every row must be traceable to at least one test.
      hold.
 25u. `decide_gate_aware_change`'s authorization check for a given
      `field_name` denies and allows identically to
-     `CHANGE_REQUEST_APPROVAL_CAPABILITY[field_name]` for every registered
-     frozen-field code, proving no second, independent capability mapping
-     exists (resolves NF-V4-2).
+     `CHANGE_REQUEST_APPROVAL_CAPABILITY.get(field_name, "APPROVE_ROLE_CHANGE")`
+     for every registered frozen-field code, proving no second, independent
+     capability mapping exists (resolves NF-V4-2, corrected in version 6 —
+     resolves NF-V4-2-INCOMPLETE-MAPPING — to use the dictionary's actual
+     `.get(...)`-with-fallback access pattern rather than bracket
+     notation).
+25u-1. Every explicitly mapped `FROZEN_FIELD_CODES` entry
+     (`visibility_mode` → `APPROVE_VISIBILITY_CHANGE`; `seller_of_record`,
+     `exporter_of_record`, `china_procurement_operator`,
+     `production_factory`, `production_site` → `APPROVE_ROLE_CHANGE`) is
+     individually tested and resolves to its documented capability; every
+     currently-unmapped `FROZEN_FIELD_CODES` entry (`incoterm`, `currency`,
+     `payment_terms`, `approved_specification_revision`,
+     `evidence_policy_reference`) is individually tested and resolves to
+     the shared `.get(...)` fallback, `APPROVE_ROLE_CHANGE`, without
+     raising `KeyError` or any other lookup failure (resolves
+     NF-V4-2-INCOMPLETE-MAPPING).
 
 **Decisions and attempts**
 26. A `GateDecision` requires the exact capability declared in
@@ -3293,6 +3719,42 @@ organization, but every row must be traceable to at least one test.
      produces exactly one outcome (mirrors 31c–31g).
 31n. A deadlock victim's transaction rolls back cleanly with no partial
      mutation, and a retry succeeds deterministically (§14.3).
+
+**Override reconciliation lock order (resolves LOCK-ORDER-1-1, §11.5,
+§11.3, §14.1a)**
+31o. `reconcile_expired_overrides` Phase 2 locks the candidate
+     `ProcurementGateOverride` before the `ProcurementPackage`
+     (`ProcurementGateOverride` → `ProcurementPackage`, Pattern A), matching
+     the identical order used by human approval, rejection, and
+     revocation — verified by a PostgreSQL concurrency test racing Phase 2
+     against a concurrent **human revocation** of the same override
+     (expiry versus human revocation).
+31p. A PostgreSQL concurrency test races Phase 2 against a concurrent
+     **human approval or rejection** of a different, unrelated override on
+     the same package, confirming both transactions serialize correctly on
+     the shared `ProcurementPackage` lock without deadlocking (expiry
+     versus approval/rejection).
+31q. Two Phase 2 calls racing to reconcile the **same** expired override
+     (duplicate reconciliation) produce exactly one expiry-observation
+     outcome; the second call's step 5 revalidation observes the already-expired
+     state and no-ops, never producing a duplicate `GATE_OVERRIDE_EXPIRED`
+     event or a duplicate `PackageHoldCause`.
+31r. A rollback triggered mid-Phase-2 (after the override lock and package
+     lock are both held, but before the transaction commits) leaves no
+     partial mutation — the override remains in its pre-reconciliation
+     state, verified by re-reading it in a fresh transaction (rollback).
+31s. A retried Phase 2 call for the same override, after a prior call's
+     transient failure (e.g. a deadlock-victim rollback), deterministically
+     reaches the same, single reconciled outcome as an uncontended first
+     attempt (retry, §14.3).
+31t. A genuine PostgreSQL deadlock-regression test — two transactions
+     deliberately racing `reconcile_expired_overrides` Phase 2 and a
+     concurrent human revocation on the same override, executed against a
+     real PostgreSQL connection per §15.1's binding rule (not SQLite) —
+     confirms the corrected `ProcurementGateOverride`-first order prevents
+     an opposite-order deadlock between these two paths (PostgreSQL
+     deadlock regression; this is §15.1's ninth named scenario, extended
+     in version 6 to explicitly include this specific race).
 
 32. Override revocation immediately changes `compute_gate_state`'s output
     for that attempt.
@@ -3552,8 +4014,13 @@ declared closed:
 3. Migrations are clean (`makemigrations --check --dry-run`,
    `migrate --check` both pass).
 4. All tests in §18's matrix pass — including §16.3's admin-immutability
-   tests (47g–47n, resolves NF4-A) and §14.1a's lock-order/deadlock-regression
-   tests (25r–25s, 31j–31n, resolves LOCK-ORDER-1) — plus the full existing
+   tests (47g–47n, resolves NF4-A; 47g-1, resolves NF4-A-1) and §14.1a's
+   lock-order/deadlock-regression
+   tests (25r–25s, 31j–31n, resolves LOCK-ORDER-1; 31o–31t, resolves
+   LOCK-ORDER-1-1) — plus §8.2.1's creation-authorization tests (25v–25ac,
+   resolves CR-CREATE-AUTH-GAP), §13's capability-mapping tests (25u-1,
+   resolves NF-V4-2-INCOMPLETE-MAPPING), and §7.3's refreeze-completion
+   tests (22a–22h, resolves HOLD-CAUSE-CLOSURE-1) — plus the full existing
    regression suite with no new failures.
 5. PostgreSQL concurrency validation is completed per §15.1's nine named
    scenarios (corrected, resolves DOC-COUNT-1 — version 4 left this count
@@ -3581,9 +4048,12 @@ declared closed:
 **Historical traceability note (binding, resolves TRACE-1).** The finding
 identifiers used across this section and this Charter's revision history
 — `CHTR-001` through `CHTR-012`, `REVAL-001` through `REVAL-012`, `NF-1`
-through `NF-4` and `NF-7`, `NF-NEW-1` through `NF-NEW-5`, and
+through `NF-4` and `NF-7`, `NF-NEW-1` through `NF-NEW-5`,
 `RISKFLAG-HOLD-1`/`NF4-A`/`DOC-COUNT-1`/`LOCK-ORDER-1`/`NF4-C`/`NF-V4-2`/
-`README-STALE`/`IMPL-LOG-COUNT`/`NF-V4-5` — are historical labels assigned
+`README-STALE`/`IMPL-LOG-COUNT`/`NF-V4-5`, and, as of version 6,
+`CR-CREATE-AUTH-GAP`/`HOLD-CAUSE-CLOSURE-1`/`NF-V4-2-INCOMPLETE-MAPPING`/
+`LOCK-ORDER-1-1`/`NF4-A-1`/`PGSTATE-ADMIN-1`/`CHTR-010-COUNT-2`/
+`HOLD-WORDING-1`/`NF-1-SUMMARY-1` — are historical labels assigned
 by each independent review at the time it ran and are **not guaranteed to
 be contiguous**. In particular, `NF-5` and `NF-6` do not appear anywhere
 in this numbering sequence. A full search of this repository's committed
@@ -3608,7 +4078,7 @@ absent concrete source evidence establishing one.
 | CHTR-007 — No gate attempt/evaluation/decision/invalidation model or audit taxonomy | **Accept.** `GateAttempt`/`GateEvaluation`/`GateDecision`/`GateInvalidation` defined with exact meanings, plus a derived current-state cache and a rebuild-from-history requirement; new `AuditEvent.Action` codes enumerated. | §9, §10. |
 | CHTR-008 — "Live validation" method undefined | **Accept.** Explicit, real HTTP/browser walkthrough method defined, distinct from and in addition to automated tests, with ten required paths and a required record format. | §19. |
 | CHTR-009 — Milestone 1 vs. Milestone 3 API boundary ambiguous | **Accept as clarified boundary.** Narrow, exhaustive Milestone 1 surface list defined; generalized convergence work explicitly reserved for Milestone 3. | §16. |
-| CHTR-010 — PostgreSQL availability/validation treatment unstated | **Accept with explicit rule.** SQLite permitted for general development; eight named lock-sensitive scenarios (six as of version 2, plus the version-3 downstream-invalidation-cascade scenario, resolves REVAL-008-RESIDUAL, and the version-4 two-phase override-reconciliation-locking scenario, resolves NF-NEW-4) require real PostgreSQL evidence or a separate, milestone-specific owner disposition before closure — never silently carried forward as validated. | §15. |
+| CHTR-010 — PostgreSQL availability/validation treatment unstated | **Accept with explicit rule.** SQLite permitted for general development; **nine** named lock-sensitive scenarios (six as of version 2, plus the version-3 downstream-invalidation-cascade scenario, resolves REVAL-008-RESIDUAL, the version-4 two-phase override-reconciliation-locking scenario, resolves NF-NEW-4, and the version-5 global lock-order/deadlock-regression scenario, resolves LOCK-ORDER-1 — **corrected in version 6, resolves CHTR-010-COUNT-2: this row itself was left at a stale "eight" by version 5's own DOC-COUNT-1 correction, which updated §15.1/§15.2/§20 item 5/`docs/SECURITY.md` to "nine" but not this historical disposition row**) require real PostgreSQL evidence or a separate, milestone-specific owner disposition before closure — never silently carried forward as validated. | §15. |
 | CHTR-011 — `EvidenceBundle`/`EvidenceItem` reuse feasibility (positive finding) | **Accept.** Confirmed and specified in full; no new evidence-storage model introduced. | §5. |
 | CHTR-012 — Evidence-classification inheritance from package visibility mode undefined | **Accept.** Deterministic classification precedence defined, plus participant-projection and information-absence rules and an explicit rule against exposing raw evidence merely because it is referenced. | §6. |
 
@@ -3656,7 +4126,7 @@ findings:
 
 | Finding | Original classification | Original severity | Blocked before correction? | Accepted disposition | Exact correction applied | Corrected Charter references |
 |---|---|---|---|---|---|---|
-| NF-1 — §8.2's "non-critical changes never touch hold state" was contradicted by the current, unmodified `apps.governance.services.request_change`, which unconditionally sets `is_on_hold = True` on every `ChangeRequest` creation | Internal contradiction against current repository code | Critical | Yes | Accept | Added `apps.procurement_gates.services.request_gate_aware_change` as the sole Milestone 1 Change Request entry point, wrapping the unmodified `request_change`, with its own hold-state recomputation from all open `PackageHoldCause` rows | §8.2.1, §13, §18 tests 25c–25g |
+| NF-1 — §8.2's "non-critical changes never touch hold state" was contradicted by the current, unmodified `apps.governance.services.request_change`, which unconditionally sets `is_on_hold = True` on every `ChangeRequest` creation | Internal contradiction against current repository code | Critical | Yes | Accept | Added `apps.procurement_gates.services.request_gate_aware_change` as the sole Milestone 1 Change Request entry point, wrapping the unmodified `request_change`, with its own hold-state recomputation via the unified projection — **corrected in version 6, resolves NF-1-SUMMARY-1: this row understated the mechanism as recomputation "from all open `PackageHoldCause` rows" alone; the actual, later-finalized rule (§8.4) is `has_unresolved_governance_holds(package) OR active PackageHoldCause exists` — both governance-side sources (pending `ChangeRequest`, non-`STANDARD` `RiskFlag`) and gate-native `PackageHoldCause` rows, never `PackageHoldCause` rows alone** | §8.2.1, §8.4, §13, §18 tests 25c–25g |
 | REVAL-004-RESIDUAL — the post-A2 cascade revoked overrides only on A3–A6, never addressing an `A2` gate left `OVERRIDDEN` by a policy-opt-in override | State-machine gap | High | Yes | Accept | `A2` is now unconditionally, permanently non-overridable (publication-time rejection); `A2` can never enter `OVERRIDDEN`, so the gap cannot occur | §3.2, §12.1, §8.1 closing note, §18 tests 10c, 33c |
 | REVAL-005-RESIDUAL — the exact A1-bootstrap capability code was never named, only its organization-vs-package scope shape | Authorization completeness gap | High | Yes | Accept | Added `CREATE_PROCUREMENT_GATE_ATTEMPT` as a new capability code; the A1-bootstrap grant now names it explicitly | §13, §18 test 27b |
 | REVAL-008-RESIDUAL — no defined behavior for a downstream `PASSED`/`OVERRIDDEN` gate when the predecessor override it relied on later expires or is revoked | Internal contradiction / stale-descendant gap | Critical | Yes | Accept | Added an explicit, locked downstream-invalidation cascade (§9.5), mirroring §8.1's shape, with a new `GATE_DOWNSTREAM_INVALIDATED` audit action | §9.5, §10, §15.1 (7th PostgreSQL scenario), §18 tests 33d–33k |
@@ -3728,12 +4198,42 @@ corrects all ten:
 documentation dispositions only. A1–A6 remain unimplemented. Version 5 of
 this Charter has not itself been independently revalidated — see §22.
 
+### 21.6 CR-CREATE-AUTH-GAP, HOLD-CAUSE-CLOSURE-1,
+NF-V4-2-INCOMPLETE-MAPPING, LOCK-ORDER-1-1, NF4-A-1, PGSTATE-ADMIN-1,
+CHTR-010-COUNT-2, HOLD-WORDING-1, NF-1-SUMMARY-1 (independent Milestone 1
+Charter Version 5 Revalidation, corrected in version 6)
+
+The independent Milestone 1 Charter Version 5 Revalidation, performed
+against commit `ebcabdc582dd8ffea3ebdfce68dc55c4ee59c526` (the commit
+introducing version 5), found four blocking findings (CR-CREATE-AUTH-GAP,
+HOLD-CAUSE-CLOSURE-1, NF-V4-2-INCOMPLETE-MAPPING, LOCK-ORDER-1-1) and five
+additional, closely-related non-blocking cleanup items (NF4-A-1,
+PGSTATE-ADMIN-1, CHTR-010-COUNT-2, HOLD-WORDING-1, NF-1-SUMMARY-1) — nine
+items in total — and returned **MILESTONE 1 CHARTER VERSION 5 REQUIRES
+CORRECTION**. Version 6 (this document) corrects all nine:
+
+| Finding | Original section/file | Original severity | Blocked before correction? | Accepted disposition | Exact Version 6 correction | Corrected Charter/doc references |
+|---|---|---|---|---|---|---|
+| CR-CREATE-AUTH-GAP — §8.2.1 step 3 described `ChangeRequest`-creation authorization only as "resolved through `RoleAssignment`/`CapabilityGrant` exactly as `has_capability` already requires," naming no actual capability code; §13's authorization table additionally, and falsely, credited the unmodified `apps.governance.services.request_change` with performing "the same capability check" — verified against that function in its entirety, it performs no capability check of any kind, only a `package.is_frozen` precondition | §8.2.1 step 3, §13 | Critical | Yes | Accept | Defined a new, stable capability code, `REQUEST_PACKAGE_CHANGE`, as the one, actual, package-scoped authorization check for `ChangeRequest` creation, evaluated before any protected value is retrieved and against a package loaded from its own persisted identity, never caller-supplied data; corrected §13's false claim about `request_change`; restated that `request_change` remains unchanged and is invoked only after this wrapper's check completes; added the required architectural bypass test and authorization-matrix tests | §8.2.1, §13, §18 tests 25v–25ac |
+| HOLD-CAUSE-CLOSURE-1 — no Charter version ever named the service function that performs a refreeze, and §8.4 never defined which specific open `PackageHoldCause` rows a given refreeze is permitted to close, risking either over-closure (clearing an unrelated hold, e.g. `PREDECESSOR_OVERRIDE_LAPSE`) or under-closure (a duplicate refreeze reopening already-completed closure work) | §7.2, §8.1 step 6, §8.4 | Critical | Yes | Accept | Added §7.3, naming `apps.procurement_gates.services.complete_package_refreeze` as the sole refreeze entry point, with a ten-step locked transaction that identifies and closes only the exact open `CRITICAL_CHANGE_REQUEST` `PackageHoldCause` rows matching the refreeze's own `source_change_requests`, preserving every unrelated hold; added §8.4's deterministic `PackageHoldCause` identity rule — `(package, cause_type, reference)`, a partial unique constraint on open rows, idempotent creation and closure, and immutable closed history; required tests added | §7.3, §8.1 step 6, §8.4, §18 tests 22a–22h |
+| NF-V4-2-INCOMPLETE-MAPPING — §13's authorization-table row and required test 25u described `decide_gate_aware_change`'s capability lookup using bracket notation, `CHANGE_REQUEST_APPROVAL_CAPABILITY[field_name]`; verified against `apps.governance.services.approve_change_request`/`reject_change_request` in their entirety, the actual lookup is `CHANGE_REQUEST_APPROVAL_CAPABILITY.get(field_name, "APPROVE_ROLE_CHANGE")` — bracket notation would raise `KeyError` for the five currently-unmapped `FROZEN_FIELD_CODES` entries the fallback is specifically meant to handle | §13, §8.2.3 step 5 | Critical | Yes | Accept | Corrected §13's table row and test 25u to the exact `.get(field_name, "APPROVE_ROLE_CHANGE")` semantics; documented which `FROZEN_FIELD_CODES` entries are explicitly mapped (`visibility_mode`, `seller_of_record`, `exporter_of_record`, `china_procurement_operator`, `production_factory`, `production_site`) and which resolve only through the shared fallback (`incoterm`, `currency`, `payment_terms`, `approved_specification_revision`, `evidence_policy_reference`); restated that `field_name` is validated against `FROZEN_FIELD_CODES` before the lookup and that aliases/translated labels never select a capability; added test 25u-1 covering every mapped and every fallback-only code individually | §13, §8.2.3, §18 tests 25u, 25u-1 |
+| LOCK-ORDER-1-1 — `reconcile_expired_overrides` Phase 2 locked `ProcurementPackage` only (Pattern B), the reverse of, and inconsistent with, §14.1a's own binding order for every other operation whose primary existing row is a `ProcurementGateOverride` (human approval/rejection/revocation, Pattern A: `ProcurementGateOverride` → `ProcurementPackage`) — an un-reconciled, opposite-order deadlock risk of the same class LOCK-ORDER-1 already fixed for `decide_gate_aware_change` in version 5; version 5 additionally asserted, unconditionally, that this race "never deadlocks," a claim not actually supported by that inconsistent order | §11.5, §14.1a, §15.1 | Critical | Yes | Accept | Rewrote `reconcile_expired_overrides` Phase 2 to lock the candidate `ProcurementGateOverride` first, derive package identity exclusively from that locked override, then lock `ProcurementPackage` second (Pattern A) — matching human approval/rejection/revocation exactly; corrected §14.1a's table row; added a numbered override-mutation transaction specification in §11.3 shared by approval, rejection, and revocation; removed the unsupported "never deadlocks" claim and replaced it with the corrected order plus explicit required tests; extended §15.1's ninth PostgreSQL-required scenario to name this specific race | §11.3, §11.5, §14.1a, §15.1, §18 tests 31o–31t |
+| NF4-A-1 — §16.3's required-tests paragraph (47g–47n) named only `has_change_permission()==False`/`has_delete_permission()==False` and a change-view `POST` rejection, omitting `has_add_permission()==False` and an add-view `POST` rejection, despite §16.3's own binding policy already requiring all three permission methods to return `False` | §16.3 (required tests only) | Medium | No | Accept | Added test 47g-1: `has_add_permission()==False` verified for every listed model, plus a direct `POST` to each registered listed model's admin **add** view rejected (403/404, not a created row) | §16.3, §18 test 47g-1 |
+| PGSTATE-ADMIN-1 — §16.3's binding historical-model list did not state whether `PackageGateState` (§9.6, a rebuildable cache, not a historical record) was subject to the treatment-1-or-2 admin declaration requirement, or exempt from it while remaining service-controlled | §16.3, §9.6 | Medium | No | Accept | Added an explicit exemption: `PackageGateState` is not subject to §16.3's binding declaration requirement because it is rebuildable from history alone (`rebuild_gate_state`), but its mutations remain exclusively written by the same locked transactions that already hold the relevant `ProcurementPackage` lock — no admin add/change/delete path is authorized to write it directly, registered or not | §16.3, §18 test 47g-1 |
+| CHTR-010-COUNT-2 — §21.1's own CHTR-010 disposition row still said "eight" named PostgreSQL scenarios after version 5's DOC-COUNT-1 correction had already updated §15.1/§15.2/§20 item 5/`docs/SECURITY.md` to "nine," an update that did not reach this historical row | §21.1 (CHTR-010 row) | Low | No | Accept | Corrected §21.1's CHTR-010 row to "nine," naming the version-5 global lock-order/deadlock-regression scenario as the ninth, and noting the count was previously missed here specifically | §21.1 |
+| HOLD-WORDING-1 — §8.1 step 1 described `ProcurementPackage.is_on_hold = True` as "written exclusively by this path for critical-change holds," contradicting §8.4's unified-projection rule that `is_on_hold` is always a recomputed, never independently or exclusively written, cached projection | §8.1 step 1 | Low | No | Accept | Removed the "written exclusively" claim; restated that the `CRITICAL_CHANGE_REQUEST` `PackageHoldCause` was already opened at the `ChangeRequest`'s creation time (§8.2.1 step 7), and that this step records, rather than independently writes, the package's held state, which `recompute_package_hold_state` re-derives at §8.2.3 step 11 | §8.1 step 1 |
+| NF-1-SUMMARY-1 — §21.3's historical NF-1 disposition row described the resulting hold-state mechanism as recomputation "from all open `PackageHoldCause` rows," omitting that the actual, later-finalized §8.4 rule is a two-source `OR` (`has_unresolved_governance_holds(package) OR active PackageHoldCause exists`), not `PackageHoldCause` rows alone | §21.3 (NF-1 row) | Low | No | Accept | Corrected §21.3's NF-1 row to state the unified projection covers both governance-side and gate-native hold sources, cross-referencing §8.4 | §21.3 |
+
+**No implementation has occurred.** This table, like §21.1–§21.5, records
+documentation dispositions only. A1–A6 remain unimplemented. Version 6 of
+this Charter has not itself been independently revalidated — see §22.
+
 ---
 
 ## 22. Status and next action
 
-**MILESTONE 1 CHARTER CORRECTION CYCLE 4 COMPLETE (VERSION 5) — NOT YET
-INDEPENDENTLY REVALIDATED — NOT OWNER-APPROVED.**
+**MILESTONE 1 CHARTER VERSION 6 FINAL CORRECTION COMPLETE — READY FOR
+DELTA-ONLY INDEPENDENT REVALIDATION.**
 
 Version 1 of this Charter was independently revalidated and returned
 MILESTONE 1 CHARTER REQUIRES CORRECTION, with twelve findings
@@ -3769,17 +4269,35 @@ NF4-A — no admin-edit-immutability policy existed for procurement-gates
 historical models beyond the two cases version 4 already covered) and
 eight additional accepted findings (DOC-COUNT-1, LOCK-ORDER-1, NF4-C,
 NF-V4-2, README-STALE, IMPL-LOG-COUNT, NF-V4-5, TRACE-1) — ten items in
-total, all listed in §21.5. Version 5 (this document) corrects all ten.
-Version 5 has **not** itself been independently revalidated. Milestone 1
-implementation remains unauthorized. The exact next action is a new,
-independent Fable 5 Charter revalidation session against the commit that
-introduces this version — confirming this Charter actually resolves
-CHTR-001 through CHTR-012, REVAL-001 through REVAL-012,
-NF-1/REVAL-004-RESIDUAL/REVAL-005-RESIDUAL/REVAL-008-RESIDUAL/
-REVAL-009-TRACE/REVAL-011-ENFORCEMENT/NF-2/NF-3/NF-4/NF-7,
-NF-NEW-1/NF-NEW-2/NF-NEW-3/NF-NEW-4/NF-NEW-5/the editorial correction,
-and RISKFLAG-HOLD-1/NF4-A/DOC-COUNT-1/LOCK-ORDER-1/NF4-C/NF-V4-2/
-README-STALE/IMPL-LOG-COUNT/NF-V4-5/TRACE-1 as claimed, contains no
-internal contradictions of its own, and does not itself require further
-correction — before any owner-approval decision or A1–A6 implementation
-authorization is considered. Do not begin A1–A6 implementation.
+total, all listed in §21.5. Version 5 corrected all ten, but was itself
+independently revalidated (the Independent Milestone 1 Charter Version 5
+Revalidation, performed against commit
+`ebcabdc582dd8ffea3ebdfce68dc55c4ee59c526`, the commit that introduced
+version 5) and returned **MILESTONE 1 CHARTER VERSION 5 REQUIRES
+CORRECTION**, finding four blocking findings (CR-CREATE-AUTH-GAP — no
+capability code was ever named for `ChangeRequest`-creation authorization,
+and §13 falsely credited the unmodified `request_change` with performing
+a check it does not perform; HOLD-CAUSE-CLOSURE-1 — no named refreeze
+service and no defined rule for which `PackageHoldCause` rows a refreeze
+may close; NF-V4-2-INCOMPLETE-MAPPING — §13 described the decision
+capability lookup with bracket notation that does not match the actual
+`.get(...)`-with-fallback dictionary access; LOCK-ORDER-1-1 —
+`reconcile_expired_overrides` Phase 2 used a lock order inconsistent with
+human override approval/rejection/revocation) and five additional,
+closely-related non-blocking cleanup items (NF4-A-1, PGSTATE-ADMIN-1,
+CHTR-010-COUNT-2, HOLD-WORDING-1, NF-1-SUMMARY-1) — nine items in total,
+all listed in §21.6. Version 6 (this document) corrects all nine.
+Version 6 has **not** itself been independently revalidated. Version 6 is
+documentation-only — no application code, template, test, or migration
+was written or modified to produce it. Version 6 is not owner-approved.
+A1–A6 remain unimplemented. Milestone 1 implementation remains
+unauthorized. PostgreSQL and live validation (§15, §19) remain
+outstanding. The exact next action is a new, delta-only independent
+revalidation of Version 6 against the commit that introduces this
+version: review only the Version 5→Version 6 diff, the four blocking
+findings (CR-CREATE-AUTH-GAP, HOLD-CAUSE-CLOSURE-1,
+NF-V4-2-INCOMPLETE-MAPPING, LOCK-ORDER-1-1), the five listed cleanup items
+(NF4-A-1, PGSTATE-ADMIN-1, CHTR-010-COUNT-2, HOLD-WORDING-1,
+NF-1-SUMMARY-1), repository cleanliness, and status accuracy — not a new,
+full architecture audit of this Charter's entire accumulated content.
+Do not begin A1–A6 implementation.

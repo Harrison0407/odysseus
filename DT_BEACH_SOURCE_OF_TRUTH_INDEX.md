@@ -126,10 +126,20 @@ RISKFLAG-HOLD-1, NF4-A — and eight additional accepted findings —
 DOC-COUNT-1, LOCK-ORDER-1, NF4-C, NF-V4-2, README-STALE, IMPL-LOG-COUNT,
 NF-V4-5, TRACE-1). A documentation-only Milestone 1 Charter Correction
 Cycle 4 produced Charter version 5, resolving all ten. Charter version 5
-has not yet been independently revalidated and is not owner-approved.
+was itself independently revalidated (commit
+`ebcabdc582dd8ffea3ebdfce68dc55c4ee59c526`); the result was MILESTONE 1
+CHARTER VERSION 5 REQUIRES CORRECTION (four blocking findings —
+CR-CREATE-AUTH-GAP, HOLD-CAUSE-CLOSURE-1, NF-V4-2-INCOMPLETE-MAPPING,
+LOCK-ORDER-1-1 — and five additional accepted cleanup items — NF4-A-1,
+PGSTATE-ADMIN-1, CHTR-010-COUNT-2, HOLD-WORDING-1, NF-1-SUMMARY-1). A
+documentation-only Milestone 1 Charter Correction Cycle 5 produced Charter
+version 6, resolving all nine. Charter version 6 has not yet been
+independently revalidated and is not owner-approved.
 
-**Next governing activity: a new, independent Milestone 1 Charter
-revalidation session against the commit introducing Charter version 5.**
+**Next governing activity: one delta-only independent revalidation of
+Charter version 6 against the commit introducing it — the version
+5→version 6 diff, the four blocking findings, the five listed cleanup
+items, repository cleanliness, and status accuracy only.**
 A1–A6 implementation is not authorized and has not started.
 
 Tests (as independently reproduced during the cycle-3 revalidation that

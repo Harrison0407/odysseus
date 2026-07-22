@@ -33,17 +33,27 @@ closure point A1–A6 execution was unimplemented and Increment 2 still required
 a separate decision; the subsequently authorized Increment 2 is recorded
 immediately below.
 
-Milestone 1 Increment 2 status (2026-07-21): **IMPLEMENTED; READY FOR
-HARRISON BROWSER TESTING; INCREMENT 3 NOT AUTHORIZED**. Harrison separately
-authorized **Gate Execution Core and A1 Deal Established** from baseline
+Milestone 1 Increment 2 closure record (2026-07-21): **CLOSED AND
+OWNER-ACCEPTED; INCREMENT 3 NOT AUTHORIZED**. Harrison separately authorized
+**Gate Execution Core and A1 Deal Established** from baseline
 `193fdfb720662a235b259b97694a0d5e3d8edcaa`. The bounded implementation adds
 immutable A1 execution history and a rebuildable projection, explicit package
 initialization, A1 evaluation/review/pass/return, and A2 readiness only. Fresh
 SQLite evidence after the browser vertical slice: **663 collected, 657 passed,
 6 PostgreSQL-only tests skipped;
 79/79 migrations applied, 0 pending**. PostgreSQL concurrency remains pending
-and is not claimed as validated. See implementation-log entries 66–67 and
-ADR-051/ADR-052.
+and is not claimed as validated. Codex verification of implementation/browser
+commit `acd2becce64e99c2dac559ccf805b1c64344debd` returned **MILESTONE 1
+IMPLEMENTATION INCREMENT 2 CODEX VERIFIED — READY FOR HARRISON ACCEPTANCE**
+with no remaining Critical or High Increment 2 defect. Harrison completed the
+real browser walkthrough—initialization, evaluation, review request,
+self-approval denial, return, re-attempt, second evaluation, review request,
+separate approval, A1 `PASSED`, and A2 current/non-executable—and explicitly
+accepted Increment 2 at that commit. The accepted implementation commit and
+browser vertical-slice completion commit are both `acd2becce64e99c2dac559ccf805b1c64344debd`.
+Increment 3 remains absent and unauthorized. Exact next action: await
+Harrison's separate explicit authorization to begin Increment 3. See
+implementation-log entries 66–68 and ADR-051/ADR-052.
 
 The Controlled Transparency, Commercial Confidentiality & Authorization
 Foundation is **independently revalidated and owner accepted** as the

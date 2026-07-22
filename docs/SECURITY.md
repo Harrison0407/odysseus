@@ -43,6 +43,16 @@ implementation are recorded immediately below.
 
 ## Milestone 1 Increment 2 security implementation (2026-07-21)
 
+**Closed and owner-accepted:** Codex verification of the Increment 2
+implementation and browser vertical slice at
+`acd2becce64e99c2dac559ccf805b1c64344debd` returned **MILESTONE 1
+IMPLEMENTATION INCREMENT 2 CODEX VERIFIED — READY FOR HARRISON ACCEPTANCE**
+with no remaining Critical or High Increment 2 defect. Harrison explicitly
+accepted **MarketMatch Milestone 1 Implementation Increment 2 — Gate Execution
+Core and A1 Deal Established** at that commit on 2026-07-21 after completing
+the real browser flow through self-approval denial, return/re-attempt, separate
+approval, A1 `PASSED`, and A2 current/non-executable.
+
 Harrison separately authorized **Gate Execution Core and A1 Deal Established**
 from baseline `193fdfb720662a235b259b97694a0d5e3d8edcaa`. The implementation
 uses existing `CapabilityGrant` resolution and adds only stable, non-default
@@ -76,7 +86,10 @@ reads require the exact package-scoped view capability before policy, attempt,
 evaluation, or decision detail is queried; POST actions delegate exclusively
 to canonical services and render mapped, confidentiality-safe errors. A2
 freeze/evaluation, A3–A6, new hold causes, invalidation, overrides, evidence
-mapping, APIs, and Increment 3 remain absent and unauthorized.
+mapping, APIs, and Increment 3 remain absent and unauthorized. Increment 2 is
+closed and owner-accepted; its acceptance does not claim PostgreSQL validation
+or authorize Increment 3. Exact next action: await Harrison's separate
+explicit authorization to begin Increment 3.
 
 `apps.procurement_gates`'s policy-configuration/package-pinning layer
 (`GatePolicy`, `GatePolicyVersion`, `PackagePolicyAssignment`) is

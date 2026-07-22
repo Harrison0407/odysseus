@@ -7,9 +7,10 @@ Last updated: 2026-07-21
 **The Controlled Transparency, Commercial Confidentiality & Authorization
 Foundation is closed and owner-accepted. Foundation correction cycles 2
 and 3 have both been independently revalidated. Milestone 1 Increment 1 is
-closed and owner-accepted; Increment 2 now includes its testable A1 browser
-vertical slice and is ready for Harrison browser testing. Increment 3 is not
-authorized.**
+closed and owner-accepted. Milestone 1 Increment 2 is also closed and
+owner-accepted at `acd2becce64e99c2dac559ccf805b1c64344debd` after Codex
+verification and Harrison's completed real-browser walkthrough. Increment 3
+is not authorized.**
 
 Accepted foundation implementation commit:
 
@@ -427,6 +428,29 @@ The UI completion baseline is this documentation/application commit,
 
 Exact next action: **Harrison browser-tests the fresh synthetic A1 scenario.
 Do not begin Increment 3.**
+
+**Owner acceptance — Increment 2 closed (2026-07-21,
+America/Santo_Domingo).** Codex verification of implementation and browser
+vertical-slice commit `acd2becce64e99c2dac559ccf805b1c64344debd`
+returned **MILESTONE 1 IMPLEMENTATION INCREMENT 2 CODEX VERIFIED — READY FOR
+HARRISON ACCEPTANCE**, with no remaining Critical or High Increment 2 defect.
+Harrison then explicitly accepted **MarketMatch Milestone 1 Implementation
+Increment 2 — Gate Execution Core and A1 Deal Established** at that commit.
+
+Accepted evidence is **657 tests passed, 6 PostgreSQL-only tests skipped on
+the SQLite validation engine; 79/79 migrations applied, 0 pending; and a clean
+working tree**. Harrison completed the real browser walkthrough:
+initialization, evaluation, review request, self-approval denial, return,
+re-attempt, second evaluation, review request, separate approval, A1 `PASSED`,
+and A2 current/non-executable. Real PostgreSQL concurrency execution remains
+pending and this acceptance does not claim PostgreSQL validation. Increment 2
+is closed and owner-accepted. Increment 3 remains absent and unauthorized.
+
+**MILESTONE 1 IMPLEMENTATION INCREMENT 2 CLOSED AND OWNER-ACCEPTED —
+INCREMENT 3 NOT AUTHORIZED.**
+
+Exact next action: **await Harrison's separate explicit authorization to begin
+Increment 3.**
 
 ---
 

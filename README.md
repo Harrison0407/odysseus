@@ -36,7 +36,9 @@ rebuildable `PackageGateState` history plus authorized A1 initialization,
 evaluation, review, pass/return, and A2 readiness only. A2 evaluation/freeze,
 A3–A6 behavior, overrides, new holds, invalidation, evidence mapping, and APIs
 remain excluded. The package-detail A1 browser vertical slice was subsequently
-completed from backend commit `d2aacafe91edf5b680f4071e72a7291bdb95343f` — see
+completed from backend commit `d2aacafe91edf5b680f4071e72a7291bdb95343f` at
+accepted implementation/browser commit
+`acd2becce64e99c2dac559ccf805b1c64344debd` — see
 `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md`,
 `docs/implementation-log.md` entry 63 and ADR-049. The correction recorded in
 entry 64 and ADR-050 subsequently passed read-only Increment 1 Codex
@@ -61,8 +63,11 @@ Increment 1 on 2026-07-21. Acceptance evidence: 615 tests collected, 613
 passed, 2 PostgreSQL-only concurrency tests skipped on SQLite, and 77/77
 migrations applied with 0 pending. Increment 1 is closed and owner-accepted.
 PostgreSQL concurrency execution remains pending and is not claimed as
-validated. Increment 1 remains closed and owner-accepted. Increment 2 is now
-implemented pending read-only Codex verification and Harrison reconciliation;
+validated. Increment 1 remains closed and owner-accepted. Codex verification
+of Increment 2 returned **MILESTONE 1 IMPLEMENTATION INCREMENT 2 CODEX VERIFIED
+— READY FOR HARRISON ACCEPTANCE**, with no remaining Critical or High defect,
+and Harrison explicitly accepted Increment 2 on 2026-07-21 after completing
+the real browser walkthrough. Increment 2 is closed and owner-accepted;
 Increment 3 remains unauthorized.
 
 ## What's implemented
@@ -130,7 +135,9 @@ pytest
 Current Increment 2 validation: **663 collected, 657 passed, 6 skipped** on
 SQLite; all six skips are real PostgreSQL-only lock/race tests. **79/79
 migrations are applied, 0 pending.** PostgreSQL concurrency execution remains
-pending and is not claimed as validated.
+pending and is not claimed as validated. The accepted implementation and
+browser vertical-slice commit is
+`acd2becce64e99c2dac559ccf805b1c64344debd`.
 
 For a clearly synthetic A1 browser scenario, run
 `python manage.py seed_a1_browser_demo --package-code synthetic-a1-harrison-browser`
@@ -267,11 +274,21 @@ ADR-049.
 
 Increment 2 was subsequently authorized and implemented from baseline
 `193fdfb720662a235b259b97694a0d5e3d8edcaa`; see implementation-log entry 66
-and ADR-051.
+and ADR-051. The A1 browser vertical slice completed at
+`acd2becce64e99c2dac559ccf805b1c64344debd`; Codex verification returned
+**MILESTONE 1 IMPLEMENTATION INCREMENT 2 CODEX VERIFIED — READY FOR HARRISON
+ACCEPTANCE** with no remaining Critical or High Increment 2 defect. Harrison
+completed initialization, evaluation, review request, self-approval denial,
+return, re-attempt, second evaluation, review request, separate approval, A1
+`PASSED`, and A2 current/non-executable, then explicitly accepted Increment 2
+on 2026-07-21. Accepted validation was SQLite: 657 passed, 6 PostgreSQL-only
+skipped, 79/79 migrations applied, and 0 pending. PostgreSQL concurrency
+execution remains pending and is not claimed as completed.
 
-Exact next action: **run a read-only, Increment-2-only Codex verification
-against the resulting commit. Do not begin Increment 3 until that verification
-is reconciled and Harrison separately authorizes it.**
+Increment 2 is closed and owner-accepted. Increment 3 is not authorized.
+
+Exact next action: **await Harrison's separate explicit authorization to begin
+Increment 3.**
 
 ## Production deployment
 

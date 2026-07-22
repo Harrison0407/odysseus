@@ -196,8 +196,23 @@ Open boundaries remain explicit:
   The browser surface is deliberately A1-only; it displays A2 as current after
   passage but provides no A2 executable action. Increment 3 is not authorized.
 
-Exact next action: Harrison browser-tests the synthetic A1 vertical slice. Do
-not begin Increment 3 without separate owner authorization.
+**Increment 2 owner-acceptance update (2026-07-21).** Codex verification of
+the implementation and browser vertical slice at
+`acd2becce64e99c2dac559ccf805b1c64344debd` returned **MILESTONE 1
+IMPLEMENTATION INCREMENT 2 CODEX VERIFIED — READY FOR HARRISON ACCEPTANCE**
+with no remaining Critical or High Increment 2 defect. Harrison completed the
+real browser walkthrough—initialization, evaluation, review request,
+self-approval denial, return, re-attempt, second evaluation, review request,
+separate approval, A1 `PASSED`, and A2 current/non-executable—and explicitly
+accepted **MarketMatch Milestone 1 Implementation Increment 2 — Gate Execution
+Core and A1 Deal Established** at that commit. Accepted validation was SQLite:
+657 passed, 6 PostgreSQL-only skipped, 79/79 migrations applied, 0 pending,
+and a clean tree. Real PostgreSQL concurrency execution remains pending and is
+not claimed as validated. Increment 2 is closed and owner-accepted. Increment
+3 remains absent and unauthorized.
+
+Exact next action: await Harrison's separate explicit authorization to begin
+Increment 3.
 
 ### Privileged-audit N+1 query characteristic (accepted, non-blocking)
 

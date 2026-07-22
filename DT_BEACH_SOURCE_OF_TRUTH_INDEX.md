@@ -192,7 +192,8 @@ absent.
 
 **UI completion update (2026-07-21):** the original Increment 2 backend commit
 is `d2aacafe91edf5b680f4071e72a7291bdb95343f`; the package-detail A1 browser
-vertical slice is completed by this commit (`Complete testable A1 browser
+vertical slice is completed by
+`acd2becce64e99c2dac559ccf805b1c64344debd` (`Complete testable A1 browser
 vertical slice`). It adds no execution model or migration. Fresh evidence is
 663 collected, 657 passed, 6 PostgreSQL-only skipped on SQLite, and 79/79
 migrations applied with 0 pending. Chrome exercised the complete synthetic
@@ -200,7 +201,26 @@ return/re-attempt/pass flow; A2 was current but non-executable, protected
 sentinels were absent, and package/Handoff state stayed independent. The fresh
 Harrison URL is
 `http://127.0.0.1:8000/compras/paquetes/b8ee6165-bf55-415f-8333-7318eb54d8ee/`.
-**Next governing activity:** Harrison browser testing. Do not begin Increment 3.
+
+**Accepted Increment 2 implementation baseline — closed and owner-accepted
+(2026-07-21):**
+
+`acd2becce64e99c2dac559ccf805b1c64344debd`
+
+Codex verification returned **MILESTONE 1 IMPLEMENTATION INCREMENT 2 CODEX
+VERIFIED — READY FOR HARRISON ACCEPTANCE**, with no remaining Critical or High
+Increment 2 defect. Harrison explicitly accepted **MarketMatch Milestone 1
+Implementation Increment 2 — Gate Execution Core and A1 Deal Established**
+after completing the real browser flow through initialization, evaluation,
+review request, self-approval denial, return, re-attempt, second evaluation,
+review request, separate approval, A1 `PASSED`, and A2
+current/non-executable. Accepted evidence is 657 passed, 6 PostgreSQL-only
+skipped on SQLite, 79/79 migrations applied, 0 pending, and a clean tree.
+PostgreSQL concurrency execution remains pending and is not claimed as
+validated. Increment 3 remains absent and unauthorized.
+
+**Next governing activity:** await Harrison's separate explicit authorization
+to begin Increment 3.
 
 Tests (as independently reproduced during the cycle-3 revalidation that
 led to acceptance, then extended by Increment 1):

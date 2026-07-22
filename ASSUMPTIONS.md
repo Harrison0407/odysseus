@@ -28,6 +28,12 @@ instead, exactly as required, and is **not** listed here as a resolved assumptio
   API, no QuickBooks write integration, no Celery/Redis/Kafka/Kubernetes.
   Local OCR (tesseract) is treated as optional/pluggable via an adapter
   interface, not a hard dependency of core workflows.
+- **A82. MarketMatch procurement prototype data is deliberately synthetic and
+  session-backed.** It is not a supplier-import capability: supplier CSV import
+  validation, PDF/OCR ingestion, production models, and production gate actions
+  remain out of scope. Its closure evidence is SQLite-only; visual browser
+  validation requires an owner walkthrough and must not be represented as
+  deployed or Increment 3 behavior.
 
 ## Technical defaults chosen conservatively
 

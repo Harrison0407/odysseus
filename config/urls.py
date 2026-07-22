@@ -37,5 +37,8 @@ urlpatterns = [
     path("api/v1/", include("apps.api.urls")),
 ]
 
+if settings.PROCUREMENT_PROTOTYPE_ENABLED:
+    urlpatterns += [path("prototype/procurement/", include("apps.procurement_prototype.urls"))]
+
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

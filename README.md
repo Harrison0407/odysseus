@@ -290,6 +290,17 @@ Increment 2 is closed and owner-accepted. Increment 3 is not authorized.
 Exact next action: **await Harrison's separate explicit authorization to begin
 Increment 3.**
 
+### MarketMatch procurement product prototype
+
+An authorized, DEBUG-only, synthetic team-review prototype is available at
+`/prototype/procurement/`. It does not implement Increment 3 production
+behavior or mutate production workflow data. See
+[`docs/MARKETMATCH_PROCUREMENT_PROTOTYPE.md`](docs/MARKETMATCH_PROCUREMENT_PROTOTYPE.md).
+Closure verification on SQLite recorded 669 collected tests: 663 passed, 6
+PostgreSQL-only skipped, 0 failed. Browser visual validation remains an owner
+walkthrough; supplier CSV import validation is not implemented. Exact local URL:
+`http://127.0.0.1:8765/prototype/procurement/`.
+
 ## Production deployment
 
 See `docs/DEPLOYMENT.md`. Short version:

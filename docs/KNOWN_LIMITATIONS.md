@@ -61,6 +61,18 @@ claimed-complete evidence — they remain open, exactly as before:
 
 - Database-level append-only enforcement and deployed database privilege
   inspection for `AuditEvent`.
+
+## MarketMatch prototype boundary
+
+The procurement prototype is synthetic/session-only, DEBUG-gated, and excludes
+real supplier imports, PDF/OCR, production authorization, and Increment 3
+production lifecycle behavior. See `MARKETMATCH_PROCUREMENT_PROTOTYPE.md`.
+
+Supplier CSV import and its validation are **not implemented**. The available
+CSV endpoints export synthetic data only; they do not accept supplier files.
+Visual desktop/tablet browser validation of the prototype also remains an owner
+walkthrough item because browser automation was unavailable during the closure
+verification. SQLite validation passed; PostgreSQL was not validated.
 - Backup restoration testing in a disposable deployed-equivalent
   environment.
 - Deployed proxy/cache behavior and production log-sentinel analysis.

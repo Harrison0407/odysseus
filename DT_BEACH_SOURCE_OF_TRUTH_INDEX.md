@@ -24,6 +24,16 @@ Plans and documentation are never evidence of implementation by themselves.
 Always distinguish requested, planned, reported implemented, verified
 implemented, live validated, and deployed.
 
+### MarketMatch procurement prototype status (2026-07-21)
+
+Requested/authorized: a non-production team-review prototype only. Verified
+implemented: the DEBUG-gated synthetic route and documented prototype features
+in `docs/MARKETMATCH_PROCUREMENT_PROTOTYPE.md`. Automated/HTTP validated on
+SQLite: 79 migrations applied, 0 pending; 669 pytest collected, 663 passed, 6
+PostgreSQL-only skipped, exit 0. Browser visual validation is pending owner
+walkthrough; it is not deployed. Supplier CSV import validation is absent.
+Increment 3 production behavior remains unauthorized.
+
 ## Operational Data Source Priority
 
 ### 1. Approved and Signed Source Documents

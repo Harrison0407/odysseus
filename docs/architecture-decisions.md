@@ -2,6 +2,19 @@
 
 Newest first.
 
+## ADR-053 — MarketMatch procurement product prototype remains route-isolated and synthetic
+
+**Decision:** The team-review prototype is a DEBUG-and-feature-flag-gated,
+session-backed app with plain dictionaries/calculation helpers, no models or
+migrations, and no imports of production procurement, gate, evidence, handoff,
+Change Request, or Risk Flag services.
+
+**Why:** It permits review of A2–A6 concepts, comparison, and export behavior
+without authorizing Increment 3. Closure verification on SQLite found 79
+migrations applied with 0 pending and 663/669 pytest passing (6 PostgreSQL-only
+skips); visual browser review remains owner-pending and PostgreSQL is not
+claimed. Supplier CSV import validation is intentionally absent.
+
 ## ADR-052 — A1 browser surface is a capability-gated adapter over canonical services
 
 **Decision:** Complete Increment 2's browser vertical slice inside the existing

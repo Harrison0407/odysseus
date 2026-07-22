@@ -1,5 +1,17 @@
 # Security
 
+## MarketMatch procurement prototype isolation (2026-07-21)
+
+The DEBUG/feature-gated `/prototype/procurement/` route is synthetic and
+session-backed. Code inspection found no prototype model, migration,
+production-service import, embedded credential, confidential fixture, or
+production export. The route is unavailable when disabled. A focused automated
+action test proves prototype activity does not alter `ProcurementPackage`, gate
+attempt/evaluation/decision, evidence, handoff, `ChangeRequest`, or `RiskFlag`
+records. Full SQLite regression: 669 collected, 663 passed, 6 PostgreSQL-only
+skipped, exit 0. PostgreSQL and deployed-runtime validation are not claimed.
+Supplier CSV import validation is absent; exports are synthetic-only.
+
 ## Foundation status (2026-07-20)
 
 The Controlled Transparency, Commercial Confidentiality & Authorization

@@ -1,5 +1,18 @@
 # Requirements Traceability Matrix
 
+## MarketMatch procurement product prototype — closure trace (2026-07-21)
+
+| Requested capability | Verified implementation/evidence | Status |
+|---|---|---|
+| Isolated, prominent, responsive prototype | DEBUG/feature-flag route, warning labels, `--mm-*` tokens, A2–A6 screens | Verified implemented; visual owner walkthrough pending |
+| Synthetic PI/Packing comparison | Match, shortage, overage, unknown SKU, missing PI line, variant mismatch; revision/actions/reviews; synthetic CSV exports | Automated and HTTP validated on SQLite |
+| Production isolation | No models/migrations/services; focused action test leaves package/gate/evidence/handoff/change/risk records unchanged | Automated verified |
+| Regression/migrations | 79 applied, 0 pending; 669 collected, 663 passed, 6 PostgreSQL-only skipped, exit 0 | SQLite verified; PostgreSQL not validated |
+| Supplier CSV import validation | Not implemented | Known limitation |
+
+This team-review prototype is not deployed and does not authorize or implement
+Increment 3 production behavior.
+
 Status legend: **Done** = modeled, implemented, has a passing automated test.
 **Modeled** = data model + core logic exist but UI/workflow is thin or
 manual. **Planned** = intentionally deferred past this delivery (see

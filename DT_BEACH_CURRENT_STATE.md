@@ -651,6 +651,16 @@ See `docs/KNOWN_LIMITATIONS.md` for the detailed historical and current record.
 - PostgreSQL is the production source of truth.
 - QuickBooks and approved accounting records remain the financial source of truth.
 - Party, role, capability, and authorization scope remain separate.
+
+## MarketMatch procurement prototype (authorized, non-production)
+
+The DEBUG-only synthetic product prototype at `/prototype/procurement/` is a
+team-review artifact, not Increment 3 production behavior. It has no database
+models or production aggregate integrations. Details: `docs/MARKETMATCH_PROCUREMENT_PROTOTYPE.md`.
+Closure verification: SQLite only; 79 migrations applied, 0 pending; 669
+pytest tests collected, 663 passed, 6 PostgreSQL-only skipped, exit 0. HTTP
+routes and synthetic exports passed. Browser visual validation is pending an
+owner walkthrough; supplier CSV import validation is not implemented.
 - Authorization occurs before retrieval, projection, transformation, export,
   search, AI processing, or derived-artifact creation.
 - Commercial source layers remain structurally separate.

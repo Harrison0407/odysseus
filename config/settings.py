@@ -35,6 +35,9 @@ def env_list(name, default=""):
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-only-insecure-key-change-me")
 
 DEBUG = env_bool("DJANGO_DEBUG", default=False)
+# The procurement product prototype is deliberately unavailable outside local
+# debug environments. It has no production models or service integrations.
+PROCUREMENT_PROTOTYPE_ENABLED = DEBUG and env_bool("PROCUREMENT_PROTOTYPE_ENABLED", default=True)
 
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
 
@@ -83,6 +86,7 @@ INSTALLED_APPS = [
     "apps.unitplans",
     "apps.governance",
     "apps.procurement_gates",
+    "apps.procurement_prototype",
     "apps.api",
 ]
 

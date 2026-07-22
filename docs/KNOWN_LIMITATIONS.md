@@ -184,19 +184,20 @@ no A2 attempt or operational behavior.
 Open boundaries remain explicit:
 
 - Real PostgreSQL execution is still pending. Six concurrency tests are
-  PostgreSQL-only and were skipped on SQLite; the current result is 655
-  collected, 649 passed, 6 skipped, with 79/79 migrations applied and 0
+  PostgreSQL-only and were skipped on SQLite; the current result is 663
+  collected, 657 passed, 6 skipped, with 79/79 migrations applied and 0
   pending. This is not a PostgreSQL-validation claim.
 - Existing packages are not backfilled with fabricated history. They require
   the explicit, authorized, idempotent initialization service; exempt packages
   never receive fabricated progression.
 - A2 evaluation/freeze/refreeze, `PackageFreezeRevision`, A3–A6 operational
   behavior, evidence mapping, `GateInvalidation`, `PackageHoldCause`,
-  `ProcurementGateOverride`, UI/API/forms/templates, and workflow changes remain
-  unimplemented. Increment 3 is not authorized.
+  `ProcurementGateOverride`, API, and workflow changes remain unimplemented.
+  The browser surface is deliberately A1-only; it displays A2 as current after
+  passage but provides no A2 executable action. Increment 3 is not authorized.
 
-Exact next action: read-only, Increment-2-only Codex verification and Harrison
-reconciliation. Do not begin Increment 3 without separate owner authorization.
+Exact next action: Harrison browser-tests the synthetic A1 vertical slice. Do
+not begin Increment 3 without separate owner authorization.
 
 ### Privileged-audit N+1 query characteristic (accepted, non-blocking)
 

@@ -34,14 +34,16 @@ a separate decision; the subsequently authorized Increment 2 is recorded
 immediately below.
 
 Milestone 1 Increment 2 status (2026-07-21): **IMPLEMENTED; READY FOR
-READ-ONLY CODEX VERIFICATION; INCREMENT 3 NOT AUTHORIZED**. Harrison separately
+HARRISON BROWSER TESTING; INCREMENT 3 NOT AUTHORIZED**. Harrison separately
 authorized **Gate Execution Core and A1 Deal Established** from baseline
 `193fdfb720662a235b259b97694a0d5e3d8edcaa`. The bounded implementation adds
 immutable A1 execution history and a rebuildable projection, explicit package
 initialization, A1 evaluation/review/pass/return, and A2 readiness only. Fresh
-SQLite evidence: **655 collected, 649 passed, 6 PostgreSQL-only tests skipped;
+SQLite evidence after the browser vertical slice: **663 collected, 657 passed,
+6 PostgreSQL-only tests skipped;
 79/79 migrations applied, 0 pending**. PostgreSQL concurrency remains pending
-and is not claimed as validated. See implementation-log entry 66 and ADR-051.
+and is not claimed as validated. See implementation-log entries 66–67 and
+ADR-051/ADR-052.
 
 The Controlled Transparency, Commercial Confidentiality & Authorization
 Foundation is **independently revalidated and owner accepted** as the
@@ -138,13 +140,13 @@ Increment 1 commit and Harrison's separate, explicit authorization.
 
 | Capability | Module(s) | DB records | UI | Test(s) | Status |
 |---|---|---|---|---|---|
-| Immutable attempts with transactional numbering and one open attempt | `apps.procurement_gates.models/services` | `GateAttempt` | none | initialization, constraint, mutation, deletion, re-attempt, PostgreSQL race tests | Done for A1 |
-| Confidentiality-safe, append-only A1 evaluation | `apps.procurement_gates.services.evaluate_a1` | `GateEvaluation` | none | independent omissions, conflicts, expiry, wrong scope, risk/change/hold, sentinels | Done |
-| Authorized review and separated advancement decision | `request_a1_review`; `decide_a1_advancement` | `GateDecision`; immutable attempt closure | none | capabilities, separation, stale evaluation, idempotency, pass/return | Done |
+| Immutable attempts with transactional numbering and one open attempt | `apps.procurement_gates.models/services` | `GateAttempt` | package-detail initialize/re-attempt | initialization, constraint, mutation, deletion, re-attempt, PostgreSQL race tests | Done for A1 |
+| Confidentiality-safe, append-only A1 evaluation | `apps.procurement_gates.services.evaluate_a1` | `GateEvaluation` | package-detail safe outcomes/blockers | independent omissions, conflicts, expiry, wrong scope, risk/change/hold, browser sentinels | Done |
+| Authorized review and separated advancement decision | `request_a1_review`; `decide_a1_advancement` | `GateDecision`; immutable attempt closure | package-detail review/pass/return | capabilities, separation, stale evaluation, idempotency, pass/return/browser tests | Done |
 | Pure current-state computation and rebuildable cache | `compute_gate_state`; `derive_current_gate`; `rebuild_gate_state` | `PackageGateState` | none | no-write computation, deterministic rebuild, direct-write denial | Done |
-| A1 pass makes A2 current without implementing A2 | state derivation/projection only | A2 cache row remains `NOT_STARTED`; no A2 attempt | none | approval and duplicate-activation tests | Done within Increment 2 boundary |
+| A1 pass makes A2 current without implementing A2 | state derivation/projection only | A2 cache row remains `NOT_STARTED`; no A2 attempt | A2 shown as non-executable | approval, browser, and duplicate-activation tests | Done within Increment 2 boundary |
 | Additive existing-package migration | `audit.0005`; `procurement_gates.0005` | schema only | — | MigrationExecutor preservation/no-fabrication test; clean/populated SQLite validation | Done |
-| A2 freeze/evaluation; A3–A6; evidence mappings; invalidation; hold causes; overrides; UI/API | — | — | — | — | Excluded; Increment 3+ unauthorized |
+| A2 freeze/evaluation; A3–A6; evidence mappings; invalidation; hold causes; overrides; API | — | — | — | — | Excluded; Increment 3+ unauthorized |
 
 ## Priority 0 capabilities (spec section 5)
 

@@ -2605,3 +2605,43 @@ documented order.
     3. Exact next action: run a read-only, Increment-2-only Codex verification
     against the resulting commit. Do not begin Increment 3 until that
     verification is reconciled and Harrison separately authorizes it.
+
+67. **Increment 2 completion — testable A1 browser vertical slice.** Dated
+    2026-07-21.
+
+    Starting from synchronized backend commit
+    `d2aacafe91edf5b680f4071e72a7291bdb95343f`, this documentation/application
+    commit (`Complete testable A1 browser vertical slice`) adds the missing A1
+    browser experience to the existing ProcurementPackage detail page. It
+    introduces no model or migration. Safe policy/version IDs, A1–A6 states,
+    current gate, exemption, current attempt/evaluation, requirement/blocker
+    codes, review state, and immutable history are visible only with the new
+    stable package-scoped `VIEW_PROCUREMENT_GATE_STATE` capability. Initialize,
+    Evaluate, Request Review, Approve, Return, and New Attempt views accept
+    safe IDs and delegate all lifecycle work to the existing Increment 2
+    services.
+
+    A DEBUG-only `seed_a1_browser_demo` command creates clearly synthetic users,
+    package roles, package-scoped grants, policy assignment, and a preservation
+    Handoff; it refuses non-DEBUG execution and is idempotent per explicit
+    `--package-code`. Chrome exercised the real local flow at
+    `http://127.0.0.1:8012/compras/paquetes/ae92206f-d343-4964-869e-c2825d93b149/`:
+    initialize, satisfied evaluation, review, self-approval denial, return,
+    re-attempt, evaluation/review, and separate-actor approval. A1 ended
+    `PASSED`, A2 appeared current/non-executable, package status/freeze/hold and
+    Handoff remained unchanged, and confidential sentinels were absent.
+
+    Eight new HTTP/browser tests cover protected rendering, initialization and
+    idempotent resubmission, blocked results, review, self-approval,
+    cross-package and stale identifiers, return/re-attempt, approval/A2 display,
+    state preservation, durable denial audit, and confidentiality. Focused
+    regression: 275 passed, 6 PostgreSQL-only skipped. Full SQLite regression:
+    **663 collected, 657 passed, 6 PostgreSQL-only skipped**. **79/79 migrations
+    applied, 0 pending.** PostgreSQL execution remains pending and is not
+    claimed.
+
+    A fresh Harrison scenario is available at
+    `http://127.0.0.1:8000/compras/paquetes/b8ee6165-bf55-415f-8333-7318eb54d8ee/`
+    after local server startup. A2 evaluation/freeze and all later work remain
+    absent. Increment 3 remains unauthorized. Exact next action: Harrison
+    browser testing; do not begin Increment 3.

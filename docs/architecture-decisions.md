@@ -2,6 +2,27 @@
 
 Newest first.
 
+## ADR-052 — A1 browser surface is a capability-gated adapter over canonical services
+
+**Decision:** Complete Increment 2's browser vertical slice inside the existing
+ProcurementPackage detail page. `VIEW_PROCUREMENT_GATE_STATE` is a stable,
+package-scoped, non-role-default capability. Views authorize persisted package
+scope before protected gate queries and pass only validated identifiers and
+idempotency keys to the accepted Increment 2 services; they never write gate
+history or projection rows directly. Templates render only stable identifiers,
+codes, booleans, counts, and lifecycle states. A DEBUG-only, synthetic command
+provides an idempotent-per-package browser scenario and refuses production use.
+
+**Why:** This preserves one frontend architecture, keeps immutable lifecycle
+orchestration in the already-tested service layer, and makes A1 testable without
+opening A2 or adding an API. A2 is displayed after A1 passage only as current
+and non-executable.
+
+**Status:** complete from backend baseline
+`d2aacafe91edf5b680f4071e72a7291bdb95343f`; 663 collected, 657 passed, 6
+PostgreSQL-only skipped on SQLite; 79/79 migrations applied, 0 pending. Manual
+Chrome walkthrough passed. Increment 3 remains unauthorized.
+
 ## ADR-051 — Increment 2 A1 execution history, explicit initialization, and rebuildable state
 
 **Decision:** Harrison explicitly authorized Milestone 1 Increment 2 from

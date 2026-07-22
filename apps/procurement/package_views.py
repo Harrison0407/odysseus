@@ -7,6 +7,8 @@ factory) legitimately span more than one organization. An unauthorized
 package is a 404, never a 403 that would confirm its existence.
 """
 
+import uuid
+
 from django import forms
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -15,15 +17,178 @@ from django.db.models import Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from apps.audit import services as audit_services
 from apps.audit.models import EvidenceBundle
 from apps.documents.views import DocumentUploadForm
 from apps.governance import services as governance_services
 from apps.governance.models import Classification, DisclosureGrant, Party
+from apps.governance.services import AuthorizationDenied
+from apps.procurement_gates import services as gate_services
+from apps.procurement_gates.models import (
+    GATE_CODES,
+    GateAttempt,
+    GateDecision,
+    GateState,
+    PackagePolicyAssignment,
+)
 
 from . import services
 from .models import ClientQuote, FactoryRFQ, InternalCommercialSheet, ProcurementPackage, Quotation, Supplier, VerificationAssertion
+
+
+class GateActionForm(forms.Form):
+    idempotency_key = forms.CharField(max_length=128, widget=forms.HiddenInput)
+
+
+class A1AttemptActionForm(GateActionForm):
+    attempt_id = forms.UUIDField(widget=forms.HiddenInput)
+
+
+class A1DecisionForm(A1AttemptActionForm):
+    evaluation_id = forms.UUIDField(widget=forms.HiddenInput)
+    comment = forms.CharField(max_length=500, required=False)
+
+
+def _new_gate_key(action):
+    return f"browser-{action}-{uuid.uuid4().hex}"
+
+
+def _safe_gate_error_message(exc):
+    if isinstance(exc, AuthorizationDenied):
+        return "No tiene permiso para realizar esta acción de Procurement Gates."
+    if isinstance(exc, gate_services.GateIdempotencyConflict):
+        return "La clave de idempotencia ya fue utilizada por una solicitud diferente."
+    message = str(exc).lower()
+    if "requester or preparer" in message:
+        return "La persona que preparó o solicitó A1 no puede aprobar su propio intento."
+    if "stale" in message or "already decided" in message or "does not belong" in message:
+        return "El intento o la evaluación A1 ya no es vigente. Actualice la página."
+    if "satisfied" in message or "blocked" in message:
+        return "La evaluación A1 está bloqueada o todavía no está lista para decisión."
+    if "open a1 attempt" in message or "current open" in message:
+        return "El intento o la evaluación A1 ya no es vigente. Actualice la página."
+    return "No fue posible completar la acción A1 con el estado actual."
+
+
+def _gate_detail_context(user, package):
+    can_view = governance_services.has_capability(
+        user, gate_services.VIEW_PROCUREMENT_GATE_STATE, package=package
+    )
+    if not can_view:
+        return {"can_view_gates": False}
+
+    assignment = PackagePolicyAssignment.objects.filter(package=package).select_related(
+        "policy_version__policy"
+    ).first()
+    attempts = list(
+        GateAttempt.objects.filter(package=package, gate_code="A1")
+        .select_related("policy_version")
+        .prefetch_related("evaluations")
+        .order_by("-attempt_number")
+    )
+    decisions = {
+        decision.attempt_id: decision
+        for decision in GateDecision.objects.filter(attempt__package=package).order_by("decided_at")
+    }
+    history = []
+    for attempt in attempts:
+        evaluations = list(attempt.evaluations.all().order_by("evaluated_at", "created_at"))
+        history.append({
+            "attempt": attempt,
+            "evaluations": evaluations,
+            "decision": decisions.get(attempt.pk),
+        })
+
+    current_attempt = attempts[0] if attempts else None
+    current_evaluation = (
+        current_attempt.evaluations.order_by("-evaluated_at", "-created_at").first()
+        if current_attempt else None
+    )
+    current_decision = decisions.get(current_attempt.pk) if current_attempt else None
+    current_gate = gate_services.derive_current_gate(package) if assignment else None
+    gate_rows = [
+        {
+            "code": code,
+            "state": gate_services.compute_gate_state(package, code),
+            "is_current": code == current_gate,
+        }
+        for code in GATE_CODES
+    ]
+    review_state = "NOT_REQUESTED"
+    if current_attempt and current_attempt.review_requested_at:
+        review_state = "REQUESTED"
+    if current_attempt and current_attempt.closed_at:
+        review_state = "CLOSED"
+
+    can_initialize = (
+        assignment is not None
+        and not assignment.gate_progression_exempt
+        and not attempts
+        and governance_services.has_capability(
+            user,
+            gate_services.CREATE_PROCUREMENT_GATE_ATTEMPT,
+            organization=package.organization,
+        )
+    )
+    can_evaluate = bool(
+        current_attempt
+        and current_attempt.closed_at is None
+        and current_attempt.review_requested_at is None
+        and governance_services.has_capability(
+            user, gate_services.EVALUATE_PROCUREMENT_GATE, package=package
+        )
+    )
+    can_request_review = bool(
+        current_attempt
+        and current_attempt.closed_at is None
+        and current_evaluation
+        and current_evaluation.overall_ready
+        and current_attempt.review_requested_at is None
+        and governance_services.has_capability(
+            user, gate_services.REQUEST_PROCUREMENT_GATE_REVIEW, package=package
+        )
+    )
+    can_decide = bool(
+        current_attempt
+        and current_attempt.closed_at is None
+        and current_evaluation
+        and current_attempt.review_evaluation_id == current_evaluation.pk
+        and governance_services.has_capability(
+            user, current_attempt.decision_capability, package=package
+        )
+    )
+    can_open_new_attempt = bool(
+        assignment
+        and attempts
+        and gate_services.compute_gate_state(package, "A1") == GateState.FAILED
+        and governance_services.has_capability(
+            user, current_attempt.attempt_creation_capability, package=package
+        )
+    )
+
+    return {
+        "can_view_gates": True,
+        "gate_assignment": assignment,
+        "gate_rows": gate_rows,
+        "current_gate": current_gate,
+        "a1_current_attempt": current_attempt,
+        "a1_current_evaluation": current_evaluation,
+        "a1_current_decision": current_decision,
+        "a1_review_state": review_state,
+        "a1_history": history,
+        "can_initialize_gates": can_initialize,
+        "can_evaluate_a1": can_evaluate,
+        "can_request_a1_review": can_request_review,
+        "can_decide_a1": can_decide,
+        "can_open_new_a1_attempt": can_open_new_attempt,
+        "gate_initialize_key": _new_gate_key("initialize"),
+        "gate_evaluate_key": _new_gate_key("evaluate"),
+        "gate_review_key": _new_gate_key("review"),
+        "gate_decision_key": _new_gate_key("decision"),
+        "gate_reattempt_key": _new_gate_key("reattempt"),
+    }
 
 
 def user_can_view_package(request, package) -> bool:
@@ -90,7 +255,118 @@ def package_detail(request, pk):
         "disclosure_grants": package.disclosure_grants.all()[:20] if can_authorize_disclosure else DisclosureGrant.objects.none(),
         "disclosed_projection": governance_services.disclosure_projection_for_user(package, request.user),
     }
+    context.update(_gate_detail_context(request.user, package))
     return render(request, "procurement/package_detail.html", context)
+
+
+def _gate_action_form_or_message(request, form_class):
+    form = form_class(request.POST)
+    if form.is_valid():
+        return form
+    messages.error(request, "La solicitud A1 contiene identificadores inválidos o incompletos.")
+    return None
+
+
+@login_required
+@require_POST
+def package_gates_initialize(request, pk):
+    package = _get_package_or_404(request, pk)
+    form = _gate_action_form_or_message(request, GateActionForm)
+    if form is not None:
+        try:
+            gate_services.initialize_package_gates(
+                request.user, package.pk,
+                idempotency_key=form.cleaned_data["idempotency_key"],
+            )
+            messages.success(request, "Procurement Gates inicializados. A1 está abierto.")
+        except (AuthorizationDenied, gate_services.GateExecutionError) as exc:
+            messages.error(request, _safe_gate_error_message(exc))
+    return redirect("procurement:package-detail", pk=package.pk)
+
+
+@login_required
+@require_POST
+def package_a1_evaluate(request, pk):
+    package = _get_package_or_404(request, pk)
+    form = _gate_action_form_or_message(request, A1AttemptActionForm)
+    if form is not None:
+        try:
+            evaluation = gate_services.evaluate_a1(
+                request.user, package.pk, form.cleaned_data["attempt_id"],
+                idempotency_key=form.cleaned_data["idempotency_key"],
+            )
+            if evaluation.overall_ready:
+                messages.success(request, "Evaluación A1 satisfecha y lista para solicitar revisión.")
+            else:
+                messages.warning(request, "Evaluación A1 bloqueada. Revise los códigos de bloqueo seguros.")
+        except (AuthorizationDenied, gate_services.GateExecutionError) as exc:
+            messages.error(request, _safe_gate_error_message(exc))
+    return redirect("procurement:package-detail", pk=package.pk)
+
+
+@login_required
+@require_POST
+def package_a1_request_review(request, pk):
+    package = _get_package_or_404(request, pk)
+    form = _gate_action_form_or_message(request, A1AttemptActionForm)
+    if form is not None:
+        try:
+            gate_services.request_a1_review(
+                request.user, package.pk, form.cleaned_data["attempt_id"],
+                idempotency_key=form.cleaned_data["idempotency_key"],
+            )
+            messages.success(request, "Revisión A1 solicitada.")
+        except (AuthorizationDenied, gate_services.GateExecutionError) as exc:
+            messages.error(request, _safe_gate_error_message(exc))
+    return redirect("procurement:package-detail", pk=package.pk)
+
+
+@login_required
+@require_POST
+def package_a1_decide(request, pk, decision):
+    package = _get_package_or_404(request, pk)
+    if decision not in {"approve", "return"}:
+        raise Http404
+    form = _gate_action_form_or_message(request, A1DecisionForm)
+    if form is not None:
+        outcome = GateDecision.Outcome.PASSED if decision == "approve" else GateDecision.Outcome.FAILED
+        try:
+            gate_services.decide_a1_advancement(
+                request.user,
+                package.pk,
+                form.cleaned_data["attempt_id"],
+                form.cleaned_data["evaluation_id"],
+                outcome,
+                idempotency_key=form.cleaned_data["idempotency_key"],
+                comment=form.cleaned_data["comment"],
+            )
+            if outcome == GateDecision.Outcome.PASSED:
+                messages.success(
+                    request,
+                    "A1 aprobado. A2 está disponible, pero su evaluación y freeze todavía no están implementados.",
+                )
+            else:
+                messages.success(request, "A1 devuelto. El historial permanece y puede abrirse un nuevo intento.")
+        except (AuthorizationDenied, gate_services.GateExecutionError) as exc:
+            messages.error(request, _safe_gate_error_message(exc))
+    return redirect("procurement:package-detail", pk=package.pk)
+
+
+@login_required
+@require_POST
+def package_a1_open_attempt(request, pk):
+    package = _get_package_or_404(request, pk)
+    form = _gate_action_form_or_message(request, GateActionForm)
+    if form is not None:
+        try:
+            gate_services.open_a1_attempt(
+                request.user, package.pk,
+                idempotency_key=form.cleaned_data["idempotency_key"],
+            )
+            messages.success(request, "Nuevo intento A1 abierto.")
+        except (AuthorizationDenied, gate_services.GateExecutionError) as exc:
+            messages.error(request, _safe_gate_error_message(exc))
+    return redirect("procurement:package-detail", pk=package.pk)
 
 
 class FactoryQuoteForm(forms.Form):

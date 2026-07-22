@@ -34,8 +34,9 @@ authorized **Increment 2 — Gate Execution Core and A1 Deal Established** on
 implements immutable `GateAttempt`, `GateEvaluation`, `GateDecision`, and
 rebuildable `PackageGateState` history plus authorized A1 initialization,
 evaluation, review, pass/return, and A2 readiness only. A2 evaluation/freeze,
-A3–A6 behavior, overrides, new holds, invalidation, evidence mapping, UI, and
-APIs remain excluded — see
+A3–A6 behavior, overrides, new holds, invalidation, evidence mapping, and APIs
+remain excluded. The package-detail A1 browser vertical slice was subsequently
+completed from backend commit `d2aacafe91edf5b680f4071e72a7291bdb95343f` — see
 `docs/MILESTONE_1_PROCUREMENT_GATES_CHARTER.md`,
 `docs/implementation-log.md` entry 63 and ADR-049. The correction recorded in
 entry 64 and ADR-050 subsequently passed read-only Increment 1 Codex
@@ -83,7 +84,7 @@ Increment 3 remains unauthorized.
   retain organization scope).
 - A validated production deployment: Docker Compose (Postgres + Gunicorn + Caddy), with backup/restore/persistence genuinely exercised (see `docs/FINAL_VALIDATION_REPORT.md`).
 - Milestone 1 Increment 1: configurable, versioned A1–A6 procurement gate policy schemas (`apps.procurement_gates`), canonical-default/organization-specific resolution, and permanent package-to-policy-version pinning.
-- Milestone 1 Increment 2: immutable A1 execution history, package-gate initialization, confidentiality-safe A1 evaluation, authorized review/pass/return, pure current-state derivation, and rebuildable projection. Passing A1 makes A2 current but creates no A2 attempt, evaluation, decision, or freeze.
+- Milestone 1 Increment 2: immutable A1 execution history, package-gate initialization, confidentiality-safe A1 evaluation, authorized review/pass/return, pure current-state derivation, rebuildable projection, and a capability-scoped browser vertical slice in the existing package detail. Passing A1 makes A2 current but creates no A2 attempt, evaluation, decision, or freeze.
 
 ## Documentation
 
@@ -126,10 +127,17 @@ Visit `http://localhost:8000/`. Pilot user passwords are printed once by
 ```bash
 pytest
 ```
-Current Increment 2 validation: **655 collected, 649 passed, 6 skipped** on
+Current Increment 2 validation: **663 collected, 657 passed, 6 skipped** on
 SQLite; all six skips are real PostgreSQL-only lock/race tests. **79/79
 migrations are applied, 0 pending.** PostgreSQL concurrency execution remains
 pending and is not claimed as validated.
+
+For a clearly synthetic A1 browser scenario, run
+`python manage.py seed_a1_browser_demo --package-code synthetic-a1-harrison-browser`
+under `DEBUG=True`, start the local server, and open
+`http://127.0.0.1:8000/compras/paquetes/b8ee6165-bf55-415f-8333-7318eb54d8ee/`.
+The command prints the synthetic operator/approver credentials and refuses to
+run outside DEBUG. Increment 3 remains unauthorized.
 
 511 tests, covering the live-container fixture import, document
 upload/duplicate-detection/authorization, the receiving/inventory ledger,

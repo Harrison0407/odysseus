@@ -7,8 +7,9 @@ Last updated: 2026-07-21
 **The Controlled Transparency, Commercial Confidentiality & Authorization
 Foundation is closed and owner-accepted. Foundation correction cycles 2
 and 3 have both been independently revalidated. Milestone 1 Increment 1 is
-closed and owner-accepted; Increment 2 is implemented and awaiting read-only
-Codex verification. Increment 3 is not authorized.**
+closed and owner-accepted; Increment 2 now includes its testable A1 browser
+vertical slice and is ready for Harrison browser testing. Increment 3 is not
+authorized.**
 
 Accepted foundation implementation commit:
 
@@ -394,6 +395,38 @@ pending and is not claimed as validated.
 Exact next action: **run a read-only, Increment-2-only Codex verification
 against the resulting commit. Do not begin Increment 3 until that verification
 is reconciled and Harrison separately authorizes it.**
+
+**Update — Increment 2 testable A1 browser vertical slice complete
+(2026-07-21).** Starting from the synchronized Increment 2 backend commit
+`d2aacafe91edf5b680f4071e72a7291bdb95343f`, the existing package-detail
+experience now displays safe policy/version identifiers, canonical A1–A6
+state, current gate, exemption, current evaluation, stable requirement/blocker
+codes, review state, and immutable attempt/decision history. Authorized POST
+views expose Initialize, Evaluate A1, Request Review, Approve, Return, and
+post-return New Attempt actions exclusively through the accepted Increment 2
+services. `VIEW_PROCUREMENT_GATE_STATE` is an explicit package-scoped
+capability with no role-default implication.
+
+A DEBUG-only synthetic seed command supports a repeatable browser scenario by
+explicit package code and refuses non-DEBUG execution. The completed Chrome
+walkthrough ran at
+`http://127.0.0.1:8012/compras/paquetes/ae92206f-d343-4964-869e-c2825d93b149/`:
+Initialize → Evaluate → Request Review → self-approval denied → Return → New
+Attempt → Evaluate → Request Review → approval by a separate actor. It ended
+with A1 `PASSED`, A2 current but non-executable, package status/freeze/hold and
+Handoff unchanged, and all confidential sentinels absent. A fresh Harrison
+scenario is available after local server startup at
+`http://127.0.0.1:8000/compras/paquetes/b8ee6165-bf55-415f-8333-7318eb54d8ee/`.
+
+Fresh SQLite evidence: **663 collected, 657 passed, 6 PostgreSQL-only tests
+skipped; 79/79 migrations applied, 0 pending**. Real PostgreSQL concurrency
+execution remains pending and is not claimed. A2 evaluation/freeze and every
+later-gate behavior remain unimplemented; Increment 3 remains unauthorized.
+The UI completion baseline is this documentation/application commit,
+`Complete testable A1 browser vertical slice`.
+
+Exact next action: **Harrison browser-tests the fresh synthetic A1 scenario.
+Do not begin Increment 3.**
 
 ---
 

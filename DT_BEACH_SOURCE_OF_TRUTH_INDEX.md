@@ -187,9 +187,20 @@ passed and 6 PostgreSQL-only concurrency tests skipped; 79/79 migrations are
 applied with 0 pending. PostgreSQL execution is pending, not claimed.
 
 Increment 3 and A2 evaluation/freeze, A3–A6 execution, invalidation, new hold
-causes, overrides, evidence mapping, UI, and API work remain unauthorized and
-absent. **Next governing activity:** read-only, Increment-2-only Codex
-verification, followed by Harrison reconciliation. Do not begin Increment 3.
+causes, overrides, evidence mapping, and API work remain unauthorized and
+absent.
+
+**UI completion update (2026-07-21):** the original Increment 2 backend commit
+is `d2aacafe91edf5b680f4071e72a7291bdb95343f`; the package-detail A1 browser
+vertical slice is completed by this commit (`Complete testable A1 browser
+vertical slice`). It adds no execution model or migration. Fresh evidence is
+663 collected, 657 passed, 6 PostgreSQL-only skipped on SQLite, and 79/79
+migrations applied with 0 pending. Chrome exercised the complete synthetic
+return/re-attempt/pass flow; A2 was current but non-executable, protected
+sentinels were absent, and package/Handoff state stayed independent. The fresh
+Harrison URL is
+`http://127.0.0.1:8000/compras/paquetes/b8ee6165-bf55-415f-8333-7318eb54d8ee/`.
+**Next governing activity:** Harrison browser testing. Do not begin Increment 3.
 
 Tests (as independently reproduced during the cycle-3 revalidation that
 led to acceptance, then extended by Increment 1):

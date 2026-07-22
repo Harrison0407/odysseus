@@ -16,6 +16,11 @@ urlpatterns = [
     # ProcurementPackage / Controlled Transparency & Confidentiality
     path("paquetes/", package_views.package_list, name="package-list"),
     path("paquetes/<uuid:pk>/", package_views.package_detail, name="package-detail"),
+    path("paquetes/<uuid:pk>/gates/inicializar/", package_views.package_gates_initialize, name="package-gates-initialize"),
+    path("paquetes/<uuid:pk>/gates/a1/evaluar/", package_views.package_a1_evaluate, name="package-a1-evaluate"),
+    path("paquetes/<uuid:pk>/gates/a1/solicitar-revision/", package_views.package_a1_request_review, name="package-a1-request-review"),
+    path("paquetes/<uuid:pk>/gates/a1/decision/<str:decision>/", package_views.package_a1_decide, name="package-a1-decide"),
+    path("paquetes/<uuid:pk>/gates/a1/nuevo-intento/", package_views.package_a1_open_attempt, name="package-a1-open-attempt"),
     path("paquetes/<uuid:pk>/cotizacion-fabrica/crear/", package_views.factory_quote_create, name="factory-quote-create"),
     path("paquetes/<uuid:pk>/hoja-comercial/crear/", package_views.commercial_sheet_create, name="commercial-sheet-create"),
     path("paquetes/<uuid:pk>/cotizacion-cliente/crear/", package_views.client_quote_create, name="client-quote-create"),

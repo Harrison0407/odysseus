@@ -45,9 +45,10 @@ implementation are recorded immediately below.
 
 Harrison separately authorized **Gate Execution Core and A1 Deal Established**
 from baseline `193fdfb720662a235b259b97694a0d5e3d8edcaa`. The implementation
-uses existing `CapabilityGrant` resolution and adds only the stable
-`EVALUATE_PROCUREMENT_GATE` and `REQUEST_PROCUREMENT_GATE_REVIEW` codes;
-neither has a role-default implication. The already registered
+uses existing `CapabilityGrant` resolution and adds only stable, non-default
+execution codes, including `VIEW_PROCUREMENT_GATE_STATE`,
+`EVALUATE_PROCUREMENT_GATE`, and `REQUEST_PROCUREMENT_GATE_REVIEW`; none has a
+role-default implication. The already registered
 `CREATE_PROCUREMENT_GATE_ATTEMPT` and policy-pinned decision capability remain
 the attempt/decision controls.
 
@@ -68,11 +69,14 @@ stable codes, booleans, counts, and lifecycle states only; sentinel tests prove
 package, supplier/factory, role, risk/change, policy-schema, and commercial
 content is absent. No evidence payload is copied.
 
-SQLite validation collected 655 tests: 649 passed and 6 PostgreSQL-only race
-tests skipped; 79/79 migrations applied, 0 pending. PostgreSQL lock/race
-execution remains pending and is not claimed. A2 freeze/evaluation, A3–A6,
-new hold causes, invalidation, overrides, evidence mapping, UI, APIs, and
-Increment 3 remain absent and unauthorized.
+SQLite validation after the browser slice collected 663 tests: 657 passed and
+6 PostgreSQL-only race tests skipped; 79/79 migrations applied, 0 pending.
+PostgreSQL lock/race execution remains pending and is not claimed. Browser
+reads require the exact package-scoped view capability before policy, attempt,
+evaluation, or decision detail is queried; POST actions delegate exclusively
+to canonical services and render mapped, confidentiality-safe errors. A2
+freeze/evaluation, A3–A6, new hold causes, invalidation, overrides, evidence
+mapping, APIs, and Increment 3 remain absent and unauthorized.
 
 `apps.procurement_gates`'s policy-configuration/package-pinning layer
 (`GatePolicy`, `GatePolicyVersion`, `PackagePolicyAssignment`) is
